@@ -25,12 +25,12 @@ export function buildThinkingReviewPrompt({
       : []),
     '',
     'Required workflow:',
-    '1. Read the selected Cowart context and preserve links to source material.',
+    '1. Read the selected Yogurt AI context and preserve links to source material.',
     '2. Briefly interpret the request and visible marks; ask only when an ambiguity would materially change the result.',
     '3. Preview one typed local operation batch against the latest revision.',
     '4. Apply that same batch only to the selected region. Never rewrite, move, or delete unrelated page content.',
     '5. An explicit request to delete selected content is authorization for that selected content only; never infer deletion.',
     '6. Explain what changed, the evidence used, and provide the operation ID for undo.',
-    'Use existing Cowart image and HTML insertion tools when a requested chart or visual cannot be represented as cards and relations.'
+    'Use existing Yogurt AI image and HTML insertion tools when a requested chart or visual cannot be represented as cards and relations.'
   ].join('\n')
 }

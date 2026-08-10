@@ -254,7 +254,7 @@ function resolvePageId(snapshot, requestedPageId, viewState) {
   const store = snapshot?.store ?? {};
   const candidates = [requestedPageId, viewState?.currentPageId, firstPageId(snapshot)];
   const pageId = candidates.find((candidate) => typeof candidate === "string" && store[candidate]?.typeName === "page");
-  if (!pageId) throw new Error("Cowart canvas has no usable page.");
+  if (!pageId) throw new Error("Yogurt AI canvas has no usable page.");
   return pageId;
 }
 
@@ -346,7 +346,7 @@ export function summarizeThinkingContext({
   maxShapes = MAX_CONTEXT_SHAPES,
   maxTextLength = MAX_CONTEXT_TEXT,
 } = {}) {
-  if (!snapshot?.store || !snapshot?.schema) throw new Error("Expected a valid Cowart snapshot.");
+  if (!snapshot?.store || !snapshot?.schema) throw new Error("Expected a valid Yogurt AI snapshot.");
   const store = snapshot.store;
   const pageId = resolvePageId(snapshot, requestedPageId, viewState);
   const selectedIds = selectedShapeIds(selection);
@@ -742,7 +742,7 @@ export function applyThinkingOperationsToSnapshot({
   operations,
   allowUserAuthoredEdits = false,
 } = {}) {
-  if (!snapshot?.store || !snapshot?.schema) throw new Error("Expected a valid Cowart snapshot.");
+  if (!snapshot?.store || !snapshot?.schema) throw new Error("Expected a valid Yogurt AI snapshot.");
   validateOperations(operations);
   const nextSnapshot = cloneJson(snapshot);
   const store = nextSnapshot.store;
@@ -820,7 +820,7 @@ function validateSnapshot(snapshot) {
   try {
     const validationStore = new Store({
       schema: createTLSchema(),
-      props: { defaultName: "Cowart Thinking Canvas" },
+      props: { defaultName: "Yogurt AI" },
     });
     validationStore.loadStoreSnapshot(snapshot);
     return snapshot;
@@ -933,7 +933,7 @@ export async function applyThinkingOperations(args = {}, options = {}) {
   try {
     saveResult = await saveCowartCanvasSnapshot(args, result.snapshot);
     if (!saveResult.ok) {
-      throw new Error(saveResult.message || "Cowart refused to persist the thinking operation batch.");
+      throw new Error(saveResult.message || "Yogurt AI refused to persist the thinking operation batch.");
     }
   } catch (error) {
     await rm(persistedHistoryPath, { force: true }).catch(() => undefined);
@@ -997,7 +997,7 @@ export async function undoThinkingOperation(args = {}, options = {}) {
 
   const beforeSnapshot = await validateSnapshot(candidate.value.beforeSnapshot);
   const saveResult = await saveCowartCanvasSnapshot(args, beforeSnapshot);
-  if (!saveResult.ok) throw new Error(saveResult.message || "Cowart refused to persist the undo snapshot.");
+  if (!saveResult.ok) throw new Error(saveResult.message || "Yogurt AI refused to persist the undo snapshot.");
 
   const updatedHistory = {
     ...candidate.value,

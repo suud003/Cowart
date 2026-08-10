@@ -1,8 +1,8 @@
-# Cowart Thinking Canvas development plan
+# Yogurt AI development plan
 
 ## Product outcome
 
-Turn Cowart into a source-grounded, non-linear thinking canvas where Codex can grow cards, relations, images, and live HTML charts beside the user's material; understand selected visual annotations; apply only local edits; explain them; and undo the last agent operation safely.
+Turn Yogurt AI into a source-grounded, non-linear thinking canvas where Codex can grow cards, relations, images, and live HTML charts beside the user's material; understand selected visual annotations; apply only local edits; explain them; and undo the last agent operation safely.
 
 ## MVP boundary
 

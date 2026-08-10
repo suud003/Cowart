@@ -109,9 +109,9 @@ export function registerCowartThinkingTools(server) {
   server.registerTool(
     THINKING_TOOL_NAMES.getContext,
     {
-      title: "Inspect Cowart Thinking Context",
+      title: "Inspect Yogurt AI Thinking Context",
       description:
-        "Read a compact, source-aware representation of the current Cowart page or selection. Use before planning any thinking-canvas edit; do not ask for the raw tldraw snapshot.",
+        "Read a compact, source-aware representation of the current Yogurt AI page or selection. Use before planning any thinking-canvas edit; do not ask for the raw tldraw snapshot.",
       inputSchema: {
         ...projectArgsSchema,
         pageId: z.string().trim().optional(),
@@ -130,7 +130,7 @@ export function registerCowartThinkingTools(server) {
     async (input = {}) => {
       const context = await getThinkingContext(input, input);
       return toolText(
-        `Loaded ${context.shapes.length} Cowart thinking object(s) from ${context.scope} at revision ${context.revision}.`,
+        `Loaded ${context.shapes.length} Yogurt AI thinking object(s) from ${context.scope} at revision ${context.revision}.`,
         context,
       );
     },
@@ -139,9 +139,9 @@ export function registerCowartThinkingTools(server) {
   server.registerTool(
     THINKING_TOOL_NAMES.importMaterial,
     {
-      title: "Import Cowart Material",
+      title: "Import Yogurt AI Material",
       description:
-        "Attach a local source file to the Cowart project and create an editable material card that preserves its path, excerpt, summary, and provenance.",
+        "Attach a local source file to the Yogurt AI project and create an editable material card that preserves its path, excerpt, summary, and provenance.",
       inputSchema: {
         ...projectArgsSchema,
         sourcePath: z.string().trim(),
@@ -183,9 +183,9 @@ export function registerCowartThinkingTools(server) {
   server.registerTool(
     THINKING_TOOL_NAMES.applyOperations,
     {
-      title: "Apply Cowart Thinking Operations",
+      title: "Apply Yogurt AI Thinking Operations",
       description:
-        "Preview or atomically apply local, typed edits to Cowart cards, positions, sizes, and relations. A connected batch of new cards and relations is automatically arranged as a top-down Excalidraw-style graph when positions are omitted. Deletion is limited to agent-generated shapes. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
+        "Preview or atomically apply local, typed edits to Yogurt AI cards, positions, sizes, and relations. A connected batch of new cards and relations is automatically arranged as a top-down Excalidraw-style graph when positions are omitted. Deletion is limited to agent-generated shapes. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
       inputSchema: {
         ...projectArgsSchema,
         baseRevision: z.string().trim().optional(),
@@ -206,7 +206,7 @@ export function registerCowartThinkingTools(server) {
     async (input = {}) => {
       const result = await applyThinkingOperations(input, input);
       return toolText(
-        `${result.applied ? "Applied" : "Previewed"} ${result.changes.length} Cowart thinking edit(s); result revision ${result.resultRevision}.`,
+        `${result.applied ? "Applied" : "Previewed"} ${result.changes.length} Yogurt AI thinking edit(s); result revision ${result.resultRevision}.`,
         result,
       );
     },
@@ -215,7 +215,7 @@ export function registerCowartThinkingTools(server) {
   server.registerTool(
     THINKING_TOOL_NAMES.undoOperation,
     {
-      title: "Undo Cowart Thinking Operation",
+      title: "Undo Yogurt AI Thinking Operation",
       description:
         "Undo the latest compatible thinking-agent batch, or a named operation. Refuses to overwrite canvas work made after that batch.",
       inputSchema: {
@@ -232,7 +232,7 @@ export function registerCowartThinkingTools(server) {
     async (input = {}) => {
       const result = await undoThinkingOperation(input, input);
       return toolText(
-        `Undid Cowart thinking operation ${result.operationId}; canvas revision is now ${result.revision}.`,
+        `Undid Yogurt AI thinking operation ${result.operationId}; canvas revision is now ${result.revision}.`,
         result,
       );
     },

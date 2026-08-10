@@ -5,6 +5,8 @@ import {
   isEditableKeyboardTarget
 } from './excalidrawInteraction.js'
 
+const PRODUCT_NAME = 'Yogurt AI'
+
 function clickToolbarTool(toolId) {
   const candidates = document.querySelectorAll(
     `[data-testid="tools.${toolId}"], [data-value="${toolId}"]`
@@ -83,12 +85,12 @@ function CowartAiMenu({ brandIcon, items }) {
         type="button"
       >
         <span className="cowart-excalidraw-ai-trigger-icon">{brandIcon}</span>
-        <span>Cowart AI</span>
+        <span>{PRODUCT_NAME}</span>
       </button>
       {isOpen && (
-        <div aria-label="Cowart AI" className="cowart-excalidraw-ai-popover" role="menu">
+        <div aria-label={PRODUCT_NAME} className="cowart-excalidraw-ai-popover" role="menu">
           <div className="cowart-excalidraw-ai-popover-heading">
-            <strong>Cowart AI</strong>
+            <strong>{PRODUCT_NAME}</strong>
             <span>在画布中创建可编辑内容</span>
           </div>
           {items.map((item) => (

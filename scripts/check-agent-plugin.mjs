@@ -88,4 +88,4 @@ for (const skillName of [
   assert.ok(description && [...description].length <= 1024);
 }
 
-console.log(`Cowart Thinking Canvas Agent Plugin metadata OK (${manifest.version})`);
+console.log(`Yogurt AI Agent Plugin metadata OK (${manifest.version})`);

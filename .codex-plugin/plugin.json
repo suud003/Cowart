@@ -20,9 +20,9 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Cowart Thinking Canvas",
+    "displayName": "Yogurt AI",
     "shortDescription": "Think with sources, editable visuals, and reversible annotation-driven agent edits.",
-    "longDescription": "Cowart Thinking Canvas extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, and a selected-region annotation loop while preserving Cowart's image, HTML, Slides, and project-local storage capabilities.",
+    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, and a selected-region annotation loop while preserving image, HTML, Slides, and project-local storage capabilities.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -39,11 +39,11 @@
       "Project-local persistence"
     ],
     "defaultPrompt": [
-      "Open the Cowart Thinking Canvas for this project.",
+      "Open Yogurt AI for this project.",
       "Organize these documents into source-linked cards and relationships on the canvas.",
       "Interpret my selected canvas annotations and apply the smallest reversible edit.",
-      "Use my Cowart annotation screenshot to generate a clean revised image beside the original.",
-      "Generate a new image into the selected Cowart AI image holder."
+      "Use my Yogurt AI annotation screenshot to generate a clean revised image beside the original.",
+      "Generate a new image into the selected Yogurt AI image holder."
     ]
   }
 }
