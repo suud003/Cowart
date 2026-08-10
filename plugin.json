@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "cowart-thinking-canvas",
+  "version": "0.2.0+codex.20260810232641",
+  "description": "A source-grounded, non-linear thinking canvas with reversible agent edits and annotation-driven reasoning.",
+  "author": {
+    "name": "ZHONG XIN",
+    "email": "zhongxin123456@gmail.com",
+    "url": "https://www.jiqiren.ai"
+  },
+  "homepage": "https://www.jiqiren.ai",
+  "repository": "https://github.com/suud003/Cowart",
+  "license": "MIT",
+  "keywords": [
+    "canvas",
+    "tldraw",
+    "whiteboard",
+    "image-generation",
+    "visual-collaboration"
+  ]
+}

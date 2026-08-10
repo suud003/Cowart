@@ -1,13 +1,15 @@
 {
-  "name": "cowart",
-  "version": "0.1.3",
-  "description": "A local infinite canvas for Codex, powered by tldraw and built for visual thinking, image generation, and annotation-driven edits.",
+  "name": "cowart-thinking-canvas",
+  "version": "0.2.0+codex.20260810232641",
+  "description": "A source-grounded, non-linear thinking canvas with reversible agent edits and annotation-driven reasoning.",
   "author": {
     "name": "ZHONG XIN",
     "email": "zhongxin123456@gmail.com",
     "url": "https://www.jiqiren.ai"
   },
   "homepage": "https://www.jiqiren.ai",
+  "repository": "https://github.com/suud003/Cowart",
+  "license": "MIT",
   "keywords": [
     "canvas",
     "tldraw",
@@ -18,9 +20,9 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Cowart",
-    "shortDescription": "Create, annotate, and generate on a local infinite canvas in Codex.",
-    "longDescription": "Cowart brings a tldraw-powered infinite canvas into Codex for visual planning and creative iteration. Open a local canvas for the active project, sketch ideas, place AI image holders, generate images into selected slots, and turn annotated screenshots into revised image outputs while keeping canvas data in the user's project workspace.",
+    "displayName": "Cowart Thinking Canvas",
+    "shortDescription": "Think with sources, editable visuals, and reversible annotation-driven agent edits.",
+    "longDescription": "Cowart Thinking Canvas extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, and a selected-region annotation loop while preserving Cowart's image, HTML, Slides, and project-local storage capabilities.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -29,13 +31,17 @@
     "composerIcon": "./assets/app-icon.png",
     "capabilities": [
       "Interactive canvas",
-      "Local web service",
+      "Native Codex widget",
+      "Source-grounded reasoning",
+      "Atomic reversible edits",
       "AI image generation",
       "Annotation-driven editing",
       "Project-local persistence"
     ],
     "defaultPrompt": [
-      "Open the Cowart canvas for this project.",
+      "Open the Cowart Thinking Canvas for this project.",
+      "Organize these documents into source-linked cards and relationships on the canvas.",
+      "Interpret my selected canvas annotations and apply the smallest reversible edit.",
       "Use my Cowart annotation screenshot to generate a clean revised image beside the original.",
       "Generate a new image into the selected Cowart AI image holder."
     ]

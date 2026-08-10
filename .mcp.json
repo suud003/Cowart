@@ -1,9 +1,11 @@
 {
   "mcpServers": {
-    "cowart_mcp": {
-      "command": "bash",
+    "cowart_thinking_mcp": {
+      "title": "Cowart Thinking Canvas MCP",
+      "description": "Render, reason over, and persist the native Cowart Thinking Canvas without opening a localhost page.",
+      "command": "node",
       "args": [
-        "./scripts/start-mcp.sh"
+        "./scripts/start-mcp.mjs"
       ],
       "cwd": "."
     }

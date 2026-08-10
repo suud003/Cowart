@@ -1,76 +1,71 @@
-# Cowart
+# Cowart Thinking Canvas
 
-Cowart 是一个面向 Codex 的本地无限画布插件。它基于 tldraw 提供可视化画布，用于构思、标注、生成图片和根据标注图迭代图片。画布运行在本地网页服务中，数据默认保存到当前用户项目的 `canvas/` 目录，而不是保存到插件仓库里。
+Cowart Thinking Canvas 是基于 Cowart 的非线性思考画布插件。它把用户提供的文档、知识、图片和画布批注组织为可编辑的材料卡、观点、证据、问题与关系；Agent 先预演局部修改，再原子写入画布，并可按操作撤销。原有的 tldraw 画布、图片生成、AI HTML、Slides 和项目本地持久化能力全部保留。
+
+仓库同时遵循 [Agent Plugins v1.0.0](https://agent-plugins.org/specification)：根目录的 `plugin.json`、`skills/` 和 `mcp.json` 提供可移植插件入口；`.codex-plugin/plugin.json`、`.mcp.json` 和 `.agents/plugins/marketplace.json` 保留 Codex 专用的界面与安装元数据。
 
 English README: [README.en.md](README.en.md)
 
 ## 功能
 
-- 在 Codex 中打开一个本地 tldraw 无限画布。
+- 在 Codex 中打开一个原生 tldraw 无限画布 widget；正常使用不再通过网页浏览器或 in-app browser 打开本地页面。
 - 在当前项目目录中持久化画布页面和图片资源。
-- 在画布中创建 AI image holder，并让 Codex 生成图片填入选中的 holder。
-- 上传或提供 Cowart 标注截图，让 Codex 根据标注生成干净的新图并放到原图旁边。
-- 通过 Cowart MCP 工具读取选择状态、插入图片，并保存到页面本地资源目录。
+- 把本地文档或图片作为带来源路径、摘要和摘录的材料卡放入画布，不混淆“原始材料”和“Agent 推断”。
+- 读取当前页或选区的紧凑语义上下文，并用卡片、关系、位置和尺寸等原子操作让结构逐步长出来。
+- 对非简单修改先 `dryRun` 预演，再针对同一 revision 应用；每批修改都有 operation ID，可安全撤销。
+- 使用独立的 `AI 圈选` 工具手绘闭合区域，自动选中圈内内容；在就近出现的指令框中说明要求，把圈线、箭头、划掉、分组和文字批注连同选区截图交给 Agent 做局部修订与解释。
+- 在画布中创建 AI 图片框，直接输入 prompt、选择参考图，并让 Codex 按选中框的位置和比例生成图片后替换它。
+- 创建 16:9 的 `AI HTML` 框，通过 prompt 和参考图生成可运行的单文件 HTML，并直接嵌入画布继续编辑或迭代。
+- 创建 `AI Slides`，将图片和 HTML 组织成演示文稿，或让 Codex 按指定页数生成一组 16:9 HTML 页面；支持缩略图预览和全屏播放。
+- 标注好图片后，可从画布里直接提交标注截图，让 Codex 根据标注生成干净的新图并放到原图旁边。
+- 通过 Cowart MCP 工具读取选择状态、保存画布、插入图片或 HTML，并保存到页面本地资源目录。
 
 ## 安装
+
+### 从公开 Fork 安装
+
+```bash
+git clone https://github.com/suud003/Cowart.git
+cd Cowart
+npm install
+npm run build
+codex plugin marketplace add <Cowart-绝对路径>
+codex plugin add cowart-thinking-canvas@cowart-thinking-github
+```
+
+安装或重新安装后，请开启一个新的 Codex 任务，让 Skill 和 MCP 工具完整加载。
 
 ### 让 Codex 自动安装
 
 把下面这段发给 Codex：
 
 ```text
-请从 https://github.com/zhongerxin/cowart.git 安装 Cowart Codex 插件。
-请 clone 仓库到 ~/plugins/cowart，确认 .codex-plugin/plugin.json 存在，
-把插件加入 personal marketplace，先运行 codex plugin marketplace add ~，
-再运行 codex plugin add cowart@personal。
-安装后请校验插件，并告诉我是否需要开启一个新对话来加载新技能和 MCP 工具。
+请从我提供的 Cowart Thinking Canvas 解压目录安装本地 Codex 插件。
+先在插件根目录运行 npm install 和 npm run build，再运行
+codex plugin marketplace add <解压后的-cowart-thinking-canvas-绝对路径>，
+再运行 codex plugin add cowart-thinking-canvas@cowart-thinking-github，
+并用 codex plugin list 确认插件已启用。安装完成后提醒我开启一个新任务，
+以便加载新的 Skill 和 MCP 工具。
 ```
 
 ### 手动安装
 
-推荐把插件 clone 到 Codex personal marketplace 默认会引用的位置：
+先在解压后的插件根目录安装依赖，再把该目录注册为 Codex marketplace：
 
 ```bash
-mkdir -p ~/plugins
-git clone https://github.com/zhongerxin/cowart.git ~/plugins/cowart
-cd ~/plugins/cowart
 npm install
 npm run build
+codex plugin marketplace add <absolute-path-to-cowart-thinking-canvas>
 ```
 
-确保 `~/.agents/plugins/marketplace.json` 中有 Cowart 条目：
-
-```json
-{
-  "name": "personal",
-  "interface": {
-    "displayName": "Personal"
-  },
-  "plugins": [
-    {
-      "name": "cowart",
-      "source": {
-        "source": "local",
-        "path": "./plugins/cowart"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    }
-  ]
-}
-```
-
-然后先注册 personal marketplace，再安装插件：
+再从这个 marketplace 安装并检查插件：
 
 ```bash
-codex plugin marketplace add ~
-codex plugin add cowart@personal
+codex plugin add cowart-thinking-canvas@cowart-thinking-github
+codex plugin list
 ```
 
-安装后建议开启一个新的 Codex 对话，让新的 skill 和 MCP 工具完整加载。
+如果 `cowart-thinking-github` 已经指向当前解压目录，可以跳过第一条命令。安装或重新安装后请开启一个新的 Codex 任务，让 Skill 和 MCP 工具完整加载。
 
 ## 使用
 
@@ -82,11 +77,7 @@ codex plugin add cowart@personal
 Open the Cowart canvas for this project.
 ```
 
-Cowart 会启动本地服务，默认地址是：
-
-```text
-http://127.0.0.1:43217/
-```
+Cowart 会通过 `render_cowart_canvas_widget` 打开 Codex 原生 widget，不需要再启动本地网页服务或手动打开 in-app browser。`scripts/start-canvas.sh` 只保留为本地开发 fallback。
 
 画布数据会保存在当前项目目录下：
 
@@ -97,39 +88,59 @@ canvas/pages/<page-id>/assets/
 
 ![在 Codex 中打开 Cowart 画布](assets/open-canvas.png)
 
+### 用材料和批注推进非线性思考
+
+1. 把需要使用的文档、图片或笔记放在当前项目里，让 `$cowart-thinking-agent` 导入为材料卡；外部文件只有在明确允许时才会复制进 `canvas/materials/`。
+2. 让 Agent 从当前页或选区提取证据、问题、假设、洞察与结论。复杂修改会先预演，再在 revision 未变化时应用同一批局部操作。
+3. 点击顶部的 `AI 圈选`，手绘闭合区域后松开；Cowart 会自动选中圈内对象并聚焦指令框。输入要求后按 Enter 或点击发送，Agent 会解释它对批注的理解，只修改相关区域，并返回可撤销的 operation ID。
+4. 图表或信息图需要更强视觉表达时，Agent 会复用已有 AI HTML 或图片插入能力，把可预览内容放到相关材料旁边。
+
 ### 生成新图
 
 1. 打开 Cowart 画布。
-2. 在画布里创建并选中一个 AI image holder。
-3. 在 Codex 中描述要生成的图片，例如：
+2. 在画布里创建并选中一个 `AI 图片` 框。
+3. 在弹出的生成面板里输入 prompt，也可以选择一张或多张参考图，然后点击发送。
 
-```text
-Generate a new image into the selected Cowart AI image holder.
-```
-
-Codex 会读取选中的 holder，按它的比例生成图片，并插入到 holder 中。
+Cowart 会把 prompt、参考图和选中 `AI 图片` 框的尺寸信息发送给 Codex。Codex 会按这个框的位置和比例生成图片，然后把 `AI 图片` 框替换成普通图片形状。
 
 ![使用 Cowart 生成并插入新图](assets/generate-image.png)
 
 ### 根据标注图生成新图
 
 1. 在 Cowart 画布中对图片做标注。
-2. 截图并把标注截图发给 Codex。
-3. 使用提示：
+2. 选中被标注的图片，点击 `按标注修改`。
+3. Cowart 会导出包含原图、箭头和标注文字的截图，并通过 widget bridge 发送给 Codex。
 
-```text
-Use my Cowart annotation screenshot to generate a clean revised image beside the original.
-```
-
-Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图，并把结果放在原图旁边。原图和标注不会被删除或移动。
+Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图，并把结果放在原图旁边。原图和标注不会被删除或移动。你也可以手动把 Cowart 标注截图发给 Codex，走同样的修订流程。
 
 ![根据 Cowart 标注截图生成修订图](assets/annotation-edit.png)
 
+### 生成 AI HTML
+
+1. 在工具栏中创建并选中一个 `AI HTML` 框；新建框默认是 `1024 × 576`（16:9）。
+2. 在框下方的生成面板中输入 prompt，也可以选择或粘贴一张或多张参考图。
+3. 点击发送后，Codex 会生成完整可运行的单文件 HTML，并把它嵌入选中的 `AI HTML` 框。
+
+生成后的 HTML 会作为画布中的嵌入页面保存在当前 page 的 `assets/` 目录。选中它后可以下载渲染图、直接编辑文本，也可以结合画布标注继续修改 HTML，或根据 HTML 和标注生成图片。
+
+![编辑 Cowart AI HTML](assets/edit-html.png)
+
+### 创建和演示 AI Slides
+
+1. 在工具栏中创建一个 `AI Slides`。默认外框是 `1048 × 600`，对应一页 `1024 × 576`（16:9）内容和四周各 `12px` 的留白。
+2. 可以把画布中的图片或 HTML 拖入 Slides，也可以复制图片后选中 Slides，再粘贴进去；内容会自动按顺序横向排列。
+3. 空 Slides 被选中时会显示生成面板。输入整套演示的描述、按需添加参考图，并选择 3、5、10 页或自定义页数；默认是 5 页。
+4. 发送后，Codex 会生成指定数量、视觉与叙事连贯的独立 16:9 HTML 页面，并依次加入当前 Slides。Slides 已有内容时不再显示生成面板。
+5. 选中 Slides 后点击 `演示 Slides`，可以通过左侧缩略图预览和切换页面，也可以进入全屏播放。全屏时支持方向键、空格键和点击静态画面翻页；HTML 自身的按钮、链接和表单交互会保留，播放控制栏固定在顶部。
+
+![演示和切换 Cowart AI Slides](assets/view-slides.png)
+
 ## 技能
 
-- `cowart:cowart-open-canvas`：打开 Cowart 本地画布。
-- `cowart:cowart-image-gen`：把生成图片插入选中的 AI image holder。
-- `cowart:cowart-image-edit`：根据用户提供的 Cowart 标注截图生成修订图。
+- `cowart-thinking-canvas:cowart-thinking-agent`：依据材料和批注执行“检查上下文 → 区分来源与推断 → 预演 → 局部应用 → 解释与撤销”的工作流。
+- `cowart-thinking-canvas:cowart-open-canvas`：打开 Cowart 原生画布 widget。
+- `cowart-thinking-canvas:cowart-image-gen`：接收画布内 prompt 和参考图，用生成图片替换选中的 `AI 图片` 框；没有选中框时也可以把生成图插入当前页面。
+- `cowart-thinking-canvas:cowart-image-edit`：根据画布提交或用户提供的 Cowart 标注截图生成修订图。
 
 ## 本地开发
 
@@ -139,11 +150,13 @@ npm run dev
 npm run build
 ```
 
-也可以直接启动画布服务，并指定用户项目目录：
+本地开发时仍可以直接启动 Vite 画布服务，并指定用户项目目录：
 
 ```bash
 ./scripts/start-canvas.sh /path/to/user/project
 ```
+
+Vite 页面只用于界面开发，不包含 Codex 的 Agent 消息桥。AI 圈选在本地预览中会保留选区并复制指令，同时给出明确提示；要让指令直接触发 Agent，请使用 `render_cowart_canvas_widget` 打开的原生 Cowart 画布。
 
 常用环境变量：
 
@@ -157,6 +170,12 @@ ZHONG XIN
 zhongxin123456@gmail.com  
 https://www.jiqiren.ai
 
-## 致谢
+## 开源、参考与致谢
 
-Cowart 的画布能力基于 [tldraw/tldraw](https://github.com/tldraw/tldraw) 实现。
+本仓库是 [zhongerxin/Cowart](https://github.com/zhongerxin/Cowart) 的公开 Fork，保留 GitHub Fork 关系和原项目 MIT 许可证。当前发布版本由 [`suud003/Cowart`](https://github.com/suud003/Cowart) 维护。
+
+- [tldraw/tldraw](https://github.com/tldraw/tldraw)：Cowart 的无限画布、图形编辑和交互运行时。当前锁定版本为 `5.1.1`，适用 tldraw 自有许可证，不是 MIT。默认许可仅允许开发环境使用；公开生产部署需要符合其试用、商业或其他替代许可。完整许可证见 [`licenses/TLDRAW-LICENSE.md`](licenses/TLDRAW-LICENSE.md)。
+- [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw)：工具布局、手绘视觉语言和交互细节的设计参考。项目没有把 Excalidraw 编辑器作为运行依赖；打包的 Excalifont 文件与霞鹜小赖字形子集清单来自官方 `@excalidraw/excalidraw@0.18.1` 发布包，霞鹜小赖字体文件在运行时从该固定版本的公共 CDN 加载。
+- [Excalifont](https://github.com/excalidraw/excalidraw/tree/master/packages/excalidraw/fonts)、[霞鹜小赖](https://github.com/lxgw/kose-font) 与 Assistant：字体文件按 SIL Open Font License 1.1 分发，具体版权信息和完整 OFL 文本见 [`src/assets/fonts/FONT-LICENSES.md`](src/assets/fonts/FONT-LICENSES.md) 与 [`src/assets/fonts/OFL-1.1.txt`](src/assets/fonts/OFL-1.1.txt)。
+
+根目录 `LICENSE` 只覆盖 Cowart 自有代码与本 Fork 的 MIT 授权部分，不会覆盖或替代第三方依赖的许可证。完整说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

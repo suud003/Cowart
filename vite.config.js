@@ -1,11 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 
 const projectDir = resolve(process.env.COWART_PROJECT_DIR ?? process.cwd())
+const cowartAppVersion = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+).version
 const canvasDir = resolve(process.env.COWART_CANVAS_DIR ?? join(projectDir, 'canvas'))
 const canvasFile = join(canvasDir, 'cowart-canvas.json')
 const selectionFile = join(canvasDir, 'cowart-selection.json')
@@ -29,7 +32,9 @@ const mimeTypes = new Map([
   ['.jpeg', 'image/jpeg'],
   ['.png', 'image/png'],
   ['.svg', 'image/svg+xml'],
-  ['.webp', 'image/webp']
+  ['.webp', 'image/webp'],
+  ['.htm', 'text/html; charset=utf-8'],
+  ['.html', 'text/html; charset=utf-8']
 ])
 
 function sendJson(res, statusCode, payload) {
@@ -225,6 +230,8 @@ function extensionFromMimeType(mimeType) {
       return '.svg'
     case 'image/webp':
       return '.webp'
+    case 'text/html':
+      return '.html'
     default:
       return '.bin'
   }
@@ -248,6 +255,10 @@ function parseDataUrl(src) {
   const isBase64 = /^data:[^,]*;base64,/i.test(src)
   const buffer = isBase64 ? Buffer.from(encoded, 'base64') : Buffer.from(decodeURIComponent(encoded))
   return { buffer, mimeType }
+}
+
+function htmlDraftDataUrl(htmlContent) {
+  return `data:text/html;base64,${Buffer.from(String(htmlContent || ''), 'utf8').toString('base64')}`
 }
 
 function localAssetFilePathFromUrl(src) {
@@ -306,11 +317,124 @@ async function localizePageAsset(asset, pageId) {
   return localizedAsset
 }
 
+function isHtmlDraftShapeRecord(record) {
+  return record?.typeName === 'shape' && record.type === 'embed' && record.meta?.cowartHtmlDraft === true
+}
+
+function pageIdForShape(store, shape) {
+  let record = shape
+  const visited = new Set()
+  while (record && !visited.has(record.id)) {
+    visited.add(record.id)
+    if (record.typeName === 'page') return record.id
+    record = store[record.parentId]
+  }
+  return null
+}
+
+async function uniquePageAssetTarget(pageId, requestedName) {
+  const directory = pageAssetsDir(pageId)
+  const safeName = sanitizeAssetFileName(requestedName, 'html-draft.html', 'text/html')
+  const extension = extname(safeName)
+  const baseName = safeName.slice(0, safeName.length - extension.length)
+  let fileName = safeName
+  let counter = 2
+
+  while (true) {
+    const filePath = join(directory, fileName)
+    try {
+      await stat(filePath)
+      fileName = `${baseName}-v${counter}${extension}`
+      counter += 1
+    } catch (error) {
+      if (error.code === 'ENOENT') return { fileName, filePath }
+      throw error
+    }
+  }
+}
+
+async function updateHtmlDraftSnapshot(snapshot, { draftShapeId, htmlContent }) {
+  const shape = snapshot.store[draftShapeId]
+  if (!isHtmlDraftShapeRecord(shape)) throw new Error(`HTML draft shape not found: ${draftShapeId}`)
+  if (typeof htmlContent !== 'string' || !htmlContent.trim()) throw new Error('HTML draft content is empty.')
+
+  const pageId = pageIdForShape(snapshot.store, shape)
+  if (!pageId) throw new Error(`Could not determine page for HTML draft: ${draftShapeId}`)
+
+  const existingAssetUrl = shape.meta?.cowartHtmlDraftAssetUrl
+  const expectedPrefix = `${pageAssetsRoute}${pageDirName(pageId)}/`
+  const sharedAsset =
+    typeof existingAssetUrl === 'string' &&
+    Object.values(snapshot.store).some(
+      (record) =>
+        record?.id !== draftShapeId &&
+        isHtmlDraftShapeRecord(record) &&
+        record.meta?.cowartHtmlDraftAssetUrl === existingAssetUrl
+    )
+
+  let assetUrl = existingAssetUrl
+  let assetPath = typeof existingAssetUrl === 'string' ? localAssetFilePathFromUrl(existingAssetUrl) : null
+  if (!assetPath || !existingAssetUrl.startsWith(expectedPrefix) || sharedAsset) {
+    let requestedName = `${draftShapeId.replace(/[^a-zA-Z0-9_-]+/g, '-')}.html`
+    if (typeof existingAssetUrl === 'string' && existingAssetUrl.startsWith(expectedPrefix)) {
+      try {
+        requestedName = decodeURIComponent(existingAssetUrl.slice(expectedPrefix.length))
+      } catch (_error) {
+        // Fall back to the shape-based file name.
+      }
+    }
+    const target = await uniquePageAssetTarget(pageId, requestedName)
+    assetPath = target.filePath
+    assetUrl = pageAssetUrl(pageId, target.fileName)
+  }
+
+  await mkdir(dirname(assetPath), { recursive: true })
+  await writeFile(assetPath, htmlContent)
+  snapshot.store[draftShapeId] = {
+    ...shape,
+    meta: {
+      ...shape.meta,
+      cowartHtmlDraft: true,
+      cowartHtmlDraftAssetUrl: assetUrl
+    },
+    props: {
+      ...shape.props,
+      url: htmlDraftDataUrl(htmlContent)
+    }
+  }
+
+  return { assetPath, assetUrl, forkedSharedHtmlDraftAsset: sharedAsset, pageId, shapeId: draftShapeId }
+}
+
+async function persistHtmlDraftAsset(record, pageId) {
+  if (
+    record?.typeName !== 'shape' ||
+    record.type !== 'embed' ||
+    record.meta?.cowartHtmlDraft !== true ||
+    typeof record.props?.url !== 'string'
+  ) {
+    return record
+  }
+
+  const assetUrl = record.meta?.cowartHtmlDraftAssetUrl
+  const expectedPrefix = `${pageAssetsRoute}${pageDirName(pageId)}/`
+  if (typeof assetUrl !== 'string' || !assetUrl.startsWith(expectedPrefix)) return record
+
+  const parsed = record.props.url.startsWith('data:') ? parseDataUrl(record.props.url) : null
+  if (!parsed || parsed.mimeType !== 'text/html') return record
+
+  const assetPath = localAssetFilePathFromUrl(assetUrl)
+  if (!assetPath) return record
+  await mkdir(dirname(assetPath), { recursive: true })
+  await writeFile(assetPath, parsed.buffer)
+  return record
+}
+
 async function localizePageAssets(pageSnapshot, pageId) {
   const entries = await Promise.all(
     Object.entries(pageSnapshot.store).map(async ([id, record]) => {
-      if (record?.typeName !== 'asset') return [id, record]
-      return [id, await localizePageAsset(record, pageId)]
+      if (record?.typeName === 'asset') return [id, await localizePageAsset(record, pageId)]
+      return [id, await persistHtmlDraftAsset(record, pageId)]
     })
   )
   return {
@@ -457,6 +581,31 @@ function canvasStoragePlugin() {
     name: 'cowart-canvas-storage',
     configureServer(server) {
       server.middlewares.use(serveCanvasAsset)
+
+      server.middlewares.use('/api/html-draft', async (req, res) => {
+        try {
+          if (req.method !== 'PUT') {
+            res.statusCode = 405
+            res.setHeader('allow', 'PUT')
+            res.end()
+            return
+          }
+
+          const body = JSON.parse(await readRequestBody(req))
+          const loaded = await loadCanvasSnapshot()
+          if (!loaded.snapshot) {
+            sendJson(res, 404, { error: 'No Cowart canvas snapshot exists.' })
+            return
+          }
+
+          const updatedDraft = await updateHtmlDraftSnapshot(loaded.snapshot, body)
+          const result = await saveCanvasSnapshot(loaded.snapshot)
+          broadcastCanvasChanged(result)
+          sendJson(res, 200, { ok: true, ...updatedDraft, ...result })
+        } catch (error) {
+          sendJson(res, 500, { error: error.message })
+        }
+      })
 
       server.middlewares.use('/api/canvas-events', (req, res) => {
         if (req.method !== 'GET') {
@@ -617,8 +766,26 @@ function canvasStoragePlugin() {
 
 export default defineConfig({
   plugins: [react(), canvasStoragePlugin()],
+  define: {
+    __COWART_WIDGET_BUILD__: JSON.stringify(process.env.COWART_WIDGET_BUILD === '1'),
+    __COWART_APP_VERSION__: JSON.stringify(cowartAppVersion),
+    'process.env.NODE_ENV': JSON.stringify('development')
+  },
+  build: {
+    modulePreload: false,
+    assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+    cssCodeSplit: false,
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true
+      }
+    }
+  },
   server: {
     host: '127.0.0.1',
-    port: 43217
+    port: 43217,
+    watch: {
+      ignored: ['**/screenshots/**']
+    }
   }
 })
