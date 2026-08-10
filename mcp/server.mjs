@@ -37,6 +37,7 @@ import {
   COWART_GA4_EVENT_NAMES,
   sendCowartGa4Event,
 } from "./lib/ga4-analytics.mjs";
+import { registerCowartThinkingTools } from "./lib/thinking-tools.mjs";
 
 const TOOL_RENDER_WIDGET = "render_cowart_canvas_widget";
 const TOOL_GET_CANVAS_STATE = "get_cowart_canvas_state";
@@ -87,6 +88,7 @@ const COWART_CONNECT_DOMAINS = [...COWART_GOOGLE_DOMAINS];
 const COWART_RESOURCE_DOMAINS = [
   "data:",
   "blob:",
+  "https://cdn.jsdelivr.net",
   ...COWART_GOOGLE_DOMAINS,
 ];
 const COWART_FRAME_DOMAINS = [
@@ -120,13 +122,14 @@ const server = new McpServer(
   },
   {
     instructions:
-      "Render and update the native Cowart Codex widget. Use render_cowart_canvas_widget to open the canvas for the active project, get_cowart_selection for persisted widget selection, save_cowart_reference_image for widget-provided reference images, read_cowart_page_asset for lazy widget asset loading, download_cowart_file to save widget-requested files into the user's Downloads folder, insert_cowart_image to place or replace bitmap assets, and insert_cowart_html_draft to save and embed HTML drafts in the project-backed canvas without hand-writing tldraw records.",
+      "Render and update the native Cowart Thinking Canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Reuse insert_cowart_image and insert_cowart_html_draft for visual assets instead of hand-writing tldraw records.",
   },
 );
 
 registerCowartWidget(server);
 registerCowartStateTools(server);
 registerCowartImageTools(server);
+registerCowartThinkingTools(server);
 registerCowartAnalyticsTools(server);
 
 const transport = new StdioServerTransport();

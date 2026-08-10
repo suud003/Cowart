@@ -1,9 +1,9 @@
 ---
 name: cowart-open-canvas
-description: Open the native Cowart Codex widget, a tldraw-powered infinite canvas. Use when the user asks to open, launch, view, or work in the Cowart canvas or wants an infinite canvas inside Codex.
+description: Open the native Cowart Thinking Canvas Codex widget, a tldraw-powered infinite canvas. Use when the user asks to open, launch, view, or work in the Cowart canvas or wants an editable non-linear thinking canvas inside Codex.
 ---
 
-# Cowart Open Canvas
+# Cowart Thinking Canvas: Open Canvas
 
 ## Workflow
 
@@ -22,6 +22,8 @@ The tool returns `openai/outputTemplate: ui://widget/cowart/canvas.html`, which 
 ```text
 canvas/pages/<page-id>/cowart-canvas.json
 canvas/pages/<page-id>/assets/
+canvas/materials/
+canvas/thinking-history/
 ```
 
 3. If the MCP tool is not visible in the current session, use tool discovery for Cowart widget/render capabilities. If the plugin was just installed or upgraded, tell the user a new Codex conversation may be required for the new MCP tool schema to load.
