@@ -207,6 +207,18 @@ Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图�
 
 PPTX 中的标题、目录和详情文字是 PowerPoint 原生文本，可以继续修改；图片、HTML 和复杂手绘内容会以独立视觉对象保真，可在 PowerPoint 中移动、缩放或替换。文件会保存到系统下载目录。
 
+下面使用公开构造的“怎么让游戏变得更好玩”画布展示真实操作。打开 `Yogurt AI` 后，可以直接选择全景 HTML 或 PowerPoint：
+
+![在真实 Yogurt AI 画布中选择整合为 HTML 或 PowerPoint](assets/export-canvas-menu.png)
+
+HTML 会把当前页面整合为带内容目录的独立全景文件：
+
+![Yogurt AI 导出的可拖拽缩放 HTML 全景与内容目录](assets/export-html-panorama.png)
+
+PowerPoint 会生成全景、目录和详情页；下图中的目录文字框是被实际选中的原生 PowerPoint 文本，可以继续编辑：
+
+![在 PowerPoint 中编辑 Yogurt AI 导出的原生目录文字框](assets/export-powerpoint.png)
+
 ## 数据、来源与撤销
 
 - 画布页面保存在 `canvas/pages/<page-id>/cowart-canvas.json`，图片与 HTML 保存在同一页面的 `assets/` 目录。
