@@ -37,7 +37,7 @@ async function submitThinkingReview(editor, selectedIds, userInstruction) {
 
   const sender = followUpSender()
   if (!sender) {
-    const error = new Error('AI 圈选提交需要在 Codex 原生 Cowart 画布中使用。')
+    const error = new Error('AI 圈选提交需要在 Codex 原生 Yogurt AI 画布中使用。')
     error.code = FOLLOW_UP_UNAVAILABLE_CODE
     throw error
   }
@@ -173,7 +173,7 @@ export function CowartThinkingReviewToolbar() {
       if (error?.code === FOLLOW_UP_UNAVAILABLE_CODE) {
         let copied = false
         try {
-          await navigator.clipboard?.writeText(`请根据当前 Cowart 选区执行：${request}`)
+          await navigator.clipboard?.writeText(`请根据当前 Yogurt AI 选区执行：${request}`)
           copied = true
         } catch (_clipboardError) {
           // Selection persistence is still useful when clipboard access is unavailable.
@@ -182,8 +182,8 @@ export function CowartThinkingReviewToolbar() {
         addToast({
           title: '当前是本地预览',
           description: copied
-            ? '选区已保留，指令已复制。请在 Codex 原生 Cowart 画布中发送。'
-            : '选区已保留。AI 提交需要在 Codex 原生 Cowart 画布中完成。',
+            ? '选区已保留，指令已复制。请在 Codex 原生 Yogurt AI 画布中发送。'
+            : '选区已保留。AI 提交需要在 Codex 原生 Yogurt AI 画布中完成。',
           severity: 'info'
         })
         return

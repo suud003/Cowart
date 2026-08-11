@@ -1,15 +1,15 @@
 ---
 name: cowart-thinking-agent
-description: Build and revise source-grounded, non-linear thinking spaces in Cowart. Use when the user supplies documents, images, notes, or personal knowledge and wants ideas, evidence, questions, relations, comparisons, or charts to grow on an editable canvas; when the user circles, crosses out, groups, arrows, or annotates canvas content and expects the marks to be interpreted; or when a prior thinking-canvas operation must be explained or undone.
+description: Build and revise source-grounded, non-linear thinking spaces in Yogurt AI. Use when the user supplies documents, images, notes, or personal knowledge and wants ideas, evidence, questions, relations, comparisons, or charts to grow on an editable canvas; when the user circles, crosses out, groups, arrows, or annotates canvas content and expects the marks to be interpreted; or when a prior thinking-canvas operation must be explained or undone.
 ---
 
-# Cowart Thinking Agent
+# Yogurt AI Thinking Agent
 
 Treat the canvas as shared external memory. Preserve the user's materials and change only the smallest relevant region.
 
 ## Core loop
 
-1. Open Cowart with `render_cowart_canvas_widget` when no active canvas exists.
+1. Open Yogurt AI with `render_cowart_canvas_widget` when no active canvas exists.
 2. Read context with `get_cowart_thinking_context`. Use `scope: selection` for annotation requests and `scope: page` for broader synthesis.
 3. Separate four layers before editing:
    - source material and direct excerpts;
@@ -36,7 +36,7 @@ Never write tldraw records or replace a raw snapshot directly.
 - When the user asks to organize, map, diagram, or show a panorama, build one connected graph in a single operation batch: create the central topic, its branches, detail cards, and every required `create_relation`. Never return a few isolated boxes as the finished diagram.
 - Prefer a top-down hierarchy matching Excalidraw: one short central card, 3–6 concise branch cards, and detail cards beneath the branch they explain. The canvas automatically lays out connected cards when you omit `x`, `y`, and `anchorId`; use explicit coordinates only when preserving or extending an existing composition.
 - Keep structural parent-to-child arrows unlabeled. Add a relation label only when the verb carries meaning that the surrounding hierarchy does not already express.
-- Use title-only cards for scannable concepts. Put paragraphs or numbered detail into a body card; Cowart sizes those cards to their content.
+- Use title-only cards for scannable concepts. Put paragraphs or numbered detail into a body card; Yogurt AI sizes those cards to their content.
 - Use existing `insert_cowart_html_draft` for an editable comparison table, timeline, matrix, quantitative chart, or interactive explanation that cards cannot express well.
 - Use existing image generation and insertion only when a bitmap materially aids understanding.
 - Anchor new content beside the material or idea it explains. Do not dump every result at the page edge.

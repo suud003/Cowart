@@ -273,8 +273,8 @@ try {
   }
 
   const widgetHtml = resource.contents?.[0]?.text || "";
-  if (!widgetHtml.includes("window.cowartMcp") || !widgetHtml.includes("Cowart Canvas")) {
-    throw new Error("Cowart widget HTML does not include the expected bridge and app shell.");
+  if (!widgetHtml.includes("window.cowartMcp") || !widgetHtml.includes("Yogurt AI Canvas")) {
+    throw new Error("Yogurt AI widget HTML does not include the expected bridge and app shell.");
   }
   if (/<script\b[^>]*\btype="module"/i.test(widgetHtml)) {
     throw new Error("Cowart widget HTML should use classic inline scripts for host compatibility.");

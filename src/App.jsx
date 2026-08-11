@@ -196,10 +196,10 @@ const ANNOTATION_EDIT_PROMPT = [
   '- 保留原图和原标注不动，把新图放到原图旁边。'
 ].join('\n')
 const AI_HTML_LOCAL_ASSET_PROMPT_LINES = [
-  '- HTML 中不要引用 http:// 或 https:// 远程图片；Cowart widget 的 CSP 不允许 HTML iframe 直接加载这些资源。',
+  '- HTML 中不要引用 http:// 或 https:// 远程图片；Yogurt AI widget 的 CSP 不允许 HTML iframe 直接加载这些资源。',
   '- 如果 HTML 需要图片，先确定目标 shape 所在的 page，再把图片下载到当前项目的 canvas/pages/<page-id-without-page-prefix>/assets/ 目录。',
   '- HTML 内必须使用 /page-assets/<page-id-without-page-prefix>/<filename> 引用这些本地图片；不要使用 file:// URL 或绝对文件路径。',
-  '- Cowart 会在将 HTML 放入 iframe 前，通过 read_cowart_page_asset 把 /page-assets/ 图片转换为 data: URL。'
+  '- Yogurt AI 会在将 HTML 放入 iframe 前，通过 read_cowart_page_asset 把 /page-assets/ 图片转换为 data: URL。'
 ]
 const ANNOTATION_HTML_PROMPT = [
   '[@cowart-thinking-canvas](plugin://cowart-thinking-canvas@cowart-thinking-github) 按标注生成 AI HTML',
@@ -246,7 +246,7 @@ const HTML_DRAFT_ANNOTATION_IMAGE_PROMPT = [
 const AI_IMAGE_GENERATION_PROMPT_PREFIX = [
   '[@cowart-thinking-canvas](plugin://cowart-thinking-canvas@cowart-thinking-github) 生成图片',
   '',
-  '请根据下面的 prompt 生成一张图片，并替换当前选中的 Cowart AI 图片框；最终画布里应留下普通图片形状，不保留 AI 图片框容器。',
+  '请根据下面的 prompt 生成一张图片，并替换当前选中的 Yogurt AI 图片框；最终画布里应留下普通图片形状，不保留 AI 图片框容器。',
   '默认生成一张；如果用户在 prompt 中明确要求多张图片，则用户要求的数量优先于上面的单数措辞。',
   '多张时必须分别生成对应数量的独立 bitmap，并作为多个普通图片形状从左到右平铺在画布上；第一张替换当前 AI 图片框，后续图片放在上一张图片右侧。',
   '插入多张图片时，第一张按默认流程替换 AI 图片框；之后每次使用上一张插入结果返回的 shapeId 作为 anchorShapeId，并设置 replaceAiImageHolder: false、matchAnchor: false、placement: "right"。',
@@ -257,7 +257,7 @@ const AI_IMAGE_GENERATION_PROMPT_PREFIX = [
 const AI_DRAFT_GENERATION_PROMPT_PREFIX = [
   '[@cowart-thinking-canvas](plugin://cowart-thinking-canvas@cowart-thinking-github) 生成 AI HTML',
   '',
-  '请根据下面的 prompt 生成一个单文件 HTML 草稿，并把它嵌入当前选中的 Cowart AI HTML 框。',
+  '请根据下面的 prompt 生成一个单文件 HTML 草稿，并把它嵌入当前选中的 Yogurt AI HTML 框。',
   '默认生成一个 HTML；如果用户在 prompt 中明确要求多个 HTML、多个方案或多张页面，则用户要求的数量优先于上面的单数措辞。',
   '多个 HTML 必须分别生成为对应数量的完整、独立、可运行的单文件 HTML，并作为多个 HTML embed 从左到右平铺在画布上；第一个替换当前 AI HTML 框，后续 HTML 放在上一个 HTML 右侧。',
   '不要在一个 AI HTML 里制作多页、分页、选项卡、轮播或幻灯片来代替多个独立 HTML；只有用户明确要求 AI Slides 时才使用多页 Slides 语义。',
@@ -1230,7 +1230,7 @@ async function sendAnnotationEditRequest(editor, imageShapeId) {
   })
   const sender = followUpSender()
   if (!sender) {
-    throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
+    throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
   }
 
   const content = [{ type: 'text', text: prompt }]
@@ -1284,7 +1284,7 @@ async function sendAnnotationHtmlRequest(editor, imageShapeId) {
     screenshotAsset
   })
   const sender = followUpSender()
-  if (!sender) throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
+  if (!sender) throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
 
   const content = [{ type: 'text', text: prompt }]
   if (supportsCowartMessageImages()) {
@@ -2183,8 +2183,8 @@ function buildAiSlidesAnnotationEditPrompt({
   return [
     AI_SLIDES_ANNOTATION_EDIT_PROMPT,
     '',
-    `Cowart source AI Slides frame: ${sourceSlidesShape.id}`,
-    `Cowart target AI Slides frame below source: ${targetSlidesShapeId}`,
+    `Yogurt AI source Slides frame: ${sourceSlidesShape.id}`,
+    `Yogurt AI target Slides frame below source: ${targetSlidesShapeId}`,
     `Required page count: exactly ${pageCount}.`,
     `Included annotation shapes: ${annotationCount}`,
     `Screenshot size: ${exportResult.width}x${exportResult.height}`,
@@ -2212,7 +2212,7 @@ function buildAiSlidesAnnotationEditPrompt({
 
 async function sendAiSlidesAnnotationEditRequest(editor, slidesShapeId) {
   const sender = followUpSender()
-  if (!sender) throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
+  if (!sender) throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
 
   const sourceSlidesShape = editor.getShape(slidesShapeId)
   const sourceItems = getAiSlidesItems(editor, slidesShapeId)
@@ -2285,7 +2285,7 @@ function buildHtmlDraftAnnotationEditPrompt({ draftShape, exportResult, screensh
   return [
     HTML_DRAFT_ANNOTATION_EDIT_PROMPT,
     '',
-    `Cowart HTML draft shape: ${draftShape.id}`,
+    `Yogurt AI HTML draft shape: ${draftShape.id}`,
     `HTML draft asset URL: ${assetUrl || 'unavailable'}`,
     ...(assetPath ? [`HTML draft local path: ${assetPath}`] : []),
     `Included annotation shapes: ${annotationCount}`,
@@ -2314,7 +2314,7 @@ function buildHtmlDraftAnnotationImagePrompt({ draftShape, exportResult, screens
   return [
     HTML_DRAFT_ANNOTATION_IMAGE_PROMPT,
     '',
-    `Cowart HTML draft shape: ${draftShape.id}`,
+    `Yogurt AI HTML draft shape: ${draftShape.id}`,
     `Target canvas image size: ${targetWidth} x ${targetHeight} canvas units.`,
     `Target aspect ratio: ${targetWidth}:${targetHeight} (${ratio.toFixed(3)} width/height).`,
     `Included annotation shapes: ${annotationCount}`,
@@ -2335,7 +2335,7 @@ function buildHtmlDraftAnnotationImagePrompt({ draftShape, exportResult, screens
 
 async function sendHtmlDraftAnnotationRequest(editor, draftShapeId, mode) {
   const sender = followUpSender()
-  if (!sender) throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
+  if (!sender) throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
 
   const draftShape = editor.getShape(draftShapeId)
   if (!isCowartHtmlDraftEmbedShape(draftShape)) {
@@ -2465,7 +2465,7 @@ function buildAiImageGenerationPrompt({ holderShape, userPrompt, references, ref
   return [
     AI_IMAGE_GENERATION_PROMPT_PREFIX,
     '',
-    `Cowart AI image holder shape: ${holderShape.id}`,
+    `Yogurt AI image holder shape: ${holderShape.id}`,
     `Target canvas slot: ${targetWidth} x ${targetHeight} canvas units.`,
     `Target aspect ratio: ${ratioLabel} (${ratio.toFixed(3)} width/height).`,
     'Compose the final bitmap for this slot without cropping or stretching.',
@@ -2483,7 +2483,7 @@ function buildAiDraftGenerationPrompt({ holderShape, userPrompt, references, ref
   return [
     AI_DRAFT_GENERATION_PROMPT_PREFIX,
     '',
-    `Cowart AI draft holder shape: ${holderShape.id}`,
+    `Yogurt AI draft holder shape: ${holderShape.id}`,
     `Target canvas draft slot: ${targetWidth} x ${targetHeight} canvas units.`,
     `Target aspect ratio: ${ratioLabel} (${ratio.toFixed(3)} width/height).`,
     'Design the HTML so it fills this iframe size without needing external files.',
@@ -2508,7 +2508,7 @@ function buildAiSlidesGenerationPrompt({ slidesShape, pageCount, userPrompt, ref
   return [
     AI_SLIDES_GENERATION_PROMPT_PREFIX,
     '',
-    `Cowart AI Slides frame: ${slidesShape.id}`,
+    `Yogurt AI Slides frame: ${slidesShape.id}`,
     `Required page count: exactly ${pageCount}.`,
     'Create the deck as a coherent sequence with a clear opening, development, and conclusion.',
     ...referenceLines,
@@ -2556,7 +2556,7 @@ function stopEditorOverlayEvent(event) {
 async function sendAiImageGenerationRequest({ holderShape, userPrompt, referenceFiles = [] }) {
   const sender = followUpSender()
   if (!sender) {
-    throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
+    throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
   }
 
   const imageReferences = referenceFiles.slice(0, AI_IMAGE_REFERENCE_MAX_FILES)
@@ -2576,12 +2576,12 @@ async function sendAiImageGenerationRequest({ holderShape, userPrompt, reference
         })
       } catch (error) {
         if (!referenceAttached) {
-          throw new Error(`参考图无法保存到 Cowart 本地 assets：${error instanceof Error ? error.message : String(error)}`)
+          throw new Error(`参考图无法保存到 Yogurt AI 本地 assets：${error instanceof Error ? error.message : String(error)}`)
         }
         console.warn('Cowart reference image could not be saved; relying on direct image attachment.', error)
       }
     } else if (!referenceAttached) {
-      throw new Error('当前 Codex host 没有声明支持图片附件，也没有可用的 Cowart MCP 文件保存桥。')
+      throw new Error('当前 Codex host 没有声明支持图片附件，也没有可用的 Yogurt AI MCP 文件保存桥。')
     }
     references.push({ file: referenceFile, dataUrl: referenceDataUrl, savedReference })
   }
@@ -2619,7 +2619,7 @@ async function sendAiImageGenerationRequest({ holderShape, userPrompt, reference
 async function sendAiDraftGenerationRequest({ holderShape, userPrompt, referenceFiles = [] }) {
   const sender = followUpSender()
   if (!sender) {
-    throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
+    throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
   }
 
   const imageReferences = referenceFiles.slice(0, AI_IMAGE_REFERENCE_MAX_FILES)
@@ -2639,12 +2639,12 @@ async function sendAiDraftGenerationRequest({ holderShape, userPrompt, reference
         })
       } catch (error) {
         if (!referenceAttached) {
-          throw new Error(`参考图无法保存到 Cowart 本地 assets：${error instanceof Error ? error.message : String(error)}`)
+          throw new Error(`参考图无法保存到 Yogurt AI 本地 assets：${error instanceof Error ? error.message : String(error)}`)
         }
         console.warn('Cowart draft reference image could not be saved; relying on direct image attachment.', error)
       }
     } else if (!referenceAttached) {
-      throw new Error('当前 Codex host 没有声明支持图片附件，也没有可用的 Cowart MCP 文件保存桥。')
+      throw new Error('当前 Codex host 没有声明支持图片附件，也没有可用的 Yogurt AI MCP 文件保存桥。')
     }
     references.push({ file: referenceFile, dataUrl: referenceDataUrl, savedReference })
   }
@@ -2682,7 +2682,7 @@ async function sendAiDraftGenerationRequest({ holderShape, userPrompt, reference
 async function sendAiSlidesGenerationRequest({ slidesShape, pageCount, userPrompt, referenceFiles = [] }) {
   const sender = followUpSender()
   if (!sender) {
-    throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
+    throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
   }
 
   const imageReferences = referenceFiles.slice(0, AI_IMAGE_REFERENCE_MAX_FILES)
@@ -2702,12 +2702,12 @@ async function sendAiSlidesGenerationRequest({ slidesShape, pageCount, userPromp
         })
       } catch (error) {
         if (!referenceAttached) {
-          throw new Error(`参考图无法保存到 Cowart 本地 assets：${error instanceof Error ? error.message : String(error)}`)
+          throw new Error(`参考图无法保存到 Yogurt AI 本地 assets：${error instanceof Error ? error.message : String(error)}`)
         }
         console.warn('Cowart slides reference image could not be saved; relying on direct image attachment.', error)
       }
     } else if (!referenceAttached) {
-      throw new Error('当前 Codex host 没有声明支持图片附件，也没有可用的 Cowart MCP 文件保存桥。')
+      throw new Error('当前 Codex host 没有声明支持图片附件，也没有可用的 Yogurt AI MCP 文件保存桥。')
     }
     references.push({ file: referenceFile, dataUrl: referenceDataUrl, savedReference })
   }
@@ -6094,7 +6094,7 @@ export default function App() {
           acknowledgedImageShapeDeletes: Array.from(acknowledgedImageShapeDeletes)
         })
         if (saveResult?.ok === false) {
-          throw new Error(saveResult.message || 'Cowart refused to save the canvas snapshot.')
+          throw new Error(saveResult.message || 'Yogurt AI refused to save the canvas snapshot.')
         }
         for (const imageShapeId of acknowledgedDeletesInSave) {
           acknowledgedImageShapeDeletes.delete(imageShapeId)
@@ -6290,7 +6290,7 @@ export default function App() {
   }
 
   return (
-    <main className="cowart-canvas" aria-label="Cowart infinite canvas">
+    <main className="cowart-canvas" aria-label="Yogurt AI infinite canvas">
       <SkippedRecordsNotice records={skippedRecords} />
       <Tldraw
         snapshot={snapshot ?? undefined}

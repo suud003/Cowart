@@ -5,7 +5,7 @@ import './cowartGeoTypes.js'
 function createValidationStore() {
   return new Store({
     schema: createTLSchema(),
-    props: { defaultName: 'Cowart Canvas' }
+    props: { defaultName: 'Yogurt AI Canvas' }
   })
 }
 
