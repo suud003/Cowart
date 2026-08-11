@@ -55,6 +55,7 @@ import {
   createShapeId,
   DEFAULT_EMBED_DEFINITIONS,
   onDragFromToolbarToCreateShape,
+  renderPlaintextFromRichText,
   startEditingShapeWithRichText,
   toRichText,
   toDomPrecision,
@@ -80,8 +81,11 @@ import {
 import {
   collectAnnotationTargetShapeIds,
   expandBox,
-  getAnnotationExportPixelRatio as getAnnotationEditExportPixelRatio
+  getAnnotationExportPixelRatio as getAnnotationEditExportPixelRatio,
+  isAnnotationMarkShape
 } from './annotationContext.js'
+import { buildCanvasHtmlDocument, canvasExportFileName } from './canvasExportDocument.js'
+import { buildCanvasPptxBase64 } from './canvasPptx.js'
 import {
   IS_COWART_WIDGET_BUILD,
   copyCowartImageToClipboard,
@@ -144,6 +148,11 @@ const AI_SLIDES_PRESENT_LABEL = '演示 Slides'
 const COWART_EXPORT_LABEL = '导出'
 const COWART_EXPORT_IMAGE_LABEL = '导出为图片'
 const COWART_EXPORT_HTML_LABEL = '导出为 HTML'
+const COWART_CANVAS_EXPORT_PADDING = 48
+const COWART_CANVAS_EXPORT_MAX_DIMENSION = 4096
+const COWART_CANVAS_EXPORT_MAX_PIXELS = 16_000_000
+const COWART_CANVAS_EXPORT_HTML_CAPTURE_RATIO = 1.5
+const COWART_CANVAS_DETAIL_SKIP_TYPES = new Set(['arrow', 'draw', 'highlight', 'line'])
 const AI_SLIDES_GAP = 32
 const COWART_OPEN_SLIDES_EVENT = 'cowart:open-slides'
 const AI_IMAGE_HOLDER_DEFAULT_W = 512
@@ -1990,6 +1999,385 @@ async function exportCowartSlides(editor, slidesShapeId, format) {
   return { directoryName, filePath: results.at(-1)?.directoryPath, results }
 }
 
+function cowartCanvasExportPixelRatio(
+  bounds,
+  {
+    maxDimension = COWART_CANVAS_EXPORT_MAX_DIMENSION,
+    maxPixels = COWART_CANVAS_EXPORT_MAX_PIXELS
+  } = {}
+) {
+  const width = Math.max(1, Number(bounds?.w) || 1)
+  const height = Math.max(1, Number(bounds?.h) || 1)
+  return Math.max(
+    0.2,
+    Math.min(
+      2,
+      maxDimension / Math.max(width, height),
+      Math.sqrt(maxPixels / (width * height))
+    )
+  )
+}
+
+function cachedCowartHtmlCapture(cache, shape) {
+  let capture = cache.get(shape.id)
+  if (!capture) {
+    capture = renderCowartHtmlDraftCanvas(shape, COWART_CANVAS_EXPORT_HTML_CAPTURE_RATIO)
+    cache.set(shape.id, capture)
+  }
+  return capture
+}
+
+async function renderCowartCanvasComposite(
+  editor,
+  rootShapeIds,
+  {
+    padding = COWART_CANVAS_EXPORT_PADDING,
+    htmlCaptureCache = new Map(),
+    maxDimension,
+    maxPixels,
+    outputFormat = 'png'
+  } = {}
+) {
+  const rootIds = rootShapeIds.filter((shapeId) => editor.getShape(shapeId))
+  if (!rootIds.length) throw new Error('当前画布没有可导出的内容。')
+
+  const includedShapeIds = editor.getShapeAndDescendantIds(rootIds)
+  const shapes = editor
+    .getCurrentPageShapesSorted()
+    .filter((shape) => includedShapeIds.has(shape.id) && !editor.isShapeHidden(shape.id))
+  if (!shapes.length) throw new Error('当前画布没有可见内容。')
+
+  const rawBounds = editor.getShapesPageBounds(shapes.map((shape) => shape.id))
+  if (!rawBounds) throw new Error('无法计算当前画布的导出范围。')
+  const bounds = expandBox(rawBounds, padding)
+  const pixelRatio = cowartCanvasExportPixelRatio(bounds, { maxDimension, maxPixels })
+  const htmlShapes = shapes.filter(isCowartHtmlDraftEmbedShape)
+  const baseCapturePromise = editor.toImageDataUrl(rootIds, {
+    bounds,
+    background: true,
+    darkMode: false,
+    format: 'png',
+    padding: 0,
+    pixelRatio
+  })
+  const htmlCapturesPromise = Promise.all(
+    htmlShapes.map((shape) => cachedCowartHtmlCapture(htmlCaptureCache, shape))
+  )
+  const [baseCapture, htmlCaptures] = await Promise.all([
+    baseCapturePromise,
+    htmlCapturesPromise
+  ])
+
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(Number(baseCapture.width) || bounds.w * pixelRatio))
+  canvas.height = Math.max(1, Math.round(Number(baseCapture.height) || bounds.h * pixelRatio))
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('浏览器无法创建画布导出图。')
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.drawImage(await loadRasterImage(baseCapture.url), 0, 0, canvas.width, canvas.height)
+
+  const scaleX = canvas.width / bounds.w
+  const scaleY = canvas.height / bounds.h
+  for (const [index, shape] of htmlShapes.entries()) {
+    const capture = htmlCaptures[index]
+    const pageTransform = editor.getShapePageTransform(shape.id)
+    if (!pageTransform) continue
+    context.setTransform(
+      scaleX * pageTransform.a,
+      scaleY * pageTransform.b,
+      scaleX * pageTransform.c,
+      scaleY * pageTransform.d,
+      scaleX * (pageTransform.e - bounds.x),
+      scaleY * (pageTransform.f - bounds.y)
+    )
+    context.drawImage(
+      capture.canvas,
+      0,
+      0,
+      Number(shape.props?.w) || capture.displayWidth,
+      Number(shape.props?.h) || capture.displayHeight
+    )
+  }
+
+  const annotationShapeIds = shapes
+    .filter((shape) => isAnnotationMarkShape(shape))
+    .map((shape) => shape.id)
+  if (annotationShapeIds.length) {
+    const annotationOverlay = await editor.toImageDataUrl(annotationShapeIds, {
+      bounds,
+      background: false,
+      darkMode: false,
+      format: 'png',
+      padding: 0,
+      pixelRatio
+    })
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.drawImage(
+      await loadRasterImage(annotationOverlay.url),
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    )
+  }
+
+  return {
+    dataUrl: outputFormat === 'jpeg'
+      ? canvas.toDataURL('image/jpeg', 0.86)
+      : canvas.toDataURL('image/png'),
+    width: canvas.width,
+    height: canvas.height,
+    displayWidth: bounds.w,
+    displayHeight: bounds.h,
+    bounds: { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h },
+    shapeIds: shapes.map((shape) => shape.id)
+  }
+}
+
+function cowartExportShapeTypeLabel(shape) {
+  if (isCowartHtmlDraftEmbedShape(shape)) return 'HTML'
+  if (isAiSlidesShape(shape)) return 'Slides'
+  return ({
+    arrow: '连线',
+    bookmark: '链接',
+    draw: '手绘',
+    embed: '嵌入内容',
+    frame: '画框',
+    geo: '卡片',
+    group: '组合',
+    highlight: '高亮',
+    image: '图片',
+    line: '线条',
+    note: '便签',
+    text: '文本',
+    video: '视频'
+  })[shape?.type] || '画布内容'
+}
+
+function cowartShapePlainText(shape) {
+  if (!shape) return ''
+  const candidates = []
+  if (typeof shape.meta?.cowartThinkingBody === 'string') {
+    candidates.push(shape.meta.cowartThinkingBody)
+  }
+  if (shape.props?.richText) {
+    try {
+      candidates.push(renderPlaintextFromRichText(shape.props.richText))
+    } catch (_error) {
+      // Keep reading the remaining plain-text fields.
+    }
+  }
+  for (const key of ['text', 'name', 'altText']) {
+    if (typeof shape.props?.[key] === 'string') candidates.push(shape.props[key])
+  }
+  return candidates
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join('\n')
+}
+
+async function cowartShapeExportText(shape, htmlTextCache) {
+  const plainText = cowartShapePlainText(shape)
+  if (!isCowartHtmlDraftEmbedShape(shape)) return plainText
+
+  let htmlText = htmlTextCache.get(shape.id)
+  if (htmlText === undefined) {
+    try {
+      const iframeDocument = await waitForHtmlDraftDocument(shape.id)
+      htmlText = String(iframeDocument.body?.innerText || '').trim()
+    } catch (_error) {
+      htmlText = ''
+    }
+    htmlTextCache.set(shape.id, htmlText)
+  }
+  return [plainText, htmlText].filter(Boolean).join('\n')
+}
+
+function cowartShapeExportTitle(shape, text) {
+  const firstLine = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean)
+  if (firstLine) return firstLine.length > 80 ? `${firstLine.slice(0, 79)}…` : firstLine
+  return cowartExportShapeTypeLabel(shape)
+}
+
+function cowartShapeExternalUrl(shape) {
+  for (const value of [shape?.props?.url, shape?.props?.href]) {
+    if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value
+  }
+  return null
+}
+
+async function collectCowartCanvasExportItems(editor, shapes, htmlTextCache) {
+  const items = await Promise.all(shapes.map(async (shape) => {
+    const bounds = editor.getShapePageBounds(shape.id)
+    if (!bounds) return null
+    const text = await cowartShapeExportText(shape, htmlTextCache)
+    const link = cowartShapeExternalUrl(shape)
+    const isVisualContent = ['bookmark', 'embed', 'frame', 'image', 'video'].includes(shape.type)
+    if (!text && !link && !isVisualContent) return null
+    return {
+      shapeId: shape.id,
+      type: cowartExportShapeTypeLabel(shape),
+      title: cowartShapeExportTitle(shape, text),
+      text,
+      link,
+      bounds: { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
+    }
+  }))
+  return items.filter(Boolean)
+}
+
+function cowartCanvasDetailShapes(editor, rootShapes) {
+  const detailShapes = []
+  const seen = new Set()
+  for (const rootShape of rootShapes) {
+    const candidates = isAiSlidesShape(rootShape)
+      ? getAiSlidesItems(editor, rootShape.id)
+      : [rootShape]
+    for (const shape of candidates) {
+      if (
+        !shape ||
+        seen.has(shape.id) ||
+        editor.isShapeHidden(shape.id) ||
+        COWART_CANVAS_DETAIL_SKIP_TYPES.has(shape.type)
+      ) {
+        continue
+      }
+      seen.add(shape.id)
+      detailShapes.push(shape)
+    }
+  }
+  return detailShapes
+}
+
+function cowartDetailShapeNeedsImage(shape) {
+  return ['bookmark', 'embed', 'frame', 'group', 'image', 'video'].includes(shape?.type)
+}
+
+async function cowartDetailShapeText(editor, shape, htmlTextCache) {
+  const descendantIds = editor.getShapeAndDescendantIds([shape.id])
+  const texts = []
+  for (const item of editor.getCurrentPageShapesSorted()) {
+    if (!descendantIds.has(item.id) || editor.isShapeHidden(item.id)) continue
+    const text = await cowartShapeExportText(item, htmlTextCache)
+    if (text && !texts.includes(text)) texts.push(text)
+  }
+  return texts.join('\n\n')
+}
+
+function downloadCowartBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob)
+  downloadDataUrl(url, fileName)
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+async function exportCowartCanvas(editor, format) {
+  const rootShapes = editor
+    .getSortedChildIdsForParent(editor.getCurrentPageId())
+    .map((shapeId) => editor.getShape(shapeId))
+    .filter((shape) => shape && !editor.isShapeHidden(shape.id))
+  if (!rootShapes.length) throw new Error('当前画布没有可导出的内容。')
+
+  const exportedAt = new Date()
+  const fileName = canvasExportFileName(format, exportedAt)
+  const pageName = String(editor.getCurrentPage()?.name || '').trim()
+  const contentName = rootShapes
+    .map((shape) => String(shape.props?.name || '').trim())
+    .find((name) => name && ![AI_DRAFT_HOLDER_LABEL, AI_SLIDES_LABEL].includes(name))
+  const title = pageName && !/^Page(?: \d+)?$/i.test(pageName)
+    ? pageName
+    : contentName || 'Yogurt AI 画布'
+  const htmlCaptureCache = new Map()
+  const htmlTextCache = new Map()
+  const overview = await renderCowartCanvasComposite(
+    editor,
+    rootShapes.map((shape) => shape.id),
+    { htmlCaptureCache }
+  )
+  const overviewShapeIds = new Set(overview.shapeIds)
+  const overviewShapes = editor
+    .getCurrentPageShapesSorted()
+    .filter((shape) => overviewShapeIds.has(shape.id))
+  const items = await collectCowartCanvasExportItems(editor, overviewShapes, htmlTextCache)
+
+  if (format === 'html') {
+    const htmlContent = buildCanvasHtmlDocument({
+      title,
+      overview,
+      items,
+      exportedAt: exportedAt.toLocaleString('zh-CN')
+    })
+    let result = { fileName }
+    if (hasCowartWidgetBridge()) {
+      result = await downloadCowartFile({
+        dataUrl: textDataUrl(htmlContent, 'text/html'),
+        fileName,
+        mimeType: 'text/html'
+      })
+    } else {
+      downloadCowartBlob(new Blob([htmlContent], { type: 'text/html;charset=utf-8' }), fileName)
+    }
+    return { ...result, format, itemCount: items.length, slideCount: null }
+  }
+
+  const sections = []
+  for (const shape of cowartCanvasDetailShapes(editor, rootShapes)) {
+    const text = await cowartDetailShapeText(editor, shape, htmlTextCache)
+    const needsImage = cowartDetailShapeNeedsImage(shape)
+    if (!text && !needsImage) continue
+    let capture = null
+    if (needsImage) {
+      try {
+        capture = await renderCowartCanvasComposite(editor, [shape.id], {
+          padding: 24,
+          htmlCaptureCache,
+          maxDimension: 1600,
+          maxPixels: 2_500_000,
+          outputFormat: 'jpeg'
+        })
+      } catch (error) {
+        console.warn(`Could not render PPT detail shape ${shape.id}.`, error)
+      }
+    }
+    sections.push({
+      shapeId: shape.id,
+      type: cowartExportShapeTypeLabel(shape),
+      title: cowartShapeExportTitle(shape, text),
+      text,
+      imageDataUrl: capture?.dataUrl || null,
+      imageWidth: capture?.width || null,
+      imageHeight: capture?.height || null
+    })
+  }
+
+  const pptxResult = await buildCanvasPptxBase64({
+    title,
+    overview,
+    sections,
+    exportedAt: exportedAt.toISOString()
+  })
+  let result = { fileName }
+  if (hasCowartWidgetBridge()) {
+    result = await downloadCowartFile({
+      dataBase64: pptxResult.base64,
+      fileName,
+      mimeType: pptxResult.mimeType
+    })
+  } else {
+    downloadDataUrl(`data:${pptxResult.mimeType};base64,${pptxResult.base64}`, fileName)
+  }
+  return {
+    ...result,
+    format,
+    itemCount: items.length,
+    slideCount: pptxResult.slideCount
+  }
+}
+
 async function exportCowartHtmlDraftAnnotationScreenshot(editor, draftShapeId) {
   const shapeIds = collectHtmlDraftAnnotationShapeIds(editor, draftShapeId)
   const draftShape = editor.getShape(draftShapeId)
@@ -3381,6 +3769,8 @@ function CowartCanvasOverlay() {
         onCreateHtml={createAiDraftHolderAtViewportCenter}
         onCreateImage={createAiImageHolderAtViewportCenter}
         onCreateSlides={createAiSlidesAtViewportCenter}
+        onExportCanvasHtml={(editor) => exportCowartCanvas(editor, 'html')}
+        onExportCanvasPptx={(editor) => exportCowartCanvas(editor, 'pptx')}
         slidesIcon={aiSlidesToolIcon}
       />
       <CowartThinkingReviewToolbar />

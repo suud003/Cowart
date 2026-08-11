@@ -1795,6 +1795,10 @@ body {
   background: var(--cowart-accent-soft);
 }
 
+.cowart-excalidraw-ai-trigger:disabled {
+  cursor: wait;
+}
+
 .cowart-excalidraw-ai-trigger:focus-visible,
 .cowart-excalidraw-ai-option:focus-visible {
   outline: 2px solid var(--cowart-accent);
@@ -1866,6 +1870,14 @@ body {
   background: var(--cowart-surface-high);
 }
 
+.cowart-excalidraw-ai-option[data-divider="true"] {
+  margin-top: 7px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cowart-ui-border);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 .cowart-excalidraw-ai-option-icon {
   width: 32px;
   height: 32px;
@@ -1905,6 +1917,17 @@ body {
   font-size: 10px;
   background: var(--tl-color-low);
   border: 1px solid var(--cowart-ui-border);
+  border-radius: 4px;
+}
+
+.cowart-excalidraw-ai-option-badge {
+  padding: 2px 5px;
+  color: var(--cowart-accent-strong);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: var(--cowart-accent-soft);
+  border: 1px solid var(--cowart-accent-soft);
   border-radius: 4px;
 }
 

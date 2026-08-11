@@ -28,6 +28,7 @@ Yogurt AI 基于开源项目 Cowart 和 tldraw，把用户提供的文档、知�
 | 非线性思考 | 一个主题或尚未理清的想法 | 可持续扩展的分支、聚类、对比和推理路径 |
 | 圈选局部修改 | 圈线、箭头、划掉、分组、文字批注与自然语言要求 | 只作用于相关区域的修改、解释和 operation ID |
 | 视觉内容生成 | Prompt、参考图和画布上下文 | 可预览的 AI 图片、单文件 HTML 和 Slides |
+| 画布整合导出 | 当前页面的全部可见对象 | 独立 HTML 全景或可继续编辑的 PowerPoint |
 
 > Yogurt AI 的核心不是“一次生成整张图”，而是让材料、推理和视觉内容在同一个可编辑工作区里逐步长出来。
 
@@ -198,6 +199,14 @@ Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图�
 
 ![演示怎么让游戏变得更好玩的三页 Yogurt AI Slides](assets/view-slides.png)
 
+### 整合当前画布为 HTML 或 PowerPoint
+
+1. 点击右上角 `Yogurt AI`，选择 `整合为 HTML` 或 `整合为 PowerPoint`。
+2. Yogurt AI 会读取当前 page 的全部可见对象，并把 HTML 嵌入、图片、卡片、文字、连线与手绘标注合成完整全景。
+3. HTML 是一个不依赖服务器的单文件，支持拖拽、缩放、适应窗口和从内容目录定位；PPTX 包含全景页、目录页和内容详情页。
+
+PPTX 中的标题、目录和详情文字是 PowerPoint 原生文本，可以继续修改；图片、HTML 和复杂手绘内容会以独立视觉对象保真，可在 PowerPoint 中移动、缩放或替换。文件会保存到系统下载目录。
+
 ## 数据、来源与撤销
 
 - 画布页面保存在 `canvas/pages/<page-id>/cowart-canvas.json`，图片与 HTML 保存在同一页面的 `assets/` 目录。
@@ -247,5 +256,6 @@ https://www.jiqiren.ai
 - [tldraw/tldraw](https://github.com/tldraw/tldraw)：Yogurt AI 的无限画布、图形编辑和交互运行时。当前锁定版本为 `5.1.1`，适用 tldraw 自有许可证，不是 MIT。默认许可仅允许开发环境使用；公开生产部署需要符合其试用、商业或其他替代许可。完整许可证见 [`licenses/TLDRAW-LICENSE.md`](licenses/TLDRAW-LICENSE.md)。
 - [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw)：工具布局、手绘视觉语言和交互细节的设计参考。项目没有把 Excalidraw 编辑器作为运行依赖；打包的 Excalifont 文件与霞鹜小赖字形子集清单来自官方 `@excalidraw/excalidraw@0.18.1` 发布包，霞鹜小赖字体文件在运行时从该固定版本的公共 CDN 加载。
 - [Excalifont](https://github.com/excalidraw/excalidraw/tree/master/packages/excalidraw/fonts)、[霞鹜小赖](https://github.com/lxgw/kose-font) 与 Assistant：字体文件按 SIL Open Font License 1.1 分发，具体版权信息和完整 OFL 文本见 [`src/assets/fonts/FONT-LICENSES.md`](src/assets/fonts/FONT-LICENSES.md) 与 [`src/assets/fonts/OFL-1.1.txt`](src/assets/fonts/OFL-1.1.txt)。
+- [PptxGenJS](https://github.com/gitbrent/PptxGenJS)：在浏览器中生成标准 OOXML `.pptx` 文件，用于画布整合导出；按 MIT License 分发。
 
 根目录 `LICENSE` 只覆盖 Cowart 上游代码与本 Fork 的 MIT 授权部分，不会覆盖或替代第三方依赖的许可证。完整说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
