@@ -158,7 +158,9 @@ The agent returns its interpretation, the applied result, and an operation ID fo
 
 Yogurt AI sends the prompt, reference images, and selected `AI 图片` slot dimensions to Codex. Codex generates an image for that position and aspect ratio, then replaces the `AI 图片` slot with a normal image shape.
 
-![Generate and insert a new image with Yogurt AI](assets/generate-image.png)
+The original example below explores “How can we make a game more fun?” It first generates a co-op sky-ruins level with a deliberately simple route, leaving clear room for annotation-driven iteration.
+
+![Generate an original co-op game level with Yogurt AI](assets/generate-image.png)
 
 ### Generate AI HTML
 
@@ -168,7 +170,9 @@ Yogurt AI sends the prompt, reference images, and selected `AI 图片` slot dime
 
 The generated HTML is stored as an embedded canvas page in the current page's `assets/` directory. Select it to download a rendered image, edit text directly, continue revising the HTML with canvas annotations, or generate an image from the HTML and its annotations.
 
-![Edit Yogurt AI HTML](assets/edit-html.png)
+The example creates an editable “Game Fun Diagnostic” that brings choice, challenge, feedback, progression, and the next experiment into one visual workspace.
+
+![Edit a Game Fun Diagnostic HTML workspace in Yogurt AI](assets/edit-html.png)
 
 ### Create And Present AI Slides
 
@@ -178,7 +182,9 @@ The generated HTML is stored as an embedded canvas page in the current page's `a
 4. After you send the request, Codex generates the requested number of visually and narratively coordinated standalone 16:9 HTML pages and appends them to the current Slides frame. The generation panel is hidden once the frame contains content.
 5. Select the Slides frame and click `演示 Slides` to preview and navigate with the thumbnail sidebar or enter fullscreen playback. In fullscreen, use the arrow keys, Space, or click static slide content to advance. Buttons, links, and form controls inside HTML remain interactive, and the playback controls stay at the top.
 
-![Present and navigate Yogurt AI Slides](assets/view-slides.png)
+The example turns “challenge × choice × feedback” into an original three-page game-design proposal and previews it in Yogurt AI's real Slides player.
+
+![Present a three-page How to Make Games More Fun deck in Yogurt AI](assets/view-slides.png)
 
 ## Data, Provenance, And Undo
 
@@ -195,7 +201,9 @@ The generated HTML is stored as an embedded canvas page in the current page's `a
 
 Codex reads the notes and arrows in the screenshot, generates a clean revised image without annotation artifacts, and places it beside the original. The original image and annotations are not deleted or moved. You can also manually send a Yogurt AI annotation screenshot to Codex and use the same revision workflow.
 
-![Generate a revised image from a Yogurt AI annotation screenshot](assets/annotation-edit.png)
+The example marks a risky shortcut, co-op mechanisms, a visible hidden reward, and stronger exit feedback. The clean revised level appears on the right while the source and annotations remain intact.
+
+![Generate a revised game level from a Yogurt AI annotation screenshot](assets/annotation-edit.png)
 
 ## Skills
 
