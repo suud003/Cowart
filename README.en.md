@@ -195,6 +195,18 @@ The example turns “challenge × choice × feedback” into an original three-p
 
 Titles, outline entries, and detail copy remain native editable PowerPoint text. Images, HTML, and complex hand-drawn content are preserved as independent visual objects that can be moved, resized, or replaced. Exports are saved to the system Downloads folder.
 
+The real workflow below uses the public fictional “How to Make Games More Fun” canvas. Open `Yogurt AI` and choose either the standalone HTML panorama or PowerPoint:
+
+![Choose Consolidate as HTML or PowerPoint in the real Yogurt AI canvas](assets/export-canvas-menu.png)
+
+The HTML export combines the current page into a standalone panorama with outline navigation:
+
+![A pan-and-zoom Yogurt AI HTML panorama with its content outline](assets/export-html-panorama.png)
+
+PowerPoint adds overview, outline, and detail slides. The outline text box shown below is selected as native PowerPoint text and remains editable:
+
+![Edit a native outline text box in the PowerPoint exported by Yogurt AI](assets/export-powerpoint.png)
+
 ## Data, Provenance, And Undo
 
 - Canvas pages live in `canvas/pages/<page-id>/cowart-canvas.json`; page-local images and HTML live in the matching `assets/` directory.
