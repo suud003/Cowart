@@ -158,7 +158,9 @@ Agent 会返回它对批注的理解、修改结果和可撤销的 operation ID�
 
 Yogurt AI 会把 prompt、参考图和选中 `AI 图片` 框的尺寸信息发送给 Codex。Codex 会按这个框的位置和比例生成图片，然后把 `AI 图片` 框替换成普通图片形状。
 
-![使用 Yogurt AI 生成并插入新图](assets/generate-image.png)
+下面的原创示例以“怎么让游戏变得更好玩”为主题，先生成一张路线较单一的双人合作天空遗迹关卡，作为后续圈注迭代的原图。
+
+![使用 Yogurt AI 生成原创双人合作游戏关卡](assets/generate-image.png)
 
 ### 根据标注图生成新图
 
@@ -168,7 +170,9 @@ Yogurt AI 会把 prompt、参考图和选中 `AI 图片` 框的尺寸信息发�
 
 Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图，并把结果放在原图旁边。原图和标注不会被删除或移动。你也可以手动把 Yogurt AI 标注截图发给 Codex，走同样的修订流程。
 
-![根据 Yogurt AI 标注截图生成修订图](assets/annotation-edit.png)
+示例圈出了风险捷径、双人协作机关、隐藏奖励和出口反馈；右侧是 Yogurt AI 根据这些标注生成的干净新版本。
+
+![根据游戏关卡标注生成保留原图的修订版本](assets/annotation-edit.png)
 
 ### 生成 AI HTML
 
@@ -178,7 +182,9 @@ Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图�
 
 生成后的 HTML 会作为画布中的嵌入页面保存在当前 page 的 `assets/` 目录。选中它后可以下载渲染图、直接编辑文本，也可以结合画布标注继续修改 HTML，或根据 HTML 和标注生成图片。
 
-![编辑 Yogurt AI HTML](assets/edit-html.png)
+示例生成了一个可编辑的“游戏乐趣诊断台”，把选择、挑战、反馈、成长和下一轮实验放在同一个可视化工作区中。
+
+![在 Yogurt AI 中编辑游戏乐趣诊断台 HTML](assets/edit-html.png)
 
 ### 创建和演示 AI Slides
 
@@ -188,7 +194,9 @@ Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图�
 4. 发送后，Codex 会生成指定数量、视觉与叙事连贯的独立 16:9 HTML 页面，并依次加入当前 Slides。Slides 已有内容时不再显示生成面板。
 5. 选中 Slides 后点击 `演示 Slides`，可以通过左侧缩略图预览和切换页面，也可以进入全屏播放。全屏时支持方向键、空格键和点击静态画面翻页；HTML 自身的按钮、链接和表单交互会保留，播放控制栏固定在顶部。
 
-![演示和切换 Yogurt AI Slides](assets/view-slides.png)
+示例把“挑战 × 选择 × 反馈”整理成三页原创游戏设计提案，并在 Yogurt AI 的真实演示器中预览和切换。
+
+![演示怎么让游戏变得更好玩的三页 Yogurt AI Slides](assets/view-slides.png)
 
 ## 数据、来源与撤销
 
