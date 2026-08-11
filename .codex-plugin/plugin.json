@@ -1,6 +1,6 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.0+codex.20260810232641",
+  "version": "0.2.0+codex.20260811134906",
   "description": "A source-grounded, non-linear thinking canvas with reversible agent edits and annotation-driven reasoning.",
   "author": {
     "name": "ZHONG XIN",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Yogurt AI",
     "shortDescription": "Think with sources, editable visuals, and reversible annotation-driven agent edits.",
-    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, and a selected-region annotation loop while preserving image, HTML, Slides, and project-local storage capabilities.",
+    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, selected-region annotation, and whole-canvas HTML or PowerPoint export.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -36,6 +36,7 @@
       "Atomic reversible edits",
       "AI image generation",
       "Annotation-driven editing",
+      "HTML and PowerPoint canvas export",
       "Project-local persistence"
     ],
     "defaultPrompt": [

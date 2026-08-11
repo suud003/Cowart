@@ -28,6 +28,7 @@ Yogurt AI extends the open-source Cowart project and tldraw into a source-ground
 | Non-linear thinking | A topic or an unresolved idea | Expandable branches, clusters, comparisons, and reasoning paths |
 | Local lasso revision | Enclosures, arrows, strike-throughs, grouping marks, notes, and a request | A scoped edit, explanation, and operation ID |
 | Visual generation | Prompts, reference images, and canvas context | Previewable AI images, standalone HTML, and Slides |
+| Canvas export | Every visible object on the current page | A standalone HTML panorama or editable PowerPoint |
 
 > Yogurt AI is not a one-shot diagram generator. It lets source material, reasoning, and visual output grow together inside one editable workspace.
 
@@ -186,6 +187,14 @@ The example turns “challenge × choice × feedback” into an original three-p
 
 ![Present a three-page How to Make Games More Fun deck in Yogurt AI](assets/view-slides.png)
 
+### Consolidate The Current Canvas Into HTML Or PowerPoint
+
+1. Open `Yogurt AI` in the upper-right corner and choose `整合为 HTML` or `整合为 PowerPoint`.
+2. Yogurt AI reads every visible object on the current page and composes HTML embeds, images, cards, text, relations, and hand-drawn annotations into one complete panorama.
+3. HTML is a standalone file with pan, zoom, fit-to-window, and outline navigation. PPTX includes an overview slide, an editable outline, and detail slides.
+
+Titles, outline entries, and detail copy remain native editable PowerPoint text. Images, HTML, and complex hand-drawn content are preserved as independent visual objects that can be moved, resized, or replaced. Exports are saved to the system Downloads folder.
+
 ## Data, Provenance, And Undo
 
 - Canvas pages live in `canvas/pages/<page-id>/cowart-canvas.json`; page-local images and HTML live in the matching `assets/` directory.
@@ -247,5 +256,6 @@ This repository is a public fork of [zhongerxin/Cowart](https://github.com/zhong
 - [tldraw/tldraw](https://github.com/tldraw/tldraw) provides Yogurt AI's infinite-canvas, shape-editing, and interaction runtime. Version `5.1.1` is pinned and uses the tldraw license, not MIT. Its default terms permit development use only; public production deployment requires an applicable trial, commercial, or alternative license. See the verbatim [`licenses/TLDRAW-LICENSE.md`](licenses/TLDRAW-LICENSE.md).
 - [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) is the design reference for toolbar layout, hand-drawn visual language, and interaction details. The Excalidraw editor is not a runtime dependency. Bundled Excalifont files and the Xiaolai subset manifest come from the official `@excalidraw/excalidraw@0.18.1` package; Xiaolai font files load at runtime from a public CDN pinned to that version.
 - [Excalifont](https://github.com/excalidraw/excalidraw/tree/master/packages/excalidraw/fonts), [Xiaolai](https://github.com/lxgw/kose-font), and Assistant font files are distributed under the SIL Open Font License 1.1. See [`src/assets/fonts/FONT-LICENSES.md`](src/assets/fonts/FONT-LICENSES.md) and [`src/assets/fonts/OFL-1.1.txt`](src/assets/fonts/OFL-1.1.txt).
+- [PptxGenJS](https://github.com/gitbrent/PptxGenJS) generates standards-compliant OOXML `.pptx` files in the browser for consolidated canvas exports and is distributed under the MIT License.
 
 The root `LICENSE` covers upstream Cowart code and the MIT-licensed portion of this fork only. It does not supersede third-party licenses. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for details.

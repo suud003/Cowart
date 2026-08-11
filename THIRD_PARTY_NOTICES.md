@@ -18,6 +18,8 @@ A verbatim copy of the license shipped for the pinned `v5.1.1` source is include
 
 ## Other runtime dependencies
 
+[PptxGenJS](https://github.com/gitbrent/PptxGenJS) is used only through its browser build to generate standards-compliant OOXML PowerPoint files. Its package explicitly disables the Node-only `image-size` parser in browser bundles; Yogurt AI's production bundle was verified not to include that parser. PptxGenJS is distributed under the MIT License and retains its own copyright and license terms.
+
 Other packages are installed through npm and retain their own licenses, including React, Model Context Protocol SDKs, html2canvas, Lucide, Zod, Tiptap/ProseMirror, Vite, and their transitive dependencies. Refer to each installed package's `package.json` and license file for the applicable terms.
 
 The root MIT license does not replace any third-party license described above.
