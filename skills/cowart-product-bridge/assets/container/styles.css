@@ -1,0 +1,80 @@
+:root{--ink:#1d1d1f;--slate:#6e6e73;--line:#e3e3e3;--ash:#f4f4f4;--paper:#fff;--ember:#ff6234}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;color:var(--ink);background:#fbfbfb;font:16px/1.5 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+button,select,textarea{font:inherit;color:inherit}
+button,select{border:1px solid var(--line);background:#fff;padding:12px 18px;cursor:pointer}
+button:hover{border-color:#aaa}
+.dark{background:var(--ink);color:white;border-color:var(--ink)}
+.ghost{background:#fff}
+.rail{position:fixed;inset:0 auto 0 0;width:76px;border-right:1px solid var(--line);background:#f7f7f7;z-index:5}
+.rail>strong{display:block;padding:29px 19px 25px;font:700 18px/1 ui-monospace,monospace}
+.rail button{display:block;width:100%;height:72px;border:0;border-top:1px solid #eee;background:transparent;color:#777;padding:0;font:14px/1 ui-monospace,monospace;position:relative}
+.rail button.active{color:var(--ink);background:white}
+.rail button.active:after{content:"";position:absolute;right:0;top:22px;width:3px;height:28px;background:var(--ink)}
+.rail .docShortcut{font-size:11px}
+.shell{margin-left:76px;min-width:900px;height:100%}
+.topbar{height:168px;display:flex;justify-content:space-between;align-items:center;padding:28px 48px;border-bottom:1px solid var(--line);background:white}
+.crumb,.viewport{font:600 13px/1.2 ui-monospace,SFMono-Regular,monospace;letter-spacing:.09em;color:#747474}
+.topbar h1{margin:16px 0 0;font-size:42px;line-height:1}
+.topActions{display:flex;gap:10px}
+.viewTabs{height:90px;display:flex;align-items:center;gap:14px;padding:0 48px;border-bottom:1px solid var(--line);background:white}
+.viewTabs button{border:0;font-size:20px;color:#555}
+.viewTabs button.active{border:1px solid var(--line);color:var(--ink)}
+#saveState{margin-left:auto;color:#777;font:13px ui-monospace,monospace}
+.toolbar{height:86px;display:flex;align-items:center;gap:12px;padding:0 48px;background:#fff;border-bottom:1px solid var(--line)}
+.toolbar .label{color:#777}
+.toolbar select{min-width:240px}
+.toolbar .push{margin-left:auto}
+.reviewGrid{display:grid;grid-template-columns:minmax(560px,1.8fr) minmax(360px,.9fr);height:calc(100vh - 344px);min-height:520px}
+.prototypeStage{overflow:auto;padding:0 44px 56px;background:#f0f0f0}
+.prototypeFrame{position:relative;margin:0 auto;background:#fff;transform-origin:top left;box-shadow:0 0 0 1px #ddd}
+.prototypeFrame iframe{display:block;width:100%;height:100%;border:0;background:white}
+.docPanel{background:white;border-left:1px solid var(--line);overflow:hidden}
+.docTabs{height:70px;display:flex;align-items:center;gap:12px;padding:0 24px;border-bottom:1px solid var(--line)}
+.docTabs button{border:0;border-radius:999px;padding:9px 15px}
+.docTabs button.active{background:#f2f2f2;border:1px solid var(--line)}
+.docContent{height:calc(100% - 70px);overflow:auto;padding:30px 36px}
+.docContent h1{font-size:30px}
+.docContent h2{margin-top:34px;padding-top:28px;border-top:1px solid var(--line)}
+.docContent h3{font-size:19px}
+.docContent code{font-family:ui-monospace,monospace;background:#f1f1f1;padding:2px 5px}
+.docContent li{margin:8px 0}
+.note{padding:22px 0;border-bottom:1px solid var(--line)}
+.noteHead{display:flex;align-items:center;gap:12px}
+.bubble,.annotationBubble{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:white;font-weight:700}
+.note small{display:block;margin-top:8px;color:#777}
+.note .delete{padding:5px 9px;margin-left:auto;color:#a33}
+.annotationBubble{position:absolute;transform:translate(-50%,-50%);border:3px solid white;box-shadow:0 1px 5px #0004;pointer-events:auto;cursor:pointer;z-index:2}
+#annotationLayer{position:absolute;inset:0;pointer-events:none}
+#annotationLayer.adding{pointer-events:auto;cursor:crosshair;background:#ff623408}
+.canvasTools{height:92px;display:flex;align-items:center;gap:10px;padding:0 48px}
+.canvasTools span{color:#777;margin-right:auto}
+.canvasViewport{height:calc(100vh - 350px);min-height:600px;overflow:auto;background-color:#f4f4f4;background-image:radial-gradient(#cfcfcf 1px,transparent 1px);background-size:28px 28px}
+.canvasViewport>div{position:relative;width:2400px;height:1600px;transform-origin:0 0}
+.canvasViewport svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;shape-rendering:geometricPrecision}
+.pageCard{position:absolute;width:360px;height:260px;background:white;border:1px solid #ccc;box-shadow:0 5px 16px #0001}
+.pageCard header{height:38px;padding:9px 12px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;cursor:move;background:#fff;font-weight:700}
+.pageCard iframe{width:1280px;height:800px;border:0;transform:scale(.28);transform-origin:0 0;pointer-events:none}
+.pageCard .mini{height:222px;overflow:hidden}
+.edgeLabel{fill:#737373;stroke:#fff;stroke-width:5px;paint-order:stroke;stroke-linejoin:round;font:600 13px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;pointer-events:none}
+.arrow{fill:none;stroke:#0348ed;stroke-width:2.2;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.arrow[data-direction="none"]{stroke:#0a0a0a}
+.arrow[data-path="alternative"]{stroke-dasharray:8 7}
+.arrowMarker{fill:#0348ed;stroke:none}
+dialog{width:min(1100px,90vw);height:min(760px,88vh);border:1px solid #aaa;padding:0;background:#fff}
+dialog::backdrop{background:#0004}
+.dialogHeader{height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--line)}
+.dialogHeader button{font-size:24px;border:0}
+.sourceTools{display:flex;padding:14px 24px;gap:12px;border-bottom:1px solid var(--line)}
+.sourceTools select{flex:1}
+#sourceText{display:block;width:100%;height:calc(100% - 143px);resize:none;border:0;padding:26px 32px;font:15px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;outline:0}
+#toast{position:fixed;right:24px;bottom:24px;background:var(--ink);color:#fff;padding:12px 18px;opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;z-index:20}
+#toast.show{opacity:1;transform:none}
+@media(max-width:1150px){
+  .topActions button:first-child{display:none}
+  .topbar{padding-left:28px;padding-right:28px}
+  .toolbar{padding:0 24px}
+  .reviewGrid{grid-template-columns:1.45fr 1fr}
+  .prototypeStage{padding-left:20px;padding-right:20px}
+}

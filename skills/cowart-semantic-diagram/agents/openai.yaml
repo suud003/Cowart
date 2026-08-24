@@ -1,0 +1,5 @@
+interface:
+  display_name: "Yogurt Semantic Diagram"
+  short_description: "把 Yogurt 思路绘成可追溯、可回写的卡片图或安全 SVG"
+  brand_color: "#FF6234"
+  default_prompt: "Use $cowart-semantic-diagram to turn my selected Yogurt AI notes into a traceable semantic diagram and choose the right native-card or inline-SVG representation."

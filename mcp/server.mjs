@@ -37,7 +37,9 @@ import {
   COWART_GA4_EVENT_NAMES,
   sendCowartGa4Event,
 } from "./lib/ga4-analytics.mjs";
+import { snapshotRevision } from "./lib/thinking-canvas.mjs";
 import { registerCowartThinkingTools } from "./lib/thinking-tools.mjs";
+import { validateSemanticSvg } from "../skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs";
 
 const TOOL_RENDER_WIDGET = "render_cowart_canvas_widget";
 const TOOL_GET_CANVAS_STATE = "get_cowart_canvas_state";
@@ -109,6 +111,40 @@ const projectArgsSchema = {
   canvasDir: z.string().trim().optional(),
 };
 
+const semanticDiagramSchema = z.object({
+  version: z.literal("1"),
+  teachingClaim: z.string().trim().min(1).max(500),
+  readingOrder: z.enum([
+    "left-to-right",
+    "right-to-left",
+    "top-to-bottom",
+    "bottom-to-top",
+    "center-out",
+    "board-to-peers",
+  ]),
+  diagramType: z.enum([
+    "flow",
+    "architecture",
+    "comparison",
+    "state",
+    "interface",
+    "swimlane",
+    "concept",
+    "hierarchy",
+    "containment",
+    "board-to-peers",
+    "custom",
+  ]),
+  sourceShapeIds: z.array(z.string().trim().min(1).max(160)).max(250).optional(),
+  sourceIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
+  workspaceId: z.string().trim().max(160).optional(),
+  zoneId: z.string().trim().max(160).optional(),
+  objectCount: z.number().int().min(1).max(250),
+  relationCount: z.number().int().min(0).max(500),
+  specDigest: z.string().trim().max(128).optional(),
+  promptDigest: z.string().trim().max(128).optional(),
+}).strict();
+
 const displayModeSchema = z.enum(["fullscreen", "inline"]);
 
 const pluginManifest = JSON.parse(
@@ -122,7 +158,7 @@ const server = new McpServer(
   },
   {
     instructions:
-      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Reuse insert_cowart_image and insert_cowart_html_draft for visual assets instead of hand-writing tldraw records.",
+      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Reuse insert_cowart_image and insert_cowart_html_draft for visual assets instead of hand-writing tldraw records. For semantic inline-SVG diagrams, pass the constrained semanticDiagram summary so the teaching claim, reading order, source IDs, and counts remain available when the canvas is read back.",
   },
 );
 
@@ -137,6 +173,62 @@ await server.connect(transport);
 
 function finiteNumber(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function boundedMetadataText(value, maxLength) {
+  const text = nonEmptyString(value);
+  return text ? text.slice(0, maxLength) : null;
+}
+
+function boundedMetadataList(value, maxItems, maxLength) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((item) => boundedMetadataText(item, maxLength)).filter(Boolean)))
+    .slice(0, maxItems);
+}
+
+function normalizeSemanticDiagramMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const teachingClaim = boundedMetadataText(value.teachingClaim, 500);
+  const readingOrders = new Set([
+    "left-to-right",
+    "right-to-left",
+    "top-to-bottom",
+    "bottom-to-top",
+    "center-out",
+    "board-to-peers",
+  ]);
+  const diagramTypes = new Set([
+    "flow",
+    "architecture",
+    "comparison",
+    "state",
+    "interface",
+    "swimlane",
+    "concept",
+    "hierarchy",
+    "containment",
+    "board-to-peers",
+    "custom",
+  ]);
+  const objectCount = Math.max(1, Math.min(250, Math.trunc(finiteNumber(value.objectCount, 1))));
+  const relationCount = Math.max(0, Math.min(500, Math.trunc(finiteNumber(value.relationCount, 0))));
+  if (!teachingClaim || value.version !== "1" || !readingOrders.has(value.readingOrder) || !diagramTypes.has(value.diagramType)) {
+    return null;
+  }
+  return {
+    version: "1",
+    teachingClaim,
+    readingOrder: value.readingOrder,
+    diagramType: value.diagramType,
+    sourceShapeIds: boundedMetadataList(value.sourceShapeIds, 250, 160),
+    sourceIds: boundedMetadataList(value.sourceIds, 100, 160),
+    workspaceId: boundedMetadataText(value.workspaceId, 160),
+    zoneId: boundedMetadataText(value.zoneId, 160),
+    objectCount,
+    relationCount,
+    specDigest: boundedMetadataText(value.specDigest, 128),
+    promptDigest: boundedMetadataText(value.promptDigest, 128),
+  };
 }
 
 function isSafeChildPath(parent, child) {
@@ -662,6 +754,10 @@ async function insertCowartHtmlDraft(args = {}) {
   if (!snapshot || typeof snapshot !== "object" || !snapshot.schema || !snapshot.store) {
     throw new Error("No Yogurt AI canvas snapshot exists yet. Open the Yogurt AI widget for the target project and create or save the canvas before inserting HTML drafts.");
   }
+  const baseRevision = snapshotRevision(snapshot);
+  if (nonEmptyString(args.baseRevision) && args.baseRevision !== baseRevision) {
+    throw new Error(`Canvas revision changed from ${args.baseRevision} to ${baseRevision}; inspect again before inserting the HTML draft.`);
+  }
 
   const store = snapshot.store;
   const { selection } = await readCowartSelectionState(args);
@@ -681,6 +777,21 @@ async function insertCowartHtmlDraft(args = {}) {
   const shouldTargetDraftHolder = args.matchAnchor !== false && isAiDraftHolderShape(draftShape) && anchorBounds;
   const shouldTargetAiSlides = isAiSlidesShape(draftShape);
   const shouldReplaceDraftHolder = shouldTargetDraftHolder && args.replaceDraftHolder !== false;
+  const semanticInput = args.semanticDiagram !== undefined
+    ? args.semanticDiagram
+    : shouldUpdateExistingDraft
+    ? draftShape?.meta?.cowartSemanticDiagram
+    : null;
+  const semanticDiagram = normalizeSemanticDiagramMetadata(semanticInput);
+  if (semanticInput && !semanticDiagram) {
+    throw new Error("semanticDiagram metadata is invalid or exceeds its supported limits.");
+  }
+  if (semanticDiagram) {
+    const validation = validateSemanticSvg(finalHtml, { filename: nonEmptyString(args.fileName) || "semantic-diagram.html" });
+    if (validation.errors.length > 0) {
+      throw new Error(`Semantic diagram validation failed: ${validation.errors.slice(0, 8).join("; ")}`);
+    }
+  }
   const matchAnchor = args.matchAnchor !== false && anchorBounds;
   const width = shouldUpdateExistingDraft || shouldTargetDraftHolder
     ? anchorBounds.w
@@ -771,6 +882,9 @@ async function insertCowartHtmlDraft(args = {}) {
     : chooseIndex(store, parentId);
   const assetUrl = pageAssetUrl(pageId, fileName);
   const shapeMeta = args.shapeMeta && typeof args.shapeMeta === "object" ? { ...args.shapeMeta } : {};
+  delete shapeMeta.cowartHtmlDraft;
+  delete shapeMeta.cowartHtmlDraftAssetUrl;
+  delete shapeMeta.cowartSemanticDiagram;
   if (shouldTargetDraftHolder && draftShapeId && !shapeMeta.cowartGeneratedForAiDraftHolder) {
     shapeMeta.cowartGeneratedForAiDraftHolder = draftShapeId;
   }
@@ -789,9 +903,10 @@ async function insertCowartHtmlDraft(args = {}) {
     opacity: 1,
     meta: {
       ...(shouldUpdateExistingDraft && draftShape.meta && typeof draftShape.meta === "object" ? draftShape.meta : {}),
+      ...shapeMeta,
       cowartHtmlDraft: true,
       cowartHtmlDraftAssetUrl: assetUrl,
-      ...shapeMeta,
+      ...(semanticDiagram ? { cowartSemanticDiagram: semanticDiagram } : {}),
     },
     id: shapeId,
     type: "embed",
@@ -808,12 +923,33 @@ async function insertCowartHtmlDraft(args = {}) {
 
   if (!args.dryRun) {
     await mkdir(assetsDir, { recursive: true });
-    await writeFile(filePath, finalHtml);
-    for (const replacedShapeId of replacedShapeIds) {
-      delete store[replacedShapeId];
+    let previousFileContent = null;
+    let fileExisted = false;
+    try {
+      previousFileContent = await readFile(filePath);
+      fileExisted = true;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
     }
-    store[shapeId] = shapeRecord;
-    await saveCowartCanvasSnapshot(args, snapshot);
+    await writeFile(filePath, finalHtml);
+    try {
+      for (const replacedShapeId of replacedShapeIds) {
+        delete store[replacedShapeId];
+      }
+      store[shapeId] = shapeRecord;
+      const saveResult = await saveCowartCanvasSnapshot(args, snapshot);
+      if (!saveResult.ok) {
+        throw new Error(saveResult.message || "Yogurt AI refused to persist the HTML draft.");
+      }
+    } catch (error) {
+      try {
+        if (fileExisted) await writeFile(filePath, previousFileContent);
+        else await rm(filePath, { force: true });
+      } catch (rollbackError) {
+        throw new Error(`HTML draft insertion failed and its asset rollback also failed: ${rollbackError.message}`, { cause: error });
+      }
+      throw error;
+    }
   }
 
   return {
@@ -832,6 +968,8 @@ async function insertCowartHtmlDraft(args = {}) {
     forkedSharedHtmlDraftAsset: shouldForkSharedAsset,
     replacedAiDraftHolder: shouldReplaceDraftHolder,
     replacedShapeIds,
+    baseRevision,
+    resultRevision: args.dryRun ? null : snapshotRevision(snapshot),
     dryRun: Boolean(args.dryRun),
   };
 }
@@ -1481,7 +1619,7 @@ function registerCowartImageTools(mcpServer) {
     {
       title: "Insert Yogurt AI HTML Draft",
       description:
-        "Save a single-file HTML draft into the current Yogurt AI page's assets folder, update a targeted existing HTML draft in place, replace a targeted AI HTML holder, or append a 16:9 HTML page inside an AI Slides frame.",
+        "Preview or save a single-file HTML draft into the current Yogurt AI page's assets folder, update a targeted existing HTML draft in place, replace a targeted AI HTML holder, or append a 16:9 HTML page inside an AI Slides frame. Apply a dry-run with its returned baseRevision to reject stale placement. Semantic inline-SVG diagrams must pass server-side structural validation and may include a constrained semanticDiagram summary for source-aware round trips.",
       inputSchema: {
         ...projectArgsSchema,
         htmlContent: z.string().optional(),
@@ -1497,6 +1635,8 @@ function registerCowartImageTools(mcpServer) {
         updateExistingDraft: z.boolean().optional(),
         displayWidth: z.number().optional(),
         displayHeight: z.number().optional(),
+        baseRevision: z.string().trim().min(1).max(200).optional(),
+        semanticDiagram: semanticDiagramSchema.optional(),
         shapeMeta: z.record(z.string(), z.unknown()).optional(),
         dryRun: z.boolean().optional(),
       },

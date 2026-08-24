@@ -29,6 +29,51 @@ function isCanvasDirectory(value) {
   );
 }
 
+function semanticProbeHtml(sourceRevision) {
+  const spec = {
+    schemaVersion: "1",
+    diagramId: "probe-semantic",
+    claim: "A source-grounded idea becomes a reviewable semantic object.",
+    mode: "html-svg",
+    objects: [{ id: "probe-object", label: "Probe object", role: "claim", origin: "synthesis", sourceShapeIds: [] }],
+    relations: [],
+    states: [],
+    visibleLabels: [{ text: "Probe object", role: "object-label" }],
+    layout: {
+      kind: "flow",
+      readingOrder: "left-to-right",
+      alignmentTolerance: "0.5% of viewBox height",
+      minimumSafeGap: "2% of viewBox width",
+    },
+    trace: {
+      canvasId: "canvas:probe",
+      pageId: "page:probe",
+      sourceRevision,
+      scope: "page",
+      sourceShapeIds: [],
+      mappings: [],
+      draftShapeId: null,
+      operationIds: [],
+      lastAppliedRevision: null,
+    },
+  };
+  const prompt = {
+    schemaVersion: "1",
+    diagramId: "probe-semantic",
+    prompt: "Rebuild the accessible semantic probe from the embedded specification.",
+  };
+  return [
+    "<!doctype html><html><head><style>[data-cowart-stroke]{vector-effect:non-scaling-stroke;stroke:#111;fill:none}</style></head><body>",
+    '<svg viewBox="0 0 400 180" role="img" aria-labelledby="probe-semantic-title probe-semantic-desc" data-cowart-diagram-id="probe-semantic" data-cowart-layout="flow" data-reading-order="left-to-right">',
+    '<title id="probe-semantic-title">Semantic probe</title><desc id="probe-semantic-desc">One reviewable semantic object.</desc>',
+    '<g data-cowart-object-id="probe-object" data-cowart-role="claim" data-cowart-origin="synthesis"><rect data-cowart-stroke x="80" y="50" width="240" height="80"></rect><text x="200" y="94" text-anchor="middle">Probe object</text></g>',
+    "</svg>",
+    `<template data-cowart-diagram-spec type="application/json">${JSON.stringify(spec).replaceAll("<", "\\u003c")}</template>`,
+    `<template data-cowart-diagram-prompt type="application/json">${JSON.stringify(prompt).replaceAll("<", "\\u003c")}</template>`,
+    "</body></html>",
+  ].join("");
+}
+
 try {
   const tools = await client.listTools();
   const toolNames = tools.tools.map((tool) => tool.name);
@@ -138,6 +183,107 @@ try {
   });
   if (thinkingUndo.structuredContent?.revision !== thinkingRevision) {
     throw new Error("Cowart thinking undo did not restore the original revision.");
+  }
+
+  const semanticHtml = semanticProbeHtml(thinkingRevision);
+  const semanticDiagram = {
+    version: "1",
+    teachingClaim: "A source-grounded idea becomes a reviewable semantic object.",
+    readingOrder: "left-to-right",
+    diagramType: "flow",
+    sourceShapeIds: [],
+    objectCount: 1,
+    relationCount: 0,
+    specDigest: "probe-spec",
+  };
+  const rejectedSemantic = await client.callTool({
+    name: "insert_cowart_html_draft",
+    arguments: {
+      projectDir,
+      htmlContent: semanticHtml.replace("</body>", "<script>globalThis.bad=true</script></body>"),
+      fileName: "rejected-semantic.html",
+      semanticDiagram,
+      dryRun: true,
+    },
+  });
+  if (rejectedSemantic.isError !== true) {
+    throw new Error("Semantic HTML insertion must reject active script content on the server.");
+  }
+
+  const semanticPreviewArguments = {
+    projectDir,
+    htmlContent: semanticHtml,
+    fileName: "semantic-probe.html",
+    matchAnchor: false,
+    updateExistingDraft: false,
+    replaceDraftHolder: false,
+    semanticDiagram,
+    shapeMeta: {
+      cowartHtmlDraft: false,
+      cowartHtmlDraftAssetUrl: "/page-assets/evil.html",
+      cowartSemanticDiagram: { version: "bypass" },
+    },
+    dryRun: true,
+  };
+  const semanticPreview = await client.callTool({
+    name: "insert_cowart_html_draft",
+    arguments: semanticPreviewArguments,
+  });
+  if (
+    semanticPreview.isError ||
+    semanticPreview.structuredContent?.dryRun !== true ||
+    semanticPreview.structuredContent?.baseRevision !== thinkingRevision
+  ) {
+    throw new Error("Semantic HTML insertion did not return a revisioned dry-run preview.");
+  }
+
+  const staleThinkingApply = await client.callTool({
+    name: "apply_cowart_thinking_operations",
+    arguments: {
+      projectDir,
+      baseRevision: thinkingRevision,
+      operations: [{ type: "create_card", role: "question", title: "Stale guard probe" }],
+    },
+  });
+  const staleSemanticApply = await client.callTool({
+    name: "insert_cowart_html_draft",
+    arguments: {
+      ...semanticPreviewArguments,
+      baseRevision: semanticPreview.structuredContent.baseRevision,
+      dryRun: false,
+    },
+  });
+  if (staleSemanticApply.isError !== true) {
+    throw new Error("Semantic HTML insertion must reject a stale dry-run revision.");
+  }
+  await client.callTool({
+    name: "undo_cowart_thinking_operation",
+    arguments: { projectDir, operationId: staleThinkingApply.structuredContent?.operationId },
+  });
+
+  const semanticApply = await client.callTool({
+    name: "insert_cowart_html_draft",
+    arguments: {
+      ...semanticPreviewArguments,
+      baseRevision: semanticPreview.structuredContent.baseRevision,
+      dryRun: false,
+    },
+  });
+  const semanticShapeId = semanticApply.structuredContent?.shapeId;
+  if (semanticApply.isError || !semanticShapeId || !semanticApply.structuredContent?.resultRevision) {
+    throw new Error("Semantic HTML insertion did not persist the validated diagram.");
+  }
+  const semanticContext = await client.callTool({
+    name: "get_cowart_thinking_context",
+    arguments: { projectDir, scope: "page" },
+  });
+  const semanticShape = semanticContext.structuredContent?.shapes?.find((shape) => shape.id === semanticShapeId);
+  if (
+    semanticShape?.visual?.kind !== "semantic-line-svg" ||
+    semanticShape.visual.semanticDiagram?.teachingClaim !== semanticDiagram.teachingClaim ||
+    semanticShape.visual.assetUrl === "/page-assets/evil.html"
+  ) {
+    throw new Error("Semantic HTML insertion did not preserve constrained metadata or block reserved shapeMeta overrides.");
   }
 
   const probePageAssetDir = path.join(projectDir, "canvas", "pages", "probe-page", "assets");

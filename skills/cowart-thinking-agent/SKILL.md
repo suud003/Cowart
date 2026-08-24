@@ -37,7 +37,8 @@ Never write tldraw records or replace a raw snapshot directly.
 - Prefer a top-down hierarchy matching Excalidraw: one short central card, 3–6 concise branch cards, and detail cards beneath the branch they explain. The canvas automatically lays out connected cards when you omit `x`, `y`, and `anchorId`; use explicit coordinates only when preserving or extending an existing composition.
 - Keep structural parent-to-child arrows unlabeled. Add a relation label only when the verb carries meaning that the surrounding hierarchy does not already express.
 - Use title-only cards for scannable concepts. Put paragraphs or numbered detail into a body card; Yogurt AI sizes those cards to their content.
-- Use existing `insert_cowart_html_draft` for an editable comparison table, timeline, matrix, quantitative chart, or interactive explanation that cards cannot express well.
+- Use `$cowart-semantic-diagram` when the user needs an architecture, flow, state, comparison, GUI/LUI, swimlane, or other relation-dense diagram. Keep the high-level structure editable as cards and relations when useful, and place the precise line work in a traceable inline-SVG HTML draft.
+- Use existing `insert_cowart_html_draft` for an editable comparison table, timeline, matrix, quantitative chart, or interactive explanation that cards cannot express well. When the HTML is a semantic diagram, pass its constrained `semanticDiagram` summary so its teaching claim, reading order, source IDs, and counts survive a later Yogurt context read.
 - Use existing image generation and insertion only when a bitmap materially aids understanding.
 - Anchor new content beside the material or idea it explains. Do not dump every result at the page edge.
 
@@ -65,4 +66,5 @@ Use `undo_cowart_thinking_operation` when the user asks to undo. Do not bypass a
 - Avoid duplicate cards. Update an existing agent card when the concept is materially the same.
 - Keep labels short enough to scan at canvas zoom; put detail in the card body or a linked HTML view.
 - Before applying a new diagram, verify every non-root card has a visible relation and that the overall batch reads as one composition at fit-to-selection zoom.
+- For semantic line diagrams, verify each edge starts and ends at the intended object boundary, no unrelated object or label is crossed, and missing or unread sources are not promoted into directional claims.
 - Explain what changed after applying, not before, unless ambiguity requires user input.

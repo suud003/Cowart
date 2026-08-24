@@ -1,7 +1,7 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.0+codex.20260811134906",
-  "description": "A source-grounded, non-linear thinking canvas with reversible agent edits and annotation-driven reasoning.",
+  "version": "0.2.0+codex.20260824120133",
+  "description": "A source-grounded thinking canvas with reversible edits and reviewable product workspaces.",
   "author": {
     "name": "ZHONG XIN",
     "email": "zhongxin123456@gmail.com",
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Yogurt AI",
-    "shortDescription": "Think with sources, editable visuals, and reversible annotation-driven agent edits.",
-    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, selected-region annotation, and whole-canvas HTML or PowerPoint export.",
+    "shortDescription": "Turn sources into editable canvases, semantic diagrams, PRDs, and prototypes.",
+    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, annotation-driven editing, accessible semantic SVG diagrams, and reviewable product workspaces that keep PRDs, interactive prototypes, canvas zones, and return snapshots traceable.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -34,6 +34,8 @@
       "Native Codex widget",
       "Source-grounded reasoning",
       "Atomic reversible edits",
+      "Accessible semantic SVG diagrams",
+      "Interactive PRD and prototype workspaces",
       "AI image generation",
       "Annotation-driven editing",
       "HTML and PowerPoint canvas export",
@@ -42,9 +44,8 @@
     "defaultPrompt": [
       "Open Yogurt AI for this project.",
       "Organize these documents into source-linked cards and relationships on the canvas.",
-      "Interpret my selected canvas annotations and apply the smallest reversible edit.",
-      "Use my Yogurt AI annotation screenshot to generate a clean revised image beside the original.",
-      "Generate a new image into the selected Yogurt AI image holder."
+      "Turn my selected Yogurt notes into a traceable semantic line diagram.",
+      "Turn my selected notes and TAPD references into an interactive PRD, then preview a snapshot to sync back."
     ]
   }
 }

@@ -1,0 +1,53 @@
+.note .retarget {
+  padding: 5px 9px;
+  color: #444;
+}
+
+.annotationBubble {
+  z-index: 3;
+  transform-origin: 0 0;
+  min-width: 30px;
+  padding: 0;
+}
+
+.annotationBubble.fallback {
+  background: #b45309;
+  border-style: dashed;
+}
+
+.annotationBubble.active {
+  outline: 3px solid #21a65b;
+  outline-offset: 2px;
+}
+
+.annotationBubble[hidden],
+.annotationTarget[hidden] {
+  display: none !important;
+}
+
+.annotationTarget {
+  position: absolute;
+  z-index: 2;
+  border: 2px solid #21a65b;
+  border-radius: 6px;
+  background: #21a65b12;
+  pointer-events: none;
+}
+
+#annotationLayer {
+  overflow: visible;
+}
+
+#annotationLayer:not(.ready) .annotationBubble,
+#annotationLayer:not(.ready) .annotationTarget {
+  visibility: hidden;
+}
+
+#annotationLayer.adding {
+  background: #21a65b0b;
+}
+
+#annotationLayer.adding .annotationBubble {
+  opacity: 0.35;
+  pointer-events: none;
+}

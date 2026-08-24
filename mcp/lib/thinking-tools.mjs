@@ -32,6 +32,39 @@ const roleSchema = z.enum([
   "counterpoint",
 ]);
 
+const sourceProvenanceSchema = z.object({
+  origin: z.string().trim().max(80).optional(),
+  uri: z.string().trim().max(2_000).nullable().optional(),
+}).strict();
+
+const sourceMetadataSchema = z.object({
+  id: z.string().trim().max(160).optional(),
+  kind: z.enum(["yogurt-shape", "user-note", "tapd-link", "document", "image", "code", "other"]).optional(),
+  title: z.string().trim().max(300).optional(),
+  summary: z.string().max(12_000).nullable().optional(),
+  excerpt: z.string().max(3_000).nullable().optional(),
+  yogurtShapeIds: z.array(z.string().trim().max(160)).max(100).optional(),
+  provenance: sourceProvenanceSchema.optional(),
+  accessStatus: z.enum(["available", "unread", "not-configured", "denied", "error"]).optional(),
+  fileName: z.string().trim().max(240).optional(),
+  localPath: z.string().trim().max(2_000).optional(),
+  originalPath: z.string().trim().max(2_000).optional(),
+  fileSize: z.number().int().min(0).max(200 * 1024 * 1024).optional(),
+}).strict();
+
+const bridgeMetadataSchema = z.object({
+  mappingId: z.string().trim().max(160).optional(),
+  workspaceId: z.string().trim().max(160).optional(),
+  sourceIds: z.array(z.string().trim().max(160)).max(50).optional(),
+  yogurtShapeIds: z.array(z.string().trim().max(160)).max(100).optional(),
+  zoneId: z.string().trim().max(160).optional(),
+  requirementIds: z.array(z.string().trim().max(160)).max(100).optional(),
+  pageIds: z.array(z.string().trim().max(160)).max(100).optional(),
+  annotationRefs: z.array(z.string().trim().max(320)).max(100).optional(),
+  returnedShapeIds: z.array(z.string().trim().max(160)).max(100).optional(),
+  lastSyncedRevision: z.string().trim().max(200).nullable().optional(),
+}).strict();
+
 const createCardSchema = z.object({
   type: z.literal("create_card"),
   key: z.string().trim().max(80).optional(),
@@ -39,8 +72,11 @@ const createCardSchema = z.object({
   title: z.string().max(300).optional(),
   body: z.string().max(12_000).optional(),
   color: z.string().trim().optional(),
-  sourceRefs: z.array(z.string().trim()).max(50).optional(),
+  sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
+  source: sourceMetadataSchema.optional(),
+  bridge: bridgeMetadataSchema.optional(),
   url: z.string().max(2_000).optional(),
+  parentZoneId: z.string().trim().min(1).max(160).optional(),
   anchorId: z.string().trim().optional(),
   placement: placementSchema.optional(),
   gap: z.number().min(0).max(2_000).optional(),
@@ -57,6 +93,38 @@ const updateCardSchema = z.object({
   title: z.string().max(300).optional(),
   body: z.string().max(12_000).optional(),
   color: z.string().trim().optional(),
+  sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
+  source: sourceMetadataSchema.nullable().optional(),
+  bridge: bridgeMetadataSchema.nullable().optional(),
+  url: z.string().max(2_000).optional(),
+});
+
+const createZoneSchema = z.object({
+  type: z.literal("create_zone"),
+  key: z.string().trim().min(1).max(80),
+  title: z.string().trim().min(1).max(300),
+  body: z.string().max(12_000).optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  w: z.number().min(240).max(8_192).optional(),
+  h: z.number().min(160).max(8_192).optional(),
+  color: z.string().trim().optional(),
+  sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
+  bridge: bridgeMetadataSchema.optional(),
+});
+
+const updateZoneSchema = z.object({
+  type: z.literal("update_zone"),
+  id: z.string().trim().min(1),
+  title: z.string().trim().min(1).max(300).optional(),
+  body: z.string().max(12_000).optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  w: z.number().min(240).max(8_192).optional(),
+  h: z.number().min(160).max(8_192).optional(),
+  color: z.string().trim().optional(),
+  sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
+  bridge: bridgeMetadataSchema.nullable().optional(),
 });
 
 const moveShapeSchema = z.object({
@@ -92,6 +160,8 @@ const deleteShapeSchema = z.object({
 const operationSchema = z.discriminatedUnion("type", [
   createCardSchema,
   updateCardSchema,
+  createZoneSchema,
+  updateZoneSchema,
   moveShapeSchema,
   resizeShapeSchema,
   createRelationSchema,
@@ -111,11 +181,12 @@ export function registerCowartThinkingTools(server) {
     {
       title: "Inspect Yogurt AI Thinking Context",
       description:
-        "Read a compact, source-aware representation of the current Yogurt AI page or selection. Use before planning any thinking-canvas edit; do not ask for the raw tldraw snapshot.",
+        "Read a compact, source-aware representation of the current Yogurt AI page or selection. When the UI captured a selection, pass its frozen shapeIds with scope=selection so later shared-selection changes cannot alter the request; selected frames and groups include their descendants. Use before planning any thinking-canvas edit; do not ask for the raw tldraw snapshot.",
       inputSchema: {
         ...projectArgsSchema,
         pageId: z.string().trim().optional(),
         scope: z.enum(["page", "selection"]).optional(),
+        shapeIds: z.array(z.string().trim().min(1).max(160)).min(1).max(250).optional(),
         includeAnnotations: z.boolean().optional(),
         maxShapes: z.number().int().min(1).max(250).optional(),
         maxTextLength: z.number().int().min(200).max(4_000).optional(),
@@ -185,7 +256,7 @@ export function registerCowartThinkingTools(server) {
     {
       title: "Apply Yogurt AI Thinking Operations",
       description:
-        "Preview or atomically apply local, typed edits to Yogurt AI cards, positions, sizes, and relations. A connected batch of new cards and relations is automatically arranged as a top-down Excalidraw-style graph when positions are omitted. Deletion is limited to agent-generated shapes. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
+        "Preview or atomically apply local, typed edits to Yogurt AI cards, product zones, positions, sizes, and relations. Product zones are safe tldraw frames with stable keys and constrained source/bridge trace metadata. create_card may use parentZoneId (a stable zone key or shape ID, including a zone created earlier in the same batch) to become a real frame child; supplied x/y remain page coordinates and are safely converted to frame-local coordinates, while omitted positions are padded and arranged inside the frame. Creation keys must be unique within a batch, and zone updates cannot cross the requested page. A connected batch of unpositioned page-level cards and relations is automatically arranged as a top-down Excalidraw-style graph. Deletion is limited to agent-generated shapes and refuses zones containing user-authored descendants. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
       inputSchema: {
         ...projectArgsSchema,
         baseRevision: z.string().trim().optional(),

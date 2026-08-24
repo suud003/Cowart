@@ -75,6 +75,8 @@ for (const skillName of [
   "cowart-image-edit",
   "cowart-image-gen",
   "cowart-open-canvas",
+  "cowart-product-bridge",
+  "cowart-semantic-diagram",
   "cowart-thinking-agent",
 ]) {
   const skillPath = path.join(rootDir, "skills", skillName, "SKILL.md");

@@ -24,6 +24,10 @@ const HISTORY_LIMIT = 20;
 const MATERIAL_SIZE_LIMIT = 200 * 1024 * 1024;
 const DEFAULT_CARD_WIDTH = 320;
 const DEFAULT_CARD_HEIGHT = 200;
+const DEFAULT_ZONE_WIDTH = 960;
+const DEFAULT_ZONE_HEIGHT = 640;
+const DEFAULT_ZONE_PADDING = 40;
+const DEFAULT_ZONE_CARD_GAP = 28;
 const DEFAULT_GAP = 48;
 const MAX_CONTEXT_SHAPES = 250;
 const MAX_CONTEXT_TEXT = 4_000;
@@ -69,6 +73,14 @@ const ROLE_COLORS = {
   counterpoint: "light-red",
 };
 
+const SOURCE_ACCESS_STATUSES = new Set([
+  "available",
+  "unread",
+  "not-configured",
+  "denied",
+  "error",
+]);
+
 function cloneJson(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
@@ -98,6 +110,71 @@ function boundedString(value, maxLength, fallback = "") {
   return value.trim().slice(0, maxLength);
 }
 
+function boundedStringList(value, maxItems, maxLength = 160) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => typeof item === "string")
+    .map((item) => boundedString(item, maxLength))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function compactObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const compacted = Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== null && item !== undefined && item !== ""),
+  );
+  return Object.keys(compacted).length > 0 ? compacted : null;
+}
+
+function normalizeSourceMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const fileSize = finiteNumber(value.fileSize, null);
+  const yogurtShapeIds = boundedStringList(value.yogurtShapeIds, 100);
+  const provenance = value.provenance && typeof value.provenance === "object" && !Array.isArray(value.provenance)
+    ? compactObject({
+        origin: boundedString(value.provenance.origin, 80) || null,
+        uri: boundedString(value.provenance.uri, 2_000) || null,
+      })
+    : null;
+  return compactObject({
+    id: boundedString(value.id, 160) || null,
+    kind: boundedString(value.kind, 32) || null,
+    title: boundedString(value.title, 300) || null,
+    summary: boundedString(value.summary, 12_000) || null,
+    excerpt: boundedString(value.excerpt, 3_000) || null,
+    yogurtShapeIds: yogurtShapeIds.length > 0 ? yogurtShapeIds : null,
+    provenance,
+    accessStatus: SOURCE_ACCESS_STATUSES.has(value.accessStatus) ? value.accessStatus : null,
+    fileName: boundedString(value.fileName, 240) || null,
+    localPath: boundedString(value.localPath, 2_000) || null,
+    originalPath: boundedString(value.originalPath, 2_000) || null,
+    fileSize: fileSize === null ? null : Math.max(0, Math.min(MATERIAL_SIZE_LIMIT, Math.floor(fileSize))),
+  });
+}
+
+function normalizeBridgeMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const sourceIds = boundedStringList(value.sourceIds, 50);
+  const yogurtShapeIds = boundedStringList(value.yogurtShapeIds, 100);
+  const requirementIds = boundedStringList(value.requirementIds, 100);
+  const pageIds = boundedStringList(value.pageIds, 100);
+  const annotationRefs = boundedStringList(value.annotationRefs, 100, 320);
+  const returnedShapeIds = boundedStringList(value.returnedShapeIds, 100);
+  return compactObject({
+    mappingId: boundedString(value.mappingId, 160) || null,
+    workspaceId: boundedString(value.workspaceId, 160) || null,
+    sourceIds: sourceIds.length > 0 ? sourceIds : null,
+    yogurtShapeIds: yogurtShapeIds.length > 0 ? yogurtShapeIds : null,
+    zoneId: boundedString(value.zoneId, 160) || null,
+    requirementIds: requirementIds.length > 0 ? requirementIds : null,
+    pageIds: pageIds.length > 0 ? pageIds : null,
+    annotationRefs: annotationRefs.length > 0 ? annotationRefs : null,
+    returnedShapeIds: returnedShapeIds.length > 0 ? returnedShapeIds : null,
+    lastSyncedRevision: boundedString(value.lastSyncedRevision, 200) || null,
+  });
+}
+
 function safeRole(value, fallback = "idea") {
   return THINKING_ROLES.has(value) ? value : fallback;
 }
@@ -108,6 +185,10 @@ function safeColor(value, role = "idea") {
 
 function diagramColor(value) {
   return CARD_COLORS.has(value) ? value : "black";
+}
+
+function zoneColor(value) {
+  return CARD_COLORS.has(value) ? value : "grey";
 }
 
 function safeIdPart(value, fallback = "item") {
@@ -275,6 +356,7 @@ function isAnnotationShape(shape) {
 }
 
 function inferShapeRole(shape) {
+  if (shape?.meta?.cowartProductZone === true) return "zone";
   if (THINKING_ROLES.has(shape?.meta?.cowartThinkingRole)) return shape.meta.cowartThinkingRole;
   if (isAnnotationShape(shape)) return "annotation";
   if (shape?.meta?.cowartThinkingMaterial === true) return "material";
@@ -288,7 +370,18 @@ function compactSource(meta) {
   const source = meta?.cowartThinkingSource;
   if (!source || typeof source !== "object") return null;
   return {
+    id: boundedString(source.id, 160) || null,
     kind: boundedString(source.kind, 32) || null,
+    title: boundedString(source.title, 300) || null,
+    summary: boundedString(source.summary, 12_000) || null,
+    yogurtShapeIds: boundedStringList(source.yogurtShapeIds, 100),
+    provenance: source.provenance && typeof source.provenance === "object"
+      ? {
+          origin: boundedString(source.provenance.origin, 80) || null,
+          uri: boundedString(source.provenance.uri, 2_000) || null,
+        }
+      : null,
+    accessStatus: SOURCE_ACCESS_STATUSES.has(source.accessStatus) ? source.accessStatus : null,
     fileName: boundedString(source.fileName, 240) || null,
     localPath: boundedString(source.localPath, 2_000) || null,
     originalPath: boundedString(source.originalPath, 2_000) || null,
@@ -297,8 +390,59 @@ function compactSource(meta) {
   };
 }
 
+function compactBridge(meta) {
+  const bridge = normalizeBridgeMetadata(meta?.cowartProductBridge);
+  return bridge ? cloneJson(bridge) : null;
+}
+
+function compactVisual(shape) {
+  if (shape?.meta?.cowartHtmlDraft !== true) return null;
+  const semantic = shape.meta?.cowartSemanticDiagram;
+  if (!semantic || typeof semantic !== "object") return null;
+  const readingOrders = new Set([
+    "left-to-right",
+    "right-to-left",
+    "top-to-bottom",
+    "bottom-to-top",
+    "center-out",
+    "board-to-peers",
+  ]);
+  const diagramTypes = new Set([
+    "flow",
+    "architecture",
+    "comparison",
+    "state",
+    "interface",
+    "swimlane",
+    "concept",
+    "hierarchy",
+    "containment",
+    "board-to-peers",
+    "custom",
+  ]);
+  return {
+    kind: "semantic-line-svg",
+    assetUrl: boundedString(shape.meta?.cowartHtmlDraftAssetUrl, 2_000) || null,
+    semanticDiagram: {
+      version: semantic.version === "1" ? "1" : null,
+      teachingClaim: boundedString(semantic.teachingClaim, 500) || null,
+      readingOrder: readingOrders.has(semantic.readingOrder) ? semantic.readingOrder : null,
+      diagramType: diagramTypes.has(semantic.diagramType) ? semantic.diagramType : null,
+      sourceShapeIds: boundedStringList(semantic.sourceShapeIds, MAX_CONTEXT_SHAPES, 160),
+      sourceIds: boundedStringList(semantic.sourceIds, 100, 160),
+      workspaceId: boundedString(semantic.workspaceId, 160) || null,
+      zoneId: boundedString(semantic.zoneId, 160) || null,
+      objectCount: Math.max(0, Math.min(250, Math.trunc(finiteNumber(semantic.objectCount, 0)))),
+      relationCount: Math.max(0, Math.min(500, Math.trunc(finiteNumber(semantic.relationCount, 0)))),
+      specDigest: boundedString(semantic.specDigest, 128) || null,
+      promptDigest: boundedString(semantic.promptDigest, 128) || null,
+    },
+  };
+}
+
 function shapeContext(store, shape, selected, maxTextLength) {
   const asset = shape?.props?.assetId ? store[shape.props.assetId] : null;
+  const parent = typeof shape?.parentId === "string" ? store[shape.parentId] : null;
   return {
     id: shape.id,
     type: shape.type,
@@ -308,9 +452,21 @@ function shapeContext(store, shape, selected, maxTextLength) {
     title: boundedString(shape.meta?.cowartThinkingTitle, 300) || null,
     text: boundedString(textForShape(shape), maxTextLength) || null,
     source: compactSource(shape.meta),
-    sourceRefs: Array.isArray(shape.meta?.cowartThinkingSourceRefs)
-      ? shape.meta.cowartThinkingSourceRefs.filter((value) => typeof value === "string").slice(0, 50)
-      : [],
+    key: boundedString(shape.meta?.cowartThinkingKey ?? shape.meta?.cowartProductZoneKey, 80) || null,
+    sourceRefs: boundedStringList(shape.meta?.cowartThinkingSourceRefs, 50, 500),
+    zone: shape.meta?.cowartProductZone === true
+      ? {
+          key: boundedString(shape.meta?.cowartProductZoneKey, 80) || null,
+        }
+      : null,
+    parentZone: parent?.meta?.cowartProductZone === true
+      ? {
+          id: parent.id,
+          key: boundedString(parent.meta?.cowartProductZoneKey, 80) || null,
+        }
+      : null,
+    bridge: compactBridge(shape.meta),
+    visual: compactVisual(shape),
     relation: shape.meta?.cowartThinkingRelation === true
       ? {
           fromId: shape.meta.cowartThinkingFromShapeId ?? null,
@@ -342,19 +498,37 @@ export function summarizeThinkingContext({
   viewState = null,
   pageId: requestedPageId,
   scope = "page",
+  shapeIds: requestedShapeIds,
   includeAnnotations = true,
   maxShapes = MAX_CONTEXT_SHAPES,
   maxTextLength = MAX_CONTEXT_TEXT,
 } = {}) {
   if (!snapshot?.store || !snapshot?.schema) throw new Error("Expected a valid Yogurt AI snapshot.");
   const store = snapshot.store;
-  const pageId = resolvePageId(snapshot, requestedPageId, viewState);
-  const selectedIds = selectedShapeIds(selection);
+  const hasFrozenSelection = scope === "selection" && Array.isArray(requestedShapeIds);
+  const frozenSelectedIds = hasFrozenSelection
+    ? new Set(boundedStringList(requestedShapeIds, MAX_CONTEXT_SHAPES, 160))
+    : null;
+  const inferredSelectionPageId = hasFrozenSelection
+    ? Array.from(frozenSelectedIds)
+      .map((id) => store[id])
+      .filter((shape) => shape?.typeName === "shape")
+      .map((shape) => pageIdForShape(store, shape))
+      .find(Boolean) ?? null
+    : null;
+  const pageId = resolvePageId(snapshot, requestedPageId ?? inferredSelectionPageId, viewState);
+  const selectedIds = frozenSelectedIds ?? selectedShapeIds(selection);
+  const scopeShapeIds = new Set(selectedIds);
+  for (const selectedId of selectedIds) {
+    const selectedShape = store[selectedId];
+    if (selectedShape?.typeName !== "shape" || pageIdForShape(store, selectedShape) !== pageId) continue;
+    for (const descendantId of descendantShapeIds(store, selectedId)) scopeShapeIds.add(descendantId);
+  }
   const allShapes = pageShapes(store, pageId);
   const selectedRelationIds = new Set();
   const selectedBounds = unionBounds(
     allShapes
-      .filter((shape) => selectedIds.has(shape.id))
+      .filter((shape) => scopeShapeIds.has(shape.id))
       .map((shape) => pageBounds(store, shape)),
   );
   const annotationRegion = expandedBounds(selectedBounds, 160);
@@ -363,7 +537,7 @@ export function summarizeThinkingContext({
     for (const shape of allShapes) {
       if (
         shape.meta?.cowartThinkingRelation === true &&
-        (selectedIds.has(shape.meta?.cowartThinkingFromShapeId) || selectedIds.has(shape.meta?.cowartThinkingToShapeId))
+        (scopeShapeIds.has(shape.meta?.cowartThinkingFromShapeId) || scopeShapeIds.has(shape.meta?.cowartThinkingToShapeId))
       ) {
         selectedRelationIds.add(shape.id);
       }
@@ -374,7 +548,7 @@ export function summarizeThinkingContext({
     if (!includeAnnotations && isAnnotationShape(shape)) return false;
     if (scope !== "selection" || selectedIds.size === 0) return true;
     return (
-      selectedIds.has(shape.id) ||
+      scopeShapeIds.has(shape.id) ||
       selectedRelationIds.has(shape.id) ||
       (includeAnnotations && isAnnotationShape(shape) && boundsIntersect(pageBounds(store, shape), annotationRegion))
     );
@@ -407,17 +581,35 @@ function nextIndex(store, parentId) {
   return generateKeyBetween(lastShapeIndex(store, parentId), null);
 }
 
+function firstShapeIndex(store, parentId) {
+  return Object.values(store)
+    .filter((record) => record?.typeName === "shape" && record.parentId === parentId && typeof record.index === "string")
+    .map((record) => record.index)
+    .sort()
+    .at(0) ?? null;
+}
+
+function previousIndex(store, parentId) {
+  return generateKeyBetween(null, firstShapeIndex(store, parentId));
+}
+
 function formatCardText(title, body) {
   return [title, body].filter(Boolean).join("\n\n");
 }
 
-function cardPosition(store, pageId, operation, width, height, createdCount) {
+function explicitOrAnchoredCardPagePosition(store, pageId, operation, width, height, references) {
   if (Number.isFinite(operation.x) && Number.isFinite(operation.y)) {
     return { x: operation.x, y: operation.y };
   }
 
-  const anchor = typeof operation.anchorId === "string" ? store[operation.anchorId] : null;
+  const anchorId = typeof operation.anchorId === "string"
+    ? references.get(operation.anchorId) ?? operation.anchorId
+    : null;
+  const anchor = typeof anchorId === "string" ? store[anchorId] : null;
   if (anchor?.typeName === "shape") {
+    if (pageIdForShape(store, anchor) !== pageId) {
+      throw new Error(`create_card.anchorId is not on page ${pageId}: ${operation.anchorId}`);
+    }
     const bounds = pageBounds(store, anchor);
     const gap = Math.max(0, finiteNumber(operation.gap, DEFAULT_GAP));
     const placement = ["right", "left", "below", "above"].includes(operation.placement)
@@ -428,6 +620,59 @@ function cardPosition(store, pageId, operation, width, height, createdCount) {
     if (placement === "above") return { x: bounds.x, y: bounds.y - height - gap };
     return { x: bounds.x + bounds.w + gap, y: bounds.y };
   }
+
+  return null;
+}
+
+function zoneCardPosition(store, zone, operation, width, height, references, pageId) {
+  if (Math.abs(finiteNumber(zone.rotation, 0)) > Number.EPSILON) {
+    throw new Error(`Cannot safely place a card in rotated product zone ${zone.id}.`);
+  }
+  const positioned = explicitOrAnchoredCardPagePosition(
+    store,
+    pageId,
+    operation,
+    width,
+    height,
+    references,
+  );
+  const zoneBounds = pageBounds(store, zone);
+  if (positioned) {
+    return {
+      x: positioned.x - zoneBounds.x,
+      y: positioned.y - zoneBounds.y,
+    };
+  }
+
+  const siblings = Object.values(store).filter(
+    (record) => record?.typeName === "shape" && record.parentId === zone.id && record.type !== "arrow",
+  );
+  const availableWidth = Math.max(width, finiteNumber(zone.props?.w, DEFAULT_ZONE_WIDTH) - DEFAULT_ZONE_PADDING * 2);
+  const columns = Math.max(
+    1,
+    Math.floor((availableWidth + DEFAULT_ZONE_CARD_GAP) / (width + DEFAULT_ZONE_CARD_GAP)),
+  );
+  const slot = siblings.length;
+  return {
+    x: DEFAULT_ZONE_PADDING + (slot % columns) * (width + DEFAULT_ZONE_CARD_GAP),
+    y: DEFAULT_ZONE_PADDING + Math.floor(slot / columns) * (height + DEFAULT_ZONE_CARD_GAP),
+  };
+}
+
+function cardPosition(store, pageId, operation, width, height, createdCount, references, parentZone) {
+  if (parentZone) {
+    return zoneCardPosition(store, parentZone, operation, width, height, references, pageId);
+  }
+
+  const positioned = explicitOrAnchoredCardPagePosition(
+    store,
+    pageId,
+    operation,
+    width,
+    height,
+    references,
+  );
+  if (positioned) return positioned;
 
   const shapes = pageShapes(store, pageId).filter((shape) => shape.type !== "arrow");
   const rightEdge = shapes.reduce((max, shape) => {
@@ -440,7 +685,7 @@ function cardPosition(store, pageId, operation, width, height, createdCount) {
   };
 }
 
-function createCardRecord(store, pageId, operation, createdCount) {
+function createCardRecord(store, pageId, operation, createdCount, references) {
   const role = safeRole(operation.role);
   const title = boundedString(operation.title, 300, role);
   const body = boundedString(operation.body, 12_000);
@@ -448,10 +693,31 @@ function createCardRecord(store, pageId, operation, createdCount) {
   const dimensions = estimateThinkingCardSize({ title, body, w: operation.w, h: operation.h });
   const width = dimensions.w;
   const height = dimensions.h;
-  const position = cardPosition(store, pageId, operation, width, height, createdCount);
+  const parentZone = operation.parentZoneId
+    ? resolveZoneReference(store, references, operation.parentZoneId, "create_card.parentZoneId", pageId)
+    : null;
+  const parentId = parentZone?.id ?? pageId;
+  const position = cardPosition(
+    store,
+    pageId,
+    operation,
+    width,
+    height,
+    createdCount,
+    references,
+    parentZone,
+  );
   const id = uniqueId(store, SHAPE_PREFIX, operation.key || title || role);
   const timestamp = new Date().toISOString();
-  const source = operation.source && typeof operation.source === "object" ? cloneJson(operation.source) : null;
+  const source = normalizeSourceMetadata(operation.source);
+  const requestedBridge = normalizeBridgeMetadata(operation.bridge);
+  const parentBridge = normalizeBridgeMetadata(parentZone?.meta?.cowartProductBridge);
+  const bridge = parentZone
+    ? {
+        ...(requestedBridge ?? {}),
+        zoneId: requestedBridge?.zoneId || parentBridge?.zoneId || parentZone.meta.cowartProductZoneKey,
+      }
+    : requestedBridge;
 
   return {
     id,
@@ -460,8 +726,8 @@ function createCardRecord(store, pageId, operation, createdCount) {
     x: position.x,
     y: position.y,
     rotation: 0,
-    index: nextIndex(store, pageId),
-    parentId: pageId,
+    index: nextIndex(store, parentId),
+    parentId,
     isLocked: false,
     opacity: 1,
     props: {
@@ -486,12 +752,84 @@ function createCardRecord(store, pageId, operation, createdCount) {
       cowartThinkingGenerated: operation.generated !== false,
       cowartThinkingMaterial: role === "material",
       cowartThinkingRole: role,
+      cowartThinkingKey: boundedString(operation.key, 80),
       cowartThinkingTitle: title,
       cowartThinkingBody: body,
       cowartThinkingSource: source,
-      cowartThinkingSourceRefs: Array.isArray(operation.sourceRefs)
-        ? operation.sourceRefs.filter((value) => typeof value === "string").slice(0, 50)
-        : [],
+      cowartThinkingSourceRefs: boundedStringList(operation.sourceRefs, 50, 500),
+      cowartProductBridge: bridge,
+      cowartProductParentZoneKey: parentZone
+        ? boundedString(parentZone.meta?.cowartProductZoneKey, 80)
+        : null,
+      cowartThinkingCreatedAt: timestamp,
+      cowartThinkingUpdatedAt: timestamp,
+    },
+  };
+}
+
+function zonePosition(store, pageId, operation) {
+  const existingBounds = unionBounds(
+    pageShapes(store, pageId)
+      .filter((shape) => shape.type !== "arrow")
+      .map((shape) => pageBounds(store, shape)),
+  );
+  return {
+    x: finiteNumber(operation.x, existingBounds ? existingBounds.x + existingBounds.w + DEFAULT_GAP * 2 : 0),
+    y: finiteNumber(operation.y, existingBounds?.y ?? 0),
+  };
+}
+
+function normalizeZoneBridge(value, key) {
+  return {
+    ...(normalizeBridgeMetadata(value) ?? {}),
+    zoneId: boundedString(value?.zoneId, 160) || key,
+  };
+}
+
+function createZoneRecord(store, pageId, operation) {
+  const key = boundedString(operation.key, 80);
+  if (!key) throw new Error("create_zone requires a stable key.");
+  const duplicate = Object.values(store).find(
+    (record) => record?.typeName === "shape" &&
+      record.meta?.cowartProductZone === true &&
+      record.meta?.cowartProductZoneKey === key,
+  );
+  if (duplicate) throw new Error(`Product zone key already exists: ${key}. Use update_zone instead.`);
+
+  const title = boundedString(operation.title, 300, key);
+  const body = boundedString(operation.body, 12_000);
+  const width = Math.max(240, Math.min(8_192, finiteNumber(operation.w, DEFAULT_ZONE_WIDTH)));
+  const height = Math.max(160, Math.min(8_192, finiteNumber(operation.h, DEFAULT_ZONE_HEIGHT)));
+  const position = zonePosition(store, pageId, operation);
+  const preferredId = `${SHAPE_PREFIX}cowart-zone-${safeIdPart(key, "zone")}`;
+  const id = store[preferredId] ? uniqueId(store, SHAPE_PREFIX, `cowart-zone-${key}`) : preferredId;
+  const timestamp = new Date().toISOString();
+
+  return {
+    id,
+    typeName: "shape",
+    type: "frame",
+    x: position.x,
+    y: position.y,
+    rotation: 0,
+    index: previousIndex(store, pageId),
+    parentId: pageId,
+    isLocked: false,
+    opacity: 1,
+    props: {
+      w: width,
+      h: height,
+      name: title,
+      color: zoneColor(operation.color),
+    },
+    meta: {
+      cowartThinkingGenerated: true,
+      cowartProductZone: true,
+      cowartProductZoneKey: key,
+      cowartThinkingTitle: title,
+      cowartThinkingBody: body,
+      cowartThinkingSourceRefs: boundedStringList(operation.sourceRefs, 50, 500),
+      cowartProductBridge: normalizeZoneBridge(operation.bridge, key),
       cowartThinkingCreatedAt: timestamp,
       cowartThinkingUpdatedAt: timestamp,
     },
@@ -502,6 +840,24 @@ function resolveShapeReference(store, references, value, label) {
   const id = references.get(value) ?? value;
   const shape = typeof id === "string" ? store[id] : null;
   if (!shape || shape.typeName !== "shape") throw new Error(`${label} does not reference a canvas shape: ${value}`);
+  return shape;
+}
+
+function resolveZoneReference(store, references, value, label, expectedPageId = null) {
+  const referencedId = references.get(value) ?? value;
+  const direct = typeof referencedId === "string" ? store[referencedId] : null;
+  const shape = direct ?? Object.values(store).find(
+    (record) => record?.typeName === "shape" &&
+      record.meta?.cowartProductZone === true &&
+      record.meta?.cowartProductZoneKey === value,
+  );
+  if (!shape || shape.meta?.cowartProductZone !== true) {
+    throw new Error(`${label} does not reference a product zone: ${value}`);
+  }
+  const zonePageId = pageIdForShape(store, shape);
+  if (expectedPageId && zonePageId !== expectedPageId) {
+    throw new Error(`${label} references product zone ${shape.id} on ${zonePageId}, not batch page ${expectedPageId}.`);
+  }
   return shape;
 }
 
@@ -527,11 +883,21 @@ function updateThinkingCard(store, operation, allowUserAuthoredEdits) {
   const body = operation.body === undefined
     ? boundedString(shape.meta?.cowartThinkingBody ?? textForShape(shape), 12_000)
     : boundedString(operation.body, 12_000);
+  const sourceRefs = operation.sourceRefs === undefined
+    ? boundedStringList(shape.meta?.cowartThinkingSourceRefs, 50, 500)
+    : boundedStringList(operation.sourceRefs, 50, 500);
+  const source = operation.source === undefined
+    ? normalizeSourceMetadata(shape.meta?.cowartThinkingSource)
+    : normalizeSourceMetadata(operation.source);
+  const bridge = operation.bridge === undefined
+    ? normalizeBridgeMetadata(shape.meta?.cowartProductBridge)
+    : normalizeBridgeMetadata(operation.bridge);
   const updated = {
     ...shape,
     props: {
       ...shape.props,
       color: operation.color === undefined ? shape.props.color : safeColor(operation.color, role),
+      url: operation.url === undefined ? shape.props.url : boundedString(operation.url, 2_000),
       richText: toRichText(formatCardText(title, body)),
     },
     meta: {
@@ -539,6 +905,53 @@ function updateThinkingCard(store, operation, allowUserAuthoredEdits) {
       cowartThinkingRole: role,
       cowartThinkingTitle: title,
       cowartThinkingBody: body,
+      cowartThinkingSource: source,
+      cowartThinkingSourceRefs: sourceRefs,
+      cowartProductBridge: bridge,
+      cowartThinkingUpdatedAt: new Date().toISOString(),
+    },
+  };
+  store[shape.id] = updated;
+  return updated;
+}
+
+function updateProductZone(store, operation, references, pageId) {
+  const shape = resolveZoneReference(store, references, operation.id, "update_zone.id", pageId);
+  if (shape.type !== "frame") throw new Error(`Product zone ${shape.id} is not a supported tldraw frame.`);
+  const key = boundedString(shape.meta?.cowartProductZoneKey, 80);
+  const title = operation.title === undefined
+    ? boundedString(shape.meta?.cowartThinkingTitle ?? shape.props?.name, 300, key)
+    : boundedString(operation.title, 300, key);
+  const body = operation.body === undefined
+    ? boundedString(shape.meta?.cowartThinkingBody, 12_000)
+    : boundedString(operation.body, 12_000);
+  const sourceRefs = operation.sourceRefs === undefined
+    ? boundedStringList(shape.meta?.cowartThinkingSourceRefs, 50, 500)
+    : boundedStringList(operation.sourceRefs, 50, 500);
+  const bridge = operation.bridge === undefined
+    ? normalizeZoneBridge(shape.meta?.cowartProductBridge, key)
+    : normalizeZoneBridge(operation.bridge, key);
+  const updated = {
+    ...shape,
+    x: operation.x === undefined ? shape.x : finiteNumber(operation.x, shape.x),
+    y: operation.y === undefined ? shape.y : finiteNumber(operation.y, shape.y),
+    props: {
+      ...shape.props,
+      w: operation.w === undefined
+        ? shape.props.w
+        : Math.max(240, Math.min(8_192, finiteNumber(operation.w, shape.props.w))),
+      h: operation.h === undefined
+        ? shape.props.h
+        : Math.max(160, Math.min(8_192, finiteNumber(operation.h, shape.props.h))),
+      name: title,
+      color: operation.color === undefined ? shape.props.color : zoneColor(operation.color),
+    },
+    meta: {
+      ...shape.meta,
+      cowartThinkingTitle: title,
+      cowartThinkingBody: body,
+      cowartThinkingSourceRefs: sourceRefs,
+      cowartProductBridge: bridge,
       cowartThinkingUpdatedAt: new Date().toISOString(),
     },
   };
@@ -628,7 +1041,7 @@ function layoutCreatedThinkingGraph(store, pageId, createdCards, createdRelation
   if (
     createdCards.some(({ operation }) =>
       Boolean(
-        operation.anchorId || Number.isFinite(operation.x) || Number.isFinite(operation.y),
+        operation.parentZoneId || operation.anchorId || Number.isFinite(operation.x) || Number.isFinite(operation.y),
       ),
     )
   ) {
@@ -704,6 +1117,15 @@ function deleteGeneratedShape(store, operation, references) {
     throw new Error(`Refusing to delete non-agent shape ${shape.id}.`);
   }
   const shapeIds = descendantShapeIds(store, shape.id);
+  const protectedDescendants = Array.from(shapeIds)
+    .filter((id) => id !== shape.id)
+    .map((id) => store[id])
+    .filter((record) => record?.typeName === "shape" && record.meta?.cowartThinkingGenerated !== true);
+  if (protectedDescendants.length > 0) {
+    throw new Error(
+      `Refusing to delete ${shape.id}; it contains ${protectedDescendants.length} user-authored shape(s).`,
+    );
+  }
   for (const record of Object.values(store)) {
     if (
       shapeIds.has(record.id) ||
@@ -723,15 +1145,28 @@ function validateOperations(operations) {
   const supported = new Set([
     "create_card",
     "update_card",
+    "create_zone",
+    "update_zone",
     "move_shape",
     "resize_shape",
     "create_relation",
     "delete_shape",
   ]);
+  const keyedCreationTypes = new Set(["create_card", "create_zone", "create_relation"]);
+  const creationKeys = new Map();
   for (const operation of operations) {
     if (!operation || typeof operation !== "object" || !supported.has(operation.type)) {
       throw new Error(`Unsupported thinking operation: ${operation?.type ?? "missing type"}`);
     }
+    const key = keyedCreationTypes.has(operation.type) ? boundedString(operation.key, 80) : "";
+    if (!key) continue;
+    const previousType = creationKeys.get(key);
+    if (previousType) {
+      throw new Error(
+        `Duplicate creation key '${key}' in one batch (${previousType} and ${operation.type}).`,
+      );
+    }
+    creationKeys.set(key, operation.type);
   }
 }
 
@@ -754,12 +1189,32 @@ export function applyThinkingOperationsToSnapshot({
   let createdCount = 0;
 
   for (const operation of operations) {
+    if (operation.type === "create_zone") {
+      const zone = createZoneRecord(store, pageId, operation);
+      store[zone.id] = zone;
+      const key = boundedString(operation.key, 80);
+      references.set(key, zone.id);
+      changes.push({ type: operation.type, id: zone.id, key });
+      continue;
+    }
+
+    if (operation.type === "update_zone") {
+      const updated = updateProductZone(store, operation, references, pageId);
+      changes.push({
+        type: operation.type,
+        id: updated.id,
+        key: updated.meta.cowartProductZoneKey,
+      });
+      continue;
+    }
+
     if (operation.type === "create_card") {
-      const card = createCardRecord(store, pageId, operation, createdCount);
+      const card = createCardRecord(store, pageId, operation, createdCount, references);
       store[card.id] = card;
-      if (typeof operation.key === "string" && operation.key.trim()) references.set(operation.key, card.id);
+      const key = boundedString(operation.key, 80);
+      if (key) references.set(key, card.id);
       createdCards.push({ id: card.id, operation });
-      changes.push({ type: operation.type, id: card.id, key: operation.key ?? null });
+      changes.push({ type: operation.type, id: card.id, key: key || null });
       createdCount += 1;
       continue;
     }
@@ -793,9 +1248,10 @@ export function applyThinkingOperationsToSnapshot({
 
     if (operation.type === "create_relation") {
       const arrow = createRelationRecords(store, operation, references);
-      if (typeof operation.key === "string" && operation.key.trim()) references.set(operation.key, arrow.id);
+      const key = boundedString(operation.key, 80);
+      if (key) references.set(key, arrow.id);
       createdRelations.push(arrow.id);
-      changes.push({ type: operation.type, id: arrow.id, key: operation.key ?? null });
+      changes.push({ type: operation.type, id: arrow.id, key: key || null });
       continue;
     }
 
@@ -863,10 +1319,11 @@ async function pruneHistory(args) {
 }
 
 export async function getThinkingContext(args = {}, options = {}) {
-  const [state, selectionState] = await Promise.all([
-    readCowartCanvasState(args, { hydrateAssets: false }),
-    readCowartSelectionState(args),
-  ]);
+  const hasFrozenSelection = options.scope === "selection" && Array.isArray(options.shapeIds);
+  const state = await readCowartCanvasState(args, { hydrateAssets: false });
+  const selectionState = hasFrozenSelection
+    ? { selection: { selectedShapes: [] } }
+    : await readCowartSelectionState(args);
   return {
     ...summarizeThinkingContext({
       snapshot: ensureThinkingSnapshot(state.snapshot),
@@ -874,6 +1331,7 @@ export async function getThinkingContext(args = {}, options = {}) {
       viewState: state.viewState,
       pageId: options.pageId,
       scope: options.scope,
+      shapeIds: options.shapeIds,
       includeAnnotations: options.includeAnnotations,
       maxShapes: options.maxShapes,
       maxTextLength: options.maxTextLength,

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Yogurt Product Bridge</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="annotations.css">
+</head>
+<body>
+  <aside class="rail"><strong>YP</strong><div id="railItems"></div></aside>
+  <main class="shell">
+    <header class="topbar">
+      <div><div class="crumb">YOGURT / <span id="stage">SHAPING</span></div><h1 id="productName">Product Bridge</h1></div>
+      <div class="topActions"><button class="ghost" id="toggleShaping">隐藏过程文档</button><button class="ghost" id="editSource">编辑源文件</button><button class="dark" id="exportModule">导出当前模块</button></div>
+    </header>
+    <nav class="viewTabs"><button class="active" data-view="review">文档与原型</button><button data-view="canvas">全局画布</button><span id="saveState">已加载</span></nav>
+
+    <section id="reviewView">
+      <div class="toolbar">
+        <span class="label">页面</span><select id="pageSelect"></select>
+        <button id="toggleAnnotations" class="dark">隐藏标注</button><button id="addAnnotation">添加标注</button>
+        <span class="viewport" id="viewportLabel">DESKTOP / 1280 × 800</span>
+        <button id="expandPrototype" class="push">展开原型</button>
+      </div>
+      <div class="reviewGrid">
+        <div class="prototypeStage">
+          <div class="prototypeFrame" id="prototypeFrame"><iframe id="prototype"></iframe><div id="annotationLayer"></div></div>
+        </div>
+        <aside class="docPanel">
+          <div class="docTabs"><button class="active" data-doc="prd">PRD</button><button data-doc="notes">页面标注</button></div>
+          <div class="docContent" id="docContent"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="canvasView" hidden>
+      <div class="canvasTools"><span>拖拽页面标题调整位置，松开后自动保存</span><button id="autoArrange">自动排列</button><button id="zoomOut">−</button><b id="zoomLabel">60%</b><button id="zoomIn">＋</button></div>
+      <div class="canvasViewport"><div id="canvasWorld"><svg id="edges" viewBox="0 0 2400 1600" role="img" aria-labelledby="product-flow-title product-flow-desc" focusable="false"><title id="product-flow-title">产品页面关系图</title><desc id="product-flow-desc">当前没有页面关系。</desc></svg><div id="cards"></div></div></div>
+    </section>
+  </main>
+
+  <dialog id="sourceDialog">
+    <form method="dialog" class="dialogHeader"><strong>编辑外部内容</strong><button value="cancel">×</button></form>
+    <div class="sourceTools"><select id="fileSelect"></select><button class="dark" id="saveFile">保存</button></div>
+    <textarea id="sourceText" spellcheck="false"></textarea>
+  </dialog>
+  <div id="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

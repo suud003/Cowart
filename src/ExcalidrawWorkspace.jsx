@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileCode, LoaderCircle, Presentation } from 'lucide-react'
+import { FileCode, LoaderCircle, Presentation, Sparkles, Workflow } from 'lucide-react'
 import { useEditor, useToasts } from 'tldraw'
 import {
   getExcalidrawKeyboardAction,
   isEditableKeyboardTarget
 } from './excalidrawInteraction.js'
+import {
+  PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE,
+  PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
+} from './productBridgePrompt.js'
+import {
+  SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE,
+  SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+} from './semanticDiagramPrompt.js'
 
 const PRODUCT_NAME = 'Yogurt AI'
 
@@ -95,9 +103,32 @@ function CowartAiMenu({ brandIcon, items }) {
         severity: 'success'
       })
     } catch (error) {
+      if (
+        error?.code === PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE ||
+        error?.code === SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+      ) {
+        addToast({
+          title: '范围过大，请缩小选区',
+          description: error.message,
+          severity: 'error'
+        })
+        return
+      }
+      if (
+        error?.code === PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE ||
+        error?.code === SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE
+      ) {
+        addToast({
+          title: '当前是本地预览',
+          description:
+            error.message || '生成交互 PRD 需要在 Codex 原生 Yogurt AI 画布中使用。',
+          severity: 'info'
+        })
+        return
+      }
       console.error(error)
       addToast({
-        title: '画布整合导出失败',
+        title: item.errorTitle || '画布整合导出失败',
         description: error instanceof Error ? error.message : '请稍后重试。',
         severity: 'error'
       })
@@ -161,6 +192,8 @@ export function ExcalidrawCowartChrome({
   imageIcon,
   onCreateHtml,
   onCreateImage,
+  onCreateProductBridge,
+  onCreateSemanticDiagram,
   onCreateSlides,
   onExportCanvasHtml,
   onExportCanvasPptx,
@@ -192,6 +225,34 @@ export function ExcalidrawCowartChrome({
       icon: slidesIcon,
       shortcut: '⇧ S',
       onSelect: () => onCreateSlides(editor)
+    },
+    {
+      id: 'product-bridge',
+      label: '生成交互 PRD',
+      description: '将选区或整页整理成 PRD 与交互原型',
+      icon: <Sparkles aria-hidden="true" />,
+      badge: 'PRD',
+      onSelect: () => onCreateProductBridge(editor),
+      successTitle: '已发送给产品桥接 Agent',
+      successDescription: (result) =>
+        result?.scope === 'selection'
+          ? `已携带当前选区的 ${result.selectedCount} 个对象。`
+          : '当前没有选中对象，已使用整页产品内容。',
+      errorTitle: '交互 PRD 生成任务发送失败'
+    },
+    {
+      id: 'semantic-diagram',
+      label: '生成语义框线图',
+      description: '把选区或整页整理成可追踪的 SVG 关系图',
+      icon: <Workflow aria-hidden="true" />,
+      badge: 'SVG',
+      onSelect: () => onCreateSemanticDiagram(editor),
+      successTitle: '已发送给语义制图 Agent',
+      successDescription: (result) =>
+        result?.scope === 'selection'
+          ? `已冻结当前选区的 ${result.selectedCount} 个对象。`
+          : '当前没有选中对象，已使用整页内容。',
+      errorTitle: '语义框线图生成任务发送失败'
     },
     {
       id: 'export-html',

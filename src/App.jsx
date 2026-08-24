@@ -131,7 +131,24 @@ import {
   COWART_AGENT_LASSO_TOOL_LABEL,
   CowartAgentLassoTool
 } from './agentLasso.js'
-import { getCowartSelection, getCowartSelectionSnapshot } from './selectionContext.js'
+import {
+  getCowartFrozenSelectionIds,
+  getCowartSelection,
+  getCowartSelectionSnapshot
+} from './selectionContext.js'
+import {
+  buildProductBridgePrompt,
+  getProductBridgeScopeSize,
+  PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE,
+  PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
+} from './productBridgePrompt.js'
+import {
+  buildSemanticDiagramPrompt,
+  getSemanticDiagramScopeSize,
+  SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE,
+  SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+} from './semanticDiagramPrompt.js'
+import { getCowartHtmlDraftSandbox } from './htmlDraftSecurity.js'
 
 installCowartHandDrawnFontFaces()
 
@@ -337,6 +354,7 @@ const cowartHtmlDraftIframes = new Map()
 const cowartHtmlDraftDomEditSessions = new Map()
 const cowartPendingSlidesPastes = new WeakMap()
 const cowartCopiedContent = new WeakMap()
+const cowartCanvasSnapshotFlushers = new WeakMap()
 
 const cowartTldrawAssetStore = {
   upload: async (_asset, file) => ({ src: await readFileAsDataUrl(file) }),
@@ -3452,7 +3470,7 @@ function CowartHtmlDraftEmbed({ shape }) {
           height={toDomPrecision(shape.props.h)}
           onLoad={() => setFrameLoadVersion((version) => version + 1)}
           referrerPolicy="no-referrer"
-          sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
+          sandbox={getCowartHtmlDraftSandbox(shape.meta)}
           srcDoc={htmlSource}
           tabIndex={isEditing ? 0 : -1}
           title={AI_DRAFT_HOLDER_LABEL}
@@ -3760,6 +3778,173 @@ const cowartComponents = {
   StylePanel: CowartStylePanel
 }
 
+async function submitCowartProductBridge(editor) {
+  const { selectedRootShapeIds, exactShapeIds } = getCowartFrozenSelectionIds(editor)
+  const currentPageShapeCount = exactShapeIds.length > 0 ? 0 : editor.getCurrentPageShapeIds().size
+  const scopeSize = getProductBridgeScopeSize({
+    selectedShapeIds: exactShapeIds,
+    currentPageShapeCount
+  })
+  if (scopeSize.isTooLarge) {
+    const scopeLabel = scopeSize.scope === 'selection' ? '当前选区展开后' : '当前页面'
+    const error = new Error(
+      `${scopeLabel}包含 ${scopeSize.shapeCount} 个对象，超过最多 ${scopeSize.maxShapes} 个对象的限制。范围过大，请缩小选区${scopeSize.scope === 'page' ? '或拆分页面' : ''}。`
+    )
+    error.code = PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
+    error.scope = scopeSize.scope
+    error.shapeCount = scopeSize.shapeCount
+    error.maxShapes = scopeSize.maxShapes
+    throw error
+  }
+
+  const selectedShapeIds = exactShapeIds
+  const currentPageId = editor.getCurrentPageId()
+  const currentPageName = String(editor.getCurrentPage()?.name || '').trim() || '未命名页面'
+  const scope = scopeSize.scope
+  const requestedAt = new Date().toISOString()
+  const productBridgeContext = {
+    selectedShapes: selectedShapeIds.map((id) => ({ id })),
+    selectedRootShapeIds,
+    exactShapeIds,
+    scope,
+    currentPageId,
+    currentPageName,
+    requestType: 'product-bridge',
+    updatedAt: requestedAt
+  }
+
+  const flushCanvasSnapshot = cowartCanvasSnapshotFlushers.get(editor)
+  if (!flushCanvasSnapshot) {
+    throw new Error('Yogurt AI 画布保存尚未就绪，请稍后再生成交互 PRD。')
+  }
+  await flushCanvasSnapshot()
+
+  writeCowartSelectionState(productBridgeContext)
+  await saveCowartSelectionState(productBridgeContext)
+
+  const prompt = buildProductBridgePrompt({
+    selectedShapeIds,
+    currentPageId,
+    currentPageName
+  })
+  const sender = followUpSender()
+  if (!sender) {
+    let copied = false
+    try {
+      const clipboard = globalThis.navigator?.clipboard
+      if (typeof clipboard?.writeText === 'function') {
+        await clipboard.writeText(prompt)
+        copied = true
+      }
+    } catch (_clipboardError) {
+      // Persisting the exact page and selection still makes the request recoverable.
+    }
+
+    const error = new Error(
+      copied
+        ? '选区/页面上下文已保存，交互 PRD 指令已复制。请在 Codex 原生 Yogurt AI 画布中发送。'
+        : '选区/页面上下文已保存。生成交互 PRD 需要在 Codex 原生 Yogurt AI 画布中使用。'
+    )
+    error.code = PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE
+    throw error
+  }
+
+  const response = await sender(
+    { prompt },
+    { promptType: 'other', hasReference: true }
+  )
+  return {
+    response,
+    scope,
+    selectedCount: selectedShapeIds.length,
+    currentPageId,
+    currentPageName
+  }
+}
+
+async function submitCowartSemanticDiagram(editor) {
+  const { selectedRootShapeIds, exactShapeIds } = getCowartFrozenSelectionIds(editor)
+  const currentPageShapeCount = exactShapeIds.length > 0 ? 0 : editor.getCurrentPageShapeIds().size
+  const scopeSize = getSemanticDiagramScopeSize({
+    selectedShapeIds: exactShapeIds,
+    currentPageShapeCount
+  })
+  if (scopeSize.isTooLarge) {
+    const scopeLabel = scopeSize.scope === 'selection' ? '当前选区展开后' : '当前页面'
+    const error = new Error(
+      `${scopeLabel}包含 ${scopeSize.shapeCount} 个对象，超过最多 ${scopeSize.maxShapes} 个对象的限制。请缩小选区或拆分关系图。`
+    )
+    error.code = SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+    error.scope = scopeSize.scope
+    error.shapeCount = scopeSize.shapeCount
+    error.maxShapes = scopeSize.maxShapes
+    throw error
+  }
+
+  const selectedShapeIds = exactShapeIds
+  const currentPageId = editor.getCurrentPageId()
+  const currentPageName = String(editor.getCurrentPage()?.name || '').trim() || '未命名页面'
+  const scope = scopeSize.scope
+  const requestedAt = new Date().toISOString()
+  const semanticDiagramContext = {
+    selectedShapes: selectedShapeIds.map((id) => ({ id })),
+    selectedRootShapeIds,
+    exactShapeIds,
+    scope,
+    currentPageId,
+    currentPageName,
+    requestType: 'semantic-diagram',
+    updatedAt: requestedAt
+  }
+
+  const flushCanvasSnapshot = cowartCanvasSnapshotFlushers.get(editor)
+  if (!flushCanvasSnapshot) {
+    throw new Error('Yogurt AI 画布保存尚未就绪，请稍后再生成语义框线图。')
+  }
+  await flushCanvasSnapshot()
+  writeCowartSelectionState(semanticDiagramContext)
+  await saveCowartSelectionState(semanticDiagramContext)
+
+  const prompt = buildSemanticDiagramPrompt({
+    selectedShapeIds,
+    currentPageId,
+    currentPageName
+  })
+  const sender = followUpSender()
+  if (!sender) {
+    let copied = false
+    try {
+      const clipboard = globalThis.navigator?.clipboard
+      if (typeof clipboard?.writeText === 'function') {
+        await clipboard.writeText(prompt)
+        copied = true
+      }
+    } catch (_clipboardError) {
+      // Persisted IDs and page identity keep the scoped request recoverable.
+    }
+
+    const error = new Error(
+      copied
+        ? '选区/页面上下文已保存，语义框线图指令已复制。请在 Codex 原生 Yogurt AI 画布中发送。'
+        : '选区/页面上下文已保存。生成语义框线图需要在 Codex 原生 Yogurt AI 画布中使用。'
+    )
+    error.code = SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE
+    throw error
+  }
+
+  const response = await sender(
+    { prompt },
+    { promptType: 'other', hasReference: true }
+  )
+  return {
+    response,
+    scope,
+    selectedCount: selectedShapeIds.length,
+    currentPageId,
+    currentPageName
+  }
+}
+
 function CowartCanvasOverlay() {
   return (
     <>
@@ -3768,6 +3953,8 @@ function CowartCanvasOverlay() {
         imageIcon={aiImageToolIcon}
         onCreateHtml={createAiDraftHolderAtViewportCenter}
         onCreateImage={createAiImageHolderAtViewportCenter}
+        onCreateProductBridge={submitCowartProductBridge}
+        onCreateSemanticDiagram={submitCowartSemanticDiagram}
         onCreateSlides={createAiSlidesAtViewportCenter}
         onExportCanvasHtml={(editor) => exportCowartCanvas(editor, 'html')}
         onExportCanvasPptx={(editor) => exportCowartCanvas(editor, 'pptx')}
@@ -6460,6 +6647,7 @@ export default function App() {
 
     let saveTimer = null
     let isSaving = false
+    let activeSaveCompletion = null
     let hasPendingSave = false
     let hasUnsavedChanges = false
     let documentChangeVersion = 0
@@ -6467,15 +6655,26 @@ export default function App() {
     let remoteLoadController = null
     const acknowledgedImageShapeDeletes = new Set()
 
-    async function saveCanvas() {
-      if (!hasUnsavedChanges) return
+    async function saveCanvas({ force = false, rethrow = false } = {}) {
+      if (!force && !hasUnsavedChanges) return null
+      if (force) window.clearTimeout(saveTimer)
 
       if (isSaving) {
-        hasPendingSave = true
-        return
+        if (!force) {
+          hasPendingSave = true
+          return null
+        }
+
+        const pendingSaveCompletion = activeSaveCompletion
+        if (pendingSaveCompletion) await pendingSaveCompletion
+        return saveCanvas({ force: true, rethrow })
       }
 
       isSaving = true
+      let resolveSaveCompletion
+      activeSaveCompletion = new Promise((resolve) => {
+        resolveSaveCompletion = resolve
+      })
       const savingVersion = documentChangeVersion
       const acknowledgedDeletesInSave = new Set(acknowledgedImageShapeDeletes)
       try {
@@ -6490,16 +6689,27 @@ export default function App() {
           acknowledgedImageShapeDeletes.delete(imageShapeId)
         }
         hasUnsavedChanges = documentChangeVersion !== savingVersion
+        return saveResult
       } catch (error) {
         console.error(error)
+        if (rethrow) throw error
+        return null
       } finally {
         isSaving = false
+        resolveSaveCompletion()
+        activeSaveCompletion = null
         if (hasPendingSave || hasUnsavedChanges) {
           hasPendingSave = false
           scheduleSave()
         }
       }
     }
+
+    async function flushCanvasSnapshot() {
+      window.clearTimeout(saveTimer)
+      return saveCanvas({ force: true, rethrow: true })
+    }
+    cowartCanvasSnapshotFlushers.set(editor, flushCanvasSnapshot)
 
     function scheduleSave() {
       documentChangeVersion += 1
@@ -6649,6 +6859,9 @@ export default function App() {
         delete window.__cowartEditor
         delete window.__cowartSelection
         delete window.__cowartViewState
+      }
+      if (cowartCanvasSnapshotFlushers.get(editor) === flushCanvasSnapshot) {
+        cowartCanvasSnapshotFlushers.delete(editor)
       }
       document.getElementById(SELECTION_STATE_ELEMENT_ID)?.remove()
       unsubscribe()

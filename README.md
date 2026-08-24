@@ -27,6 +27,7 @@ Yogurt AI 基于开源项目 Cowart 和 tldraw，把用户提供的文档、知�
 | 文档全景梳理 | PRD、研究资料、笔记、图片 | 带来源的材料卡、观点、证据、问题和关系图 |
 | 非线性思考 | 一个主题或尚未理清的想法 | 可持续扩展的分支、聚类、对比和推理路径 |
 | 圈选局部修改 | 圈线、箭头、划掉、分组、文字批注与自然语言要求 | 只作用于相关区域的修改、解释和 operation ID |
+| 语义框线图 | 选区、整页笔记、产品流程或系统关系 | 带来源、可访问、可编辑且连线可追踪的 HTML/SVG 图 |
 | 视觉内容生成 | Prompt、参考图和画布上下文 | 可预览的 AI 图片、单文件 HTML 和 Slides |
 | 画布整合导出 | 当前页面的全部可见对象 | 独立 HTML 全景或可继续编辑的 PowerPoint |
 
@@ -46,7 +47,7 @@ flowchart LR
 
 ## Excalidraw 风格工作区
 
-工具栏、颜色、描边、字体、快捷键和手绘视觉语言参考 Excalidraw；`Yogurt AI` 菜单继续提供图片、HTML 和 Slides 生成入口。
+工具栏、颜色、描边、字体、快捷键和手绘视觉语言参考 Excalidraw；`Yogurt AI` 菜单提供图片、HTML、Slides、交互 PRD 和语义框线图入口。
 
 <p align="center">
   <img src="docs/images/yogurt-ai-workspace.png" width="100%" alt="Yogurt AI 的 Excalidraw 风格画布与 AI 功能菜单">

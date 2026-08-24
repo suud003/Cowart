@@ -1,5 +1,5 @@
-export function getCowartSelection(editor) {
-  return editor.getSelectedShapeIds().map((id) => {
+function getCowartShapes(editor, shapeIds) {
+  return shapeIds.map((id) => {
     const shape = editor.getShape(id)
     const asset = shape?.props?.assetId ? editor.getAsset(shape.props.assetId) : null
 
@@ -36,8 +36,49 @@ export function getCowartSelection(editor) {
   })
 }
 
+export function expandCowartSelectionShapeIds(selectedShapeIds, getChildShapeIds) {
+  const expandedShapeIds = []
+  const visitedShapeIds = new Set()
+
+  function visit(shapeId) {
+    if (typeof shapeId !== 'string' || !shapeId || visitedShapeIds.has(shapeId)) return
+    visitedShapeIds.add(shapeId)
+    expandedShapeIds.push(shapeId)
+
+    const childShapeIds = getChildShapeIds?.(shapeId)
+    if (!childShapeIds) return
+    for (const childShapeId of childShapeIds) visit(childShapeId)
+  }
+
+  for (const shapeId of selectedShapeIds ?? []) visit(shapeId)
+  return expandedShapeIds
+}
+
+export function getCowartSelection(editor) {
+  return getCowartShapes(editor, editor.getSelectedShapeIds())
+}
+
 export function getCowartSelectionSnapshot(editor) {
   return {
     selectedShapes: getCowartSelection(editor)
+  }
+}
+
+export function getCowartFrozenSelectionIds(editor) {
+  const selectedRootShapeIds = Array.from(editor.getSelectedShapeIds())
+  const exactShapeIds = expandCowartSelectionShapeIds(
+    selectedRootShapeIds,
+    (shapeId) => editor.getSortedChildIdsForParent(shapeId)
+  )
+
+  return { selectedRootShapeIds, exactShapeIds }
+}
+
+export function getCowartFrozenSelectionSnapshot(editor) {
+  const { selectedRootShapeIds, exactShapeIds } = getCowartFrozenSelectionIds(editor)
+  return {
+    selectedShapes: getCowartShapes(editor, exactShapeIds),
+    selectedRootShapeIds,
+    exactShapeIds
   }
 }
