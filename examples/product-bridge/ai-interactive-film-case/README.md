@@ -1,52 +1,31 @@
-# 分岔回声｜AI 互动影游 Product Bridge 案例
+# 分岔回声｜把产品想法变成可评审、可交互的 AI 影游方案
 
-这是一个从一句模糊产品想法出发，经过 `Yogurt AI → Product Bridge → PRD 与交互原型 → 评审 → 确认后回流 Yogurt` 的完整案例。
+“分岔回声”展示了 Yogurt AI Product Bridge 的完整体验：把散落在画布里的产品想法、文字描述和外部需求链接，整理成结构化 PRD、可直接操作的交互原型和统一评审空间，再把确认后的产品结构带回 Yogurt 画布继续思考。
 
-唯一初始输入是：把 PRD 生成与 Yogurt AI 打通，并用“AI 互动影游”做一个 case。本案例没有读取 TAPD；故事设定、目标用户、指标和商业判断均为演示用 AI 假设，不代表已确认需求。
+![分岔回声 Product Bridge 评审空间，展示互动播放原型、PRD 与稳定标注](docs/images/product-bridge-review.png)
 
-> 能力边界已经纠正：Product Bridge 只负责产品文档、交互原型、标注和产品分区回流。html-line-svg 的画图与布局能力属于独立的 [Yogurt 画布框线图案例](../../semantic-diagram/ai-interactive-film-system/)，不会自动进入本工作区。
+## 从一个想法到一套产品方案
 
-## 结果一览
+本案例以“做一款 AI 互动影游”为输入。演示素材没有导入 TAPD 正文；故事设定、目标用户、指标和商业判断均标记为待确认的 AI 假设，方便体验完整流程，又不会把推测包装成真实需求。
 
-| 维度 | 实际产物 |
+| Product Bridge 帮你完成 | 本案例中的可见结果 |
 | --- | --- |
-| 产品结构 | 4 份 shaping 文档、3 份模块 PRD、1 份体验与视觉基线 |
-| 评审工作区 | 2 个交互模块、5 个真实原型页面、14 个稳定标注锚点 |
-| 交互原型 | 作品发现、互动播放、可解释结局、故事编排、发布检查 |
-| 页面关系 | 5 个原型页面及可执行跳转，不包含语义图页面 |
-| Yogurt 回流 | 6 个产品分区、26 张分区内卡片、12 条关系；语义图不进入 Bridge trace map |
-| 验证结果 | Product Bridge 严格校验无错误；标注浏览器实测最大漂移 0.01px |
+| 梳理零散信息 | 4 份产品塑形文档、3 份模块 PRD、1 份体验与视觉基线 |
+| 把需求变成体验 | 作品发现、互动播放、可解释结局、故事编排、发布检查 5 个可交互页面 |
+| 集中产品评审 | 2 个交互模块、14 个跟随真实控件的稳定标注锚点 |
+| 看清页面关系 | 5 个原型页面及其主路径、备选路径与模块依赖 |
+| 回到画布继续工作 | 6 个产品分区、26 张分区内卡片和 12 条关系 |
+| 保留来源线索 | 输入、假设、需求、页面、标注与 Yogurt 对象之间可追溯 |
 
-## 1. 页面关系：看真实原型如何串起来
+## 在一个工作区里完成理解、体验和评审
 
-Product Bridge 把 5 个真实原型页面及其跳转关系放进可缩放的“页面关系”视图。关系线区分主路径、备选路径和模块间依赖；页面卡片仍是真实原型缩略图，不是语义框线图，也不是重画的静态示意图。
+### 1. 先读懂产品
 
-![分岔回声 Product Bridge 页面关系，展示五个真实原型页面](docs/images/product-bridge-global-canvas.png)
+Product Bridge 会把输入整理为产品 Brief、EARS 风格需求、玩家与创作者流程、模块计划，以及 AI 叙事引擎、玩家体验和创作者工作室三份模块 PRD。事实、外部链接状态、AI 假设和待确认问题分别记录，便于团队继续补充真实材料。
 
-这个视图只回答产品页面与导航问题。系统架构、概念关系或教学型框线图由 Yogurt 的独立画布入口生成。
+### 2. 再直接操作核心体验
 
-## 2. 两个菜单入口并行，不会互相自动触发
-
-Yogurt AI 菜单中有两个独立动作：
-
-![Yogurt AI 菜单中的生成交互 PRD 与生成画布框线图入口](docs/images/yogurt-new-actions.png)
-
-- `生成交互 PRD`：把文字叙述、Yogurt 内容和可访问的外部需求材料整理成 Product Bridge 工作区。
-- `生成画布框线图`：把同一选区直接整理成当前 Yogurt 页面上的原生节点、语义分区与关系线。
-- 两个动作可读取同一份冻结来源，但拥有独立的产物、operation ID 与 trace；Product Bridge manifest 不注册语义图。
-- TAPD URL 只有在授权连接器确实返回正文后才算已读取；本插件不内置 TAPD 登录连接器，也不会根据 URL 猜测需求。
-
-## 3. 评审与标注：标记绑定真实控件
-
-评审视图把交互原型、模块 PRD 和页面标注放在同一屏。下图中的 1–4 号标记分别绑定场景、预设选择、自由行动和状态账本对应的 `data-annotation-anchor`。
-
-![互动播放原型、玩家体验 PRD 与四个稳定语义标注同屏评审](docs/images/product-bridge-review.png)
-
-标注位置依据 iframe 与目标元素的实际矩形实时计算，并处理独立缩放和坐标系转换。页面尺寸或布局改变后，标记跟随语义元素，而不是停留在旧截图位置。
-
-## 4. 可交互原型：选择、自由行动和状态账本形成闭环
-
-玩家端不是一组静态稿。预设行动和自由输入会确定性地更新角色信任、线索与叙事承诺；完成两轮选择后可进入由状态账本解释的分支结局。
+玩家端不是静态截图。预设行动和自由输入会更新角色信任、线索与叙事承诺；完成两轮选择后，可以进入由状态账本解释的分支结局。
 
 ![AI 互动影游的互动播放页，展示场景、状态账本和分支结局入口](docs/images/interactive-player.png)
 
@@ -56,26 +35,21 @@ Yogurt AI 菜单中有两个独立动作：
 - [故事编排](prototypes/studio.html)
 - [发布与安全检查](prototypes/review.html)
 
-## 5. 回流 Yogurt：只返回产品结构
+### 3. 让标注意见始终指向真实控件
 
-Product Bridge 回流把评审结果转换为真正的 Yogurt 产品分区、分区内卡片和关系。旧的系统框线图卡片与 `system-overview` 页面映射已经从当前工作区清理；最新边界收口只更新“PRD 与交互原型评审”产品分区，批次中没有 `semanticDiagram`。独立原生语义图由另一条 canvas operation 创建，不写入本案例的 manifest 或 trace map。
+评审标记绑定页面中的语义锚点，而不是截图坐标。页面缩放或布局变化后，标记仍会跟随对应的场景、选择器、自由行动输入框和状态账本，方便产品、设计和研发围绕同一处交互讨论。
 
-初次回流遵循 `读取 revision → dry-run → 明确确认 → 原子应用`。最新 Product Bridge-only 边界操作为 `20260825043143046-31627d4c`，从 revision `308da9ea792c28b665db` 更新到 `f5b7bb6c35023e84fa91`。[return-preview.json](bridge/return-preview.json) 只保存这次不可重放的最小审计记录，不再携带旧 operations 或任何原生语义图 ID。
+### 4. 用页面关系快速检查完整链路
 
-## 文件索引
+“页面关系”把 5 个真实原型及其跳转放在一张可缩放视图里。页面卡片可以拖动，主路径、备选路径和模块依赖一目了然。
 
-| 路径 | 内容 |
-| --- | --- |
-| [`shaping/`](shaping/) | 产品 Brief、EARS 风格需求、玩家/创作者流程与模块计划 |
-| [`prd/`](prd/) | AI 叙事引擎、玩家体验、创作者工作室三份模块 PRD |
-| [`prototypes/`](prototypes/) | 5 个自包含、可离线交互的 HTML 页面 |
-| [`bridge/source-packet.json`](bridge/source-packet.json) | 用户输入、能力边界澄清、来源状态、AI 假设与待确认问题 |
-| [`bridge/trace-map.json`](bridge/trace-map.json) | 来源 → 需求 → 页面/标注 → Yogurt 产品分区与返回 shape 的映射 |
-| [`bridge/return-preview.json`](bridge/return-preview.json) | Product Bridge-only 边界收口的最小审计记录，不含旧回流 operations |
-| [`bridge/sync-state.json`](bridge/sync-state.json) | 初次回流与边界修正的 revision、operation ID |
-| [`interaction-prd.json`](interaction-prd.json) | 文档、真实原型页面、跳转位置与稳定标注锚点 |
+![分岔回声页面关系，展示五个真实原型页面及其导航](docs/images/product-bridge-global-canvas.png)
 
-## 本地运行
+### 5. 把确认后的结构带回 Yogurt
+
+完成评审后，可以先预览将要写回的产品分区、卡片和关系，确认后再同步到 Yogurt。这样，PRD 与原型中的结论能够回到原来的思考空间，继续与新材料一起演化。
+
+## 如何体验
 
 从 Cowart 插件仓库根目录执行：
 
@@ -86,6 +60,19 @@ python -B -X utf8 skills/cowart-product-bridge/scripts/serve.py examples/product
 
 打开服务输出的本地地址后：
 
-1. 在 `文档与原型` 中切换模块和页面，显示或隐藏稳定标注。
-2. 切换到 `页面关系` 查看 5 个真实原型及其导航，可拖动页面并自动保存位置。
-3. 点击 `编辑源文件` 回到对应 PRD 或原型；这里不会出现语义图文件。
+1. 在 `文档与原型` 中切换模块和页面，操作原型并显示或隐藏评审标注。
+2. 切换到 `页面关系`，查看完整导航链路并拖动页面调整视图。
+3. 从任意文档或原型使用 `编辑源文件`，继续完善需求与交互。
+
+## 可验证产物
+
+| 路径 | 内容 |
+| --- | --- |
+| [`shaping/`](shaping/) | 产品 Brief、EARS 风格需求、角色流程与模块计划 |
+| [`prd/`](prd/) | AI 叙事引擎、玩家体验、创作者工作室三份模块 PRD |
+| [`prototypes/`](prototypes/) | 5 个自包含、可离线交互的 HTML 页面 |
+| [`interaction-prd.json`](interaction-prd.json) | 工作区模块、真实页面、导航和稳定标注配置 |
+| [`bridge/source-packet.json`](bridge/source-packet.json) | 原始输入、来源访问状态、AI 假设与待确认问题 |
+| [`bridge/trace-map.json`](bridge/trace-map.json) | 来源到需求、页面、标注及 Yogurt 产品对象的映射 |
+
+想把同一组材料整理成可编辑的系统关系图，可以继续体验配套的 [Yogurt 画布原生框线图案例](../../semantic-diagram/ai-interactive-film-system/)。
