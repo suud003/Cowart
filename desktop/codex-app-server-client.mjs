@@ -20,6 +20,7 @@ const APPROVAL_REQUEST_METHODS = new Set([
   'item/commandExecution/requestApproval',
   'item/fileChange/requestApproval'
 ])
+const LOGIN_APP_BRANDS = new Set(['codex', 'chatgpt'])
 
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -294,6 +295,30 @@ export class CodexAppServerClient extends EventEmitter {
     return this.request('model/list', params)
   }
 
+  readAccount({ refreshToken = false } = {}) {
+    return this.request('account/read', { refreshToken: refreshToken === true })
+  }
+
+  startChatgptLogin({
+    useHostedLoginSuccessPage = true,
+    appBrand = 'chatgpt'
+  } = {}) {
+    if (!LOGIN_APP_BRANDS.has(appBrand)) {
+      throw new TypeError('Login appBrand must be "codex" or "chatgpt".')
+    }
+    return this.request('account/login/start', {
+      type: 'chatgpt',
+      useHostedLoginSuccessPage: useHostedLoginSuccessPage === true,
+      appBrand
+    })
+  }
+
+  cancelLogin(loginId) {
+    const normalizedLoginId = String(loginId || '').trim()
+    if (!normalizedLoginId) throw new TypeError('loginId is required to cancel a Codex login.')
+    return this.request('account/login/cancel', { loginId: normalizedLoginId })
+  }
+
   listMcpServers(threadId, params = {}) {
     return this.request('mcpServerStatus/list', {
       ...params,
@@ -563,6 +588,7 @@ export const CODEX_APP_SERVER_PROTOCOL = Object.freeze({
   transport: 'stdio-jsonl',
   websocket: false,
   experimentalApiDefault: false,
+  managedChatgptLogin: true,
   threadLifecycleTimeoutMs: THREAD_LIFECYCLE_TIMEOUT_MS,
   approvalDecisions: Object.freeze(Array.from(SIMPLE_APPROVAL_DECISIONS))
 })

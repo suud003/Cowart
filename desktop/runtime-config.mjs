@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 function requiredString(value, label) {
@@ -9,6 +9,65 @@ function requiredString(value, label) {
 
 function tomlLiteral(value) {
   return JSON.stringify(value)
+}
+
+function codedError(message, code) {
+  const error = new Error(message)
+  error.code = code
+  return error
+}
+
+export function normalizeWorkspaceDirectory(value, {
+  getStat = statSync
+} = {}) {
+  const normalized = String(value || '').trim()
+  if (!normalized) return null
+  const workspaceDir = path.resolve(normalized)
+  try {
+    if (!getStat(workspaceDir).isDirectory()) return null
+  } catch (_error) {
+    return null
+  }
+  return workspaceDir
+}
+
+export function resolveConfiguredWorkspace({
+  env = process.env,
+  persistedWorkspace = null,
+  getStat = statSync
+} = {}) {
+  const environmentWorkspace = String(env.YOGURT_WORKSPACE_ROOT || '').trim()
+  if (environmentWorkspace) {
+    const workspaceDir = normalizeWorkspaceDirectory(environmentWorkspace, { getStat })
+    return Object.freeze({
+      configured: Boolean(workspaceDir),
+      source: 'environment',
+      workspaceDir,
+      invalidPath: workspaceDir ? null : path.resolve(environmentWorkspace)
+    })
+  }
+
+  const workspaceDir = normalizeWorkspaceDirectory(persistedWorkspace, { getStat })
+  return Object.freeze({
+    configured: Boolean(workspaceDir),
+    source: workspaceDir ? 'settings' : 'none',
+    workspaceDir,
+    invalidPath: persistedWorkspace && !workspaceDir ? path.resolve(String(persistedWorkspace)) : null
+  })
+}
+
+export function resolveDesktopRuntimeRoot({
+  appPath,
+  resourcesPath,
+  isPackaged = false
+} = {}) {
+  const normalizedAppPath = path.resolve(requiredString(appPath, 'appPath'))
+  if (!isPackaged) return normalizedAppPath
+
+  return path.join(
+    path.resolve(requiredString(resourcesPath, 'resourcesPath')),
+    'app.asar.unpacked'
+  )
 }
 
 export function createYogurtCodexArgs({ repoRoot, nodeCommand = 'node' } = {}) {
@@ -36,13 +95,18 @@ export function createYogurtCodexArgs({ repoRoot, nodeCommand = 'node' } = {}) {
 export function resolveCodexLaunch({
   env = process.env,
   fileExists = existsSync,
-  platform = process.platform
+  platform = process.platform,
+  runtimeRoot = null,
+  isPackaged = false,
+  execPath = process.execPath
 } = {}) {
   const nodeCommand = requiredString(env.YOGURT_NODE_COMMAND || 'node', 'nodeCommand')
   const scriptOverride = String(env.YOGURT_CODEX_JS || '').trim()
   if (scriptOverride) {
     const scriptPath = path.resolve(scriptOverride)
-    if (!fileExists(scriptPath)) throw new Error(`YOGURT_CODEX_JS does not exist: ${scriptPath}`)
+    if (!fileExists(scriptPath)) {
+      throw codedError(`YOGURT_CODEX_JS does not exist: ${scriptPath}`, 'CODEX_CLI_NOT_FOUND')
+    }
     return Object.freeze({ command: nodeCommand, commandPrefixArgs: Object.freeze([scriptPath]) })
   }
 
@@ -52,6 +116,33 @@ export function resolveCodexLaunch({
       throw new Error('YOGURT_CODEX_COMMAND must be an executable, not a Windows shell script. Use YOGURT_CODEX_JS for the npm Codex CLI.')
     }
     return Object.freeze({ command: commandOverride, commandPrefixArgs: Object.freeze([]) })
+  }
+
+  const bundledScript = runtimeRoot
+    ? path.join(
+        path.resolve(runtimeRoot),
+        'node_modules',
+        '@openai',
+        'codex',
+        'bin',
+        'codex.js'
+      )
+    : null
+  if (bundledScript && fileExists(bundledScript)) {
+    if (isPackaged) {
+      return Object.freeze({
+        command: requiredString(execPath, 'execPath'),
+        commandPrefixArgs: Object.freeze([bundledScript]),
+        env: Object.freeze({ ELECTRON_RUN_AS_NODE: '1' })
+      })
+    }
+    return Object.freeze({ command: nodeCommand, commandPrefixArgs: Object.freeze([bundledScript]) })
+  }
+  if (isPackaged) {
+    throw codedError(
+      `The packaged Yogurt AI Codex component is missing: ${bundledScript || 'unknown path'}`,
+      'CODEX_BUNDLED_CLI_MISSING'
+    )
   }
 
   if (platform === 'win32') {
@@ -65,7 +156,10 @@ export function resolveCodexLaunch({
         return Object.freeze({ command: nodeCommand, commandPrefixArgs: Object.freeze([scriptPath]) })
       }
     }
-    throw new Error('Yogurt AI Desktop could not find a spawnable Codex CLI. Install @openai/codex with npm or set YOGURT_CODEX_JS.')
+    throw codedError(
+      'Yogurt AI Desktop could not find Codex. Install @openai/codex, then reopen Yogurt AI.',
+      'CODEX_CLI_NOT_FOUND'
+    )
   }
 
   return Object.freeze({ command: 'codex', commandPrefixArgs: Object.freeze([]) })

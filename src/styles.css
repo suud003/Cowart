@@ -210,6 +210,103 @@ body {
   box-shadow: 0 4px 14px rgb(35 32 74 / 4%);
 }
 
+.cowart-agent-setup-card {
+  display: grid;
+  padding: 14px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 11px;
+  color: #474450;
+  background: #f3f1ff;
+  border: 1px solid #ddd9ff;
+  border-radius: 12px;
+}
+
+.cowart-agent-setup-card[data-kind="codex"] {
+  background: #fff9e8;
+  border-color: #eddfaf;
+}
+
+.cowart-agent-setup-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--cowart-panel-accent-strong);
+  background: rgb(255 255 255 / 75%);
+  border-radius: 9px;
+}
+
+.cowart-agent-setup-card[data-kind="codex"] .cowart-agent-setup-icon {
+  color: #806a12;
+}
+
+.cowart-agent-setup-card strong,
+.cowart-agent-setup-card p,
+.cowart-agent-setup-card code {
+  display: block;
+}
+
+.cowart-agent-setup-card strong {
+  color: var(--cowart-panel-text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.cowart-agent-setup-card p {
+  margin: 4px 0 9px;
+  color: var(--cowart-panel-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cowart-agent-setup-card code {
+  padding: 7px 8px;
+  margin: 0 0 9px;
+  overflow: hidden;
+  color: var(--cowart-panel-text);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgb(255 255 255 / 75%);
+  border: 1px solid rgb(0 0 0 / 7%);
+  border-radius: 7px;
+  user-select: text;
+}
+
+.cowart-agent-setup-card button,
+.cowart-agent-context-actions button {
+  display: inline-flex;
+  height: 29px;
+  padding: 0 9px;
+  gap: 5px;
+  align-items: center;
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--cowart-panel-accent-strong);
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.cowart-agent-setup-card button:disabled,
+.cowart-agent-context-actions button:disabled {
+  opacity: 0.58;
+  cursor: default;
+}
+
+.cowart-agent-setup-notice {
+  padding: 8px 10px;
+  margin: -8px 0 0;
+  color: var(--cowart-panel-text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  background: var(--cowart-panel-card-muted);
+  border-radius: 8px;
+}
+
 .cowart-agent-section-heading {
   display: flex;
   min-height: 22px;
@@ -220,6 +317,21 @@ body {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
+}
+
+.cowart-agent-context-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cowart-agent-context-actions button {
+  height: 22px;
+  padding: 0 7px;
+  color: var(--cowart-panel-accent-strong);
+  background: transparent;
+  border: 1px solid #d9d6fb;
+  border-radius: 999px;
 }
 
 .cowart-agent-scope-chip {
@@ -699,6 +811,23 @@ body {
     color: #dedce4;
     background: #2c2c31;
     border-color: #55515a;
+  }
+
+  .cowart-agent-setup-card {
+    color: #d9d7e4;
+    background: #302e49;
+    border-color: #49456f;
+  }
+
+  .cowart-agent-setup-card[data-kind="codex"] {
+    background: #39351f;
+    border-color: #5a5128;
+  }
+
+  .cowart-agent-setup-icon,
+  .cowart-agent-setup-card code {
+    background: rgb(255 255 255 / 7%);
+    border-color: rgb(255 255 255 / 10%);
   }
 }
 

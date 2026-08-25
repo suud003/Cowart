@@ -6,7 +6,12 @@ import {
   YOGURT_DESKTOP_CAPABILITY_CONTRACT,
   YogurtAgentService
 } from '../desktop/agent-service.mjs'
-import { IPC_CHANNELS, registerYogurtAgentIpc } from '../desktop/ipc-bridge.mjs'
+import {
+  IPC_CHANNELS,
+  YogurtDesktopRuntime,
+  normalizeCodexLoginUrl,
+  registerYogurtAgentIpc
+} from '../desktop/ipc-bridge.mjs'
 
 class FakeCodexClient extends EventEmitter {
   constructor() {
@@ -73,6 +78,36 @@ class FakeCodexClient extends EventEmitter {
   }
 }
 
+class FakeAuthCodexClient extends FakeCodexClient {
+  constructor({
+    account = null,
+    authUrl = 'https://auth.openai.com/codex/authorize'
+  } = {}) {
+    super()
+    this.accountResult = { account, requiresOpenaiAuth: true }
+    this.authUrl = authUrl
+  }
+
+  async readAccount(params) {
+    this.calls.push(['readAccount', params])
+    return this.accountResult
+  }
+
+  async startChatgptLogin(params) {
+    this.calls.push(['startChatgptLogin', params])
+    return {
+      type: 'chatgpt',
+      loginId: 'login_1',
+      authUrl: this.authUrl
+    }
+  }
+
+  async cancelLogin(loginId) {
+    this.calls.push(['cancelLogin', loginId])
+    return {}
+  }
+}
+
 test('YogurtAgentService starts and steers turns while returning acceptance only', async () => {
   const client = new FakeCodexClient()
   const service = new YogurtAgentService({
@@ -135,6 +170,50 @@ test('YogurtAgentService resumes its thread and starts a fresh turn after a side
   assert.equal(resumeCalls[0][1], 'thr_1')
   assert.equal(turnCalls.length, 2)
   assert.equal(steerCalls.length, 0)
+})
+
+test('YogurtAgentService waits for managed ChatGPT login and connects after completion', async () => {
+  const client = new FakeAuthCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+
+  await service.start()
+  assert.equal(service.getState().status, 'auth-required')
+  assert.equal(service.getState().auth.status, 'login-required')
+  assert.equal(client.calls.some(([name]) => name === 'startThread'), false)
+  const runtime = new YogurtDesktopRuntime({
+    agentService: service,
+    configuredWorkspace: true,
+    projectDir: 'C:\\workspace'
+  })
+  assert.equal(runtime.getSetup().codex.status, 'login-required')
+  assert.equal(runtime.getSetup().codex.canLogin, true)
+
+  const login = await service.startChatgptLogin()
+  assert.equal(runtime.getSetup().codex.status, 'login-pending')
+  assert.equal(login.authUrl, 'https://auth.openai.com/codex/authorize')
+  assert.equal(service.getState().status, 'authenticating')
+  assert.equal(service.getState().login.status, 'waiting')
+  assert.equal(JSON.stringify(service.getState()).includes(login.authUrl), false)
+
+  client.accountResult = {
+    account: { type: 'chatgpt', email: 'private@example.com', planType: 'plus' },
+    requiresOpenaiAuth: true
+  }
+  const ready = new Promise((resolve) => {
+    service.on('event', (event) => {
+      if (event.type === 'state.changed' && event.state?.status === 'ready') resolve(event)
+    })
+  })
+  client.emit('notification', {
+    method: 'account/login/completed',
+    params: { loginId: 'login_1', success: true, error: null }
+  })
+  await ready
+
+  assert.equal(service.getState().status, 'ready')
+  assert.equal(service.getState().auth.authMode, 'chatgpt')
+  assert.equal(client.calls.some(([name]) => name === 'startThread'), true)
+  assert.equal(JSON.stringify(service.getState()).includes('private@example.com'), false)
 })
 
 test('YogurtAgentService normalizes agent, approval, diff, plan, turn, and error events', async () => {
@@ -286,15 +365,22 @@ test('IPC bridge registers only the renderer whitelist and rejects foreign sende
   const client = new FakeCodexClient()
   const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
   const trusted = { id: 1, send() {}, isDestroyed: () => false }
+  let workspaceSelectionCount = 0
   const cleanup = registerYogurtAgentIpc({
     ipcMain,
     agentService: service,
-    getTrustedWebContents: () => trusted
+    getTrustedWebContents: () => trusted,
+    selectWorkspace: async () => {
+      workspaceSelectionCount += 1
+      return { selected: false, restarting: false }
+    }
   })
 
   assert.deepEqual(new Set(handlers.keys()), new Set([
     IPC_CHANNELS.getState,
     IPC_CHANNELS.refreshCapabilities,
+    IPC_CHANNELS.selectWorkspace,
+    IPC_CHANNELS.startCodexLogin,
     IPC_CHANNELS.sendTask,
     IPC_CHANNELS.respondApproval,
     IPC_CHANNELS.interrupt,
@@ -305,8 +391,72 @@ test('IPC bridge registers only the renderer whitelist and rejects foreign sende
     /untrusted renderer/
   )
   assert.equal((await handlers.get(IPC_CHANNELS.getState)({ sender: trusted })).projectDir, service.projectDir)
+  assert.deepEqual(
+    await handlers.get(IPC_CHANNELS.selectWorkspace)({ sender: trusted }),
+    { selected: false, restarting: false }
+  )
+  assert.equal(workspaceSelectionCount, 1)
   cleanup()
   assert.equal(handlers.size, 0)
+})
+
+test('desktop login IPC opens only the App Server managed OpenAI URL and does not expose it', async () => {
+  const handlers = new Map()
+  const ipcMain = {
+    handle(channel, handler) { handlers.set(channel, handler) },
+    removeHandler(channel) { handlers.delete(channel) },
+    on() {},
+    removeListener() {}
+  }
+  const client = new FakeAuthCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  const runtime = new YogurtDesktopRuntime({
+    agentService: service,
+    configuredWorkspace: true,
+    projectDir: 'C:\\workspace'
+  })
+  const trusted = { id: 1, send() {}, isDestroyed: () => false }
+  const openedUrls = []
+  const cleanup = registerYogurtAgentIpc({
+    ipcMain,
+    agentService: runtime,
+    getTrustedWebContents: () => trusted,
+    openExternal: async (url) => openedUrls.push(url)
+  })
+
+  const result = await handlers.get(IPC_CHANNELS.startCodexLogin)(
+    { sender: trusted },
+    { authUrl: 'https://attacker.example/renderer-controlled' }
+  )
+  assert.deepEqual(openedUrls, ['https://auth.openai.com/codex/authorize'])
+  assert.deepEqual(result, {
+    started: true,
+    alreadyAuthenticated: false,
+    status: 'waiting',
+    browserOpened: true
+  })
+  assert.equal('authUrl' in result, false)
+  cleanup()
+})
+
+test('Codex login URL validation rejects non-HTTPS and non-OpenAI hosts', () => {
+  assert.equal(normalizeCodexLoginUrl('https://openai.com/login'), 'https://openai.com/login')
+  assert.equal(
+    normalizeCodexLoginUrl('https://auth.openai.com/codex/authorize'),
+    'https://auth.openai.com/codex/authorize'
+  )
+  assert.equal(
+    normalizeCodexLoginUrl('https://chatgpt.com/auth?redirect_uri=http%3A%2F%2Flocalhost'),
+    'https://chatgpt.com/auth?redirect_uri=http%3A%2F%2Flocalhost'
+  )
+  assert.equal(
+    normalizeCodexLoginUrl('https://auth.chatgpt.com/login'),
+    'https://auth.chatgpt.com/login'
+  )
+  assert.throws(() => normalizeCodexLoginUrl('http://auth.openai.com/login'), /refused/)
+  assert.throws(() => normalizeCodexLoginUrl('https://openai.com.attacker.example/login'), /refused/)
+  assert.throws(() => normalizeCodexLoginUrl('https://user@chatgpt.com/login'), /refused/)
+  assert.throws(() => normalizeCodexLoginUrl('https://auth.openai.com:444/login'), /refused/)
 })
 
 test('IPC bootstrap can claim exactly one provisional renderer before BrowserWindow construction returns', () => {

@@ -97,13 +97,48 @@ function compactMcpServer(result) {
     : { name: COWART_MCP_SERVER, available: false, authStatus: null, toolNames: [] }
 }
 
+function initialAuthState() {
+  return Object.freeze({
+    status: 'unknown',
+    authMode: null,
+    accountType: null,
+    planType: null,
+    requiresOpenaiAuth: null
+  })
+}
+
+function authStateFromAccountRead(result) {
+  const account = isRecord(result?.account) ? result.account : null
+  const requiresOpenaiAuth = result?.requiresOpenaiAuth === true
+  const accountType = account?.type ? String(account.type) : null
+  const authMode = accountType === 'apiKey' ? 'apikey' : accountType
+  return Object.freeze({
+    status: requiresOpenaiAuth && !account ? 'login-required' : 'ready',
+    authMode,
+    accountType,
+    planType: account?.planType ? String(account.planType) : null,
+    requiresOpenaiAuth
+  })
+}
+
+function loginState(status = 'idle', fields = {}) {
+  return Object.freeze({
+    status,
+    loginId: fields.loginId ? String(fields.loginId) : null,
+    error: fields.error ? String(fields.error) : null
+  })
+}
+
 export class YogurtAgentService extends EventEmitter {
   #activeThreadId = null
   #activeTurnId = null
+  #authState = initialAuthState()
   #canvasDir
   #capabilities
   #client
   #lastError = null
+  #loginAuthUrl = null
+  #loginState = loginState()
   #onThreadChanged
   #projectDir
   #startPromise = null
@@ -149,6 +184,13 @@ export class YogurtAgentService extends EventEmitter {
     this.#startPromise = (async () => {
       try {
         await this.#client.start()
+        const authState = await this.#refreshAccountState()
+        if (authState?.status === 'login-required') {
+          this.#status = this.#loginState.status === 'waiting' ? 'authenticating' : 'auth-required'
+          this.#lastError = null
+          this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+          return this.getState()
+        }
         await this.#ensureThread()
         this.#status = 'ready'
         this.#lastError = null
@@ -178,6 +220,8 @@ export class YogurtAgentService extends EventEmitter {
         request.method === 'item/fileChange/requestApproval'
       ).length ?? 0,
       lastError: this.#lastError,
+      auth: this.#authState,
+      login: this.#loginState,
       sidecar: this.#client.state
     })
   }
@@ -246,6 +290,88 @@ export class YogurtAgentService extends EventEmitter {
     })
   }
 
+  async startChatgptLogin() {
+    if (typeof this.#client.startChatgptLogin !== 'function') {
+      throw new Error('This Codex App Server does not support managed ChatGPT login.')
+    }
+
+    await this.#client.start()
+    const authState = await this.#refreshAccountState()
+    if (authState?.status === 'ready') {
+      await this.#ensureThread()
+      this.#status = 'ready'
+      this.#lastError = null
+      this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+      return Object.freeze({
+        started: false,
+        alreadyAuthenticated: true,
+        status: 'ready'
+      })
+    }
+
+    if (this.#loginState.status === 'waiting' && this.#loginAuthUrl) {
+      return Object.freeze({
+        started: false,
+        alreadyAuthenticated: false,
+        status: 'waiting',
+        loginId: this.#loginState.loginId,
+        authUrl: this.#loginAuthUrl
+      })
+    }
+
+    this.#status = 'authenticating'
+    this.#lastError = null
+    this.#loginState = loginState('starting')
+    this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+
+    try {
+      const result = await this.#client.startChatgptLogin({
+        useHostedLoginSuccessPage: true,
+        appBrand: 'chatgpt'
+      })
+      const loginId = requiredString(result?.loginId, 'Codex loginId', 512)
+      const authUrl = requiredString(result?.authUrl, 'Codex authUrl', 8_192)
+      if (result?.type !== 'chatgpt') {
+        throw new Error('Codex App Server returned an unexpected login flow.')
+      }
+      this.#loginAuthUrl = authUrl
+      this.#loginState = loginState('waiting', { loginId })
+      this.#emitEvent(normalizedEvent('auth.login.started', { loginId }))
+      this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+      return Object.freeze({
+        started: true,
+        alreadyAuthenticated: false,
+        status: 'waiting',
+        loginId,
+        authUrl
+      })
+    } catch (error) {
+      this.#status = 'auth-required'
+      this.#loginAuthUrl = null
+      this.#loginState = loginState('failed', { error: error?.message || error })
+      this.#emitEvent(normalizedEvent('auth.login.completed', {
+        success: false,
+        error: String(error?.message || error)
+      }))
+      this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+      throw error
+    }
+  }
+
+  async cancelChatgptLogin(loginId = this.#loginState.loginId) {
+    const normalizedLoginId = requiredString(loginId, 'loginId', 512)
+    if (typeof this.#client.cancelLogin === 'function') {
+      await this.#client.cancelLogin(normalizedLoginId)
+    }
+    if (normalizedLoginId === this.#loginState.loginId) {
+      this.#loginAuthUrl = null
+      this.#loginState = loginState('idle')
+      this.#status = 'auth-required'
+      this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+    }
+    return Object.freeze({ cancelled: true, loginId: normalizedLoginId })
+  }
+
   async respondApproval(requestId, decision) {
     await this.start()
     const normalizedRequestId = requiredString(requestId, 'requestId', 512)
@@ -298,6 +424,36 @@ export class YogurtAgentService extends EventEmitter {
     this.#activeTurnId = null
     this.#threadNeedsResume = Boolean(this.#activeThreadId)
     this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+  }
+
+  async #refreshAccountState() {
+    if (typeof this.#client.readAccount !== 'function') return null
+    const result = await this.#client.readAccount({ refreshToken: false })
+    this.#authState = authStateFromAccountRead(result)
+    return this.#authState
+  }
+
+  async #finishChatgptLogin() {
+    try {
+      const authState = await this.#refreshAccountState()
+      if (authState?.status === 'login-required') {
+        throw new Error('Codex login completed, but no authenticated account is available.')
+      }
+      await this.#ensureThread()
+      this.#status = 'ready'
+      this.#lastError = null
+      this.#loginState = loginState('completed', { loginId: this.#loginState.loginId })
+      this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+    } catch (error) {
+      this.#status = 'failed'
+      this.#lastError = String(error?.message || error)
+      this.#loginState = loginState('failed', {
+        loginId: this.#loginState.loginId,
+        error: this.#lastError
+      })
+      this.#emitError(error, 'sidecar')
+      this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+    }
   }
 
   async #ensureThread() {
@@ -395,6 +551,44 @@ export class YogurtAgentService extends EventEmitter {
   }
 
   #handleNotification(method, params = {}) {
+    if (method === 'account/login/completed') {
+      const loginId = params.loginId == null ? null : String(params.loginId)
+      const matchesCurrentLogin = !this.#loginState.loginId || !loginId || loginId === this.#loginState.loginId
+      if (!matchesCurrentLogin) return
+      this.#loginAuthUrl = null
+      if (params.success === true) {
+        this.#status = 'starting'
+        this.#loginState = loginState('completed', { loginId })
+        this.#emitEvent(normalizedEvent('auth.login.completed', { loginId, success: true }))
+        this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+        void this.#finishChatgptLogin()
+      } else {
+        const message = String(params.error || 'Codex login was not completed.')
+        this.#status = 'auth-required'
+        this.#loginState = loginState('failed', { loginId, error: message })
+        this.#emitEvent(normalizedEvent('auth.login.completed', {
+          loginId,
+          success: false,
+          error: message
+        }))
+        this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
+      }
+      return
+    }
+    if (method === 'account/updated') {
+      this.#authState = Object.freeze({
+        ...this.#authState,
+        status: params.authMode ? 'ready' : 'login-required',
+        authMode: params.authMode ? String(params.authMode) : null,
+        planType: params.planType ? String(params.planType) : null,
+        requiresOpenaiAuth: true
+      })
+      this.#emitEvent(normalizedEvent('auth.updated', {
+        authMode: this.#authState.authMode,
+        planType: this.#authState.planType
+      }))
+      return
+    }
     if (method === 'item/agentMessage/delta') {
       this.#emitEvent(normalizedEvent('agent.delta', {
         threadId: params.threadId,
@@ -520,6 +714,9 @@ export const YOGURT_DESKTOP_CAPABILITY_CONTRACT = Object.freeze({
   cowartToolNames: COWART_TOOL_NAMES,
   approvalDecisions: APPROVAL_DECISIONS,
   eventTypes: Object.freeze([
+    'auth.login.started',
+    'auth.login.completed',
+    'auth.updated',
     'agent.delta',
     'plan.updated',
     'diff.updated',

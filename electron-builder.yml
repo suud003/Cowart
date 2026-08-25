@@ -1,0 +1,85 @@
+appId: com.yogurtai.desktop
+productName: Yogurt AI Beta
+copyright: Copyright © 2026 Twox
+
+asar: true
+npmRebuild: false
+
+directories:
+  output: output/desktop
+  buildResources: packaging
+
+# Keep the application archive intentionally small. The desktop runtime is
+# unpacked because Codex launches the MCP server in a separate Node process;
+# external processes cannot execute JavaScript from an app.asar virtual path.
+files:
+  - package.json
+  - package-lock.json
+  - index.html
+  - vite.config.js
+  - packaging/desktop-bootstrap.cjs
+  - desktop/**/*
+  - dist/**/*
+  - mcp/**/*
+  - public/**/*
+  - src/**/*
+  - scripts/start-mcp.mjs
+  - scripts/vite-build-once.mjs
+  - skills/**/*
+  - .codex-plugin/plugin.json
+  - plugin.json
+  - LICENSE
+  - licenses/**/*
+  - node_modules/**/*
+  - "!**/{test,tests,__tests__}/**/*"
+  - "!**/*.{map,tsbuildinfo}"
+
+asarUnpack:
+  - package.json
+  - package-lock.json
+  - index.html
+  - vite.config.js
+  - desktop/**/*
+  - dist/**/*
+  - mcp/**/*
+  - public/**/*
+  - src/**/*
+  - scripts/start-mcp.mjs
+  - scripts/vite-build-once.mjs
+  - skills/**/*
+  - .codex-plugin/plugin.json
+  - plugin.json
+  - LICENSE
+  - licenses/**/*
+  - node_modules/**/*
+
+# electron-builder intentionally omits npm lockfiles from app.asar. The MCP
+# widget source hash includes this file, so place the exact lockfile beside the
+# unpacked runtime explicitly.
+extraResources:
+  - from: package-lock.json
+    to: app.asar.unpacked/package-lock.json
+
+win:
+  icon: packaging/yogurt-ai-icon.png
+  executableName: Yogurt AI Beta
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  artifactName: Yogurt-AI-Beta-Setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Yogurt AI Beta
+  uninstallDisplayName: Yogurt AI Beta
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  license: packaging/TLDRAW-LICENSE.txt
+
+publish: null

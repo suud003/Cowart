@@ -1,19 +1,24 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { mkdir, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { YogurtAgentService } from './agent-service.mjs'
 import { CodexAppServerClient } from './codex-app-server-client.mjs'
-import { registerYogurtAgentIpc } from './ipc-bridge.mjs'
-import { createYogurtCodexArgs, resolveCodexLaunch } from './runtime-config.mjs'
+import { registerYogurtAgentIpc, YogurtDesktopRuntime } from './ipc-bridge.mjs'
+import {
+  createYogurtCodexArgs,
+  resolveCodexLaunch,
+  resolveConfiguredWorkspace,
+  resolveDesktopRuntimeRoot
+} from './runtime-config.mjs'
 
 const desktopDir = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(desktopDir, '..')
+const applicationRoot = path.resolve(desktopDir, '..')
 const preloadPath = path.join(desktopDir, 'preload.cjs')
-const distIndexPath = path.join(repoRoot, 'dist', 'index.html')
+const desktopSettingsFileName = 'yogurt-desktop-settings.json'
 
 function rendererDevUrl(value) {
   if (!value) return null
@@ -25,11 +30,7 @@ function rendererDevUrl(value) {
   return url.toString()
 }
 
-const projectDir = path.resolve(process.env.YOGURT_WORKSPACE_ROOT || process.cwd())
-const canvasDir = path.join(projectDir, 'canvas')
-const sessionFile = path.join(canvasDir, '.yogurt-agent-session.json')
-
-function readPersistedThreadId() {
+function readPersistedThreadId(sessionFile) {
   try {
     const state = JSON.parse(readFileSync(sessionFile, 'utf8'))
     return typeof state?.threadId === 'string' && state.threadId.trim()
@@ -40,40 +41,148 @@ function readPersistedThreadId() {
   }
 }
 
-async function persistThreadId(threadId) {
+async function persistThreadId(sessionFile, canvasDir, threadId) {
   await mkdir(canvasDir, { recursive: true })
   const temporaryFile = `${sessionFile}.${process.pid}.${randomUUID()}.tmp`
   await writeFile(temporaryFile, `${JSON.stringify({ version: 1, threadId }, null, 2)}\n`)
   await rename(temporaryFile, sessionFile)
 }
 
-const cowartMcpCommand = process.env.YOGURT_NODE_COMMAND || 'node'
-const codexArgs = createYogurtCodexArgs({ repoRoot, nodeCommand: cowartMcpCommand })
-const codexLaunch = resolveCodexLaunch()
-const codexClient = new CodexAppServerClient({
-  command: codexLaunch.command,
-  commandPrefixArgs: codexLaunch.commandPrefixArgs,
-  args: codexArgs,
-  cwd: projectDir,
-  clientInfo: {
-    name: 'yogurt_ai_desktop',
-    title: 'Yogurt AI Desktop',
-    version: process.env.YOGURT_DESKTOP_VERSION || '0.1.0'
-  },
-  experimentalApi: false
-})
-const agentService = new YogurtAgentService({
-  client: codexClient,
-  projectDir,
-  canvasDir,
-  initialThreadId: readPersistedThreadId(),
-  onThreadChanged: persistThreadId
-})
-
 let mainWindow = null
 let provisionalWebContents = null
 let unregisterIpc = null
 let quitAfterCleanup = false
+let relaunchScheduled = false
+let desktopRuntime = null
+let distIndexPath = null
+let settingsFile = null
+
+async function readDesktopSettings(filePath) {
+  try {
+    const parsed = JSON.parse(await readFile(filePath, 'utf8'))
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (error) {
+    if (error?.code === 'ENOENT') return {}
+    console.warn('Yogurt AI ignored invalid desktop settings:', error)
+    return {}
+  }
+}
+
+async function writeDesktopSettings(filePath, settings) {
+  await mkdir(path.dirname(filePath), { recursive: true })
+  const temporaryFile = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+  await writeFile(temporaryFile, `${JSON.stringify(settings, null, 2)}\n`)
+  await rename(temporaryFile, filePath)
+}
+
+async function chooseWorkspace(parentWindow = null) {
+  const options = {
+    title: '选择 Yogurt AI 工作区',
+    buttonLabel: '选择此文件夹',
+    message: '画布和 Agent 生成的文件将保存在这个文件夹中。',
+    properties: ['openDirectory', 'createDirectory', 'promptToCreate']
+  }
+  const result = parentWindow
+    ? await dialog.showOpenDialog(parentWindow, options)
+    : await dialog.showOpenDialog(options)
+  const workspaceDir = result.canceled ? null : result.filePaths?.[0]
+  return workspaceDir ? path.resolve(workspaceDir) : null
+}
+
+async function chooseWorkspaceAndRelaunch() {
+  if (relaunchScheduled) return Object.freeze({ selected: false, restarting: true })
+  const workspaceDir = await chooseWorkspace(mainWindow)
+  if (!workspaceDir) return Object.freeze({ selected: false, restarting: false })
+  await writeDesktopSettings(settingsFile, { version: 1, workspaceDir })
+  relaunchScheduled = true
+  setTimeout(() => {
+    app.relaunch()
+    app.quit()
+  }, 180)
+  return Object.freeze({ selected: true, restarting: true, workspaceDir })
+}
+
+async function initializeDesktopRuntime() {
+  const appPath = applicationRoot
+  distIndexPath = path.join(appPath, 'dist', 'index.html')
+  settingsFile = path.join(app.getPath('userData'), desktopSettingsFileName)
+  const settings = await readDesktopSettings(settingsFile)
+  let workspace = resolveConfiguredWorkspace({
+    env: process.env,
+    persistedWorkspace: settings.workspaceDir
+  })
+
+  if (!workspace.configured) {
+    const selectedWorkspace = await chooseWorkspace()
+    if (selectedWorkspace) {
+      await writeDesktopSettings(settingsFile, { version: 1, workspaceDir: selectedWorkspace })
+      workspace = Object.freeze({
+        configured: true,
+        source: 'first-run',
+        workspaceDir: selectedWorkspace,
+        invalidPath: null
+      })
+    }
+  }
+
+  const scratchProjectDir = path.join(app.getPath('userData'), 'onboarding-workspace')
+  const projectDir = workspace.workspaceDir || scratchProjectDir
+  const canvasDir = path.join(projectDir, 'canvas')
+  await mkdir(projectDir, { recursive: true })
+
+  let agentService = null
+  let agentStartError = null
+  if (workspace.configured) {
+    try {
+      const runtimeRoot = resolveDesktopRuntimeRoot({
+        appPath,
+        resourcesPath: process.resourcesPath,
+        isPackaged: app.isPackaged
+      })
+      const cowartMcpCommand = process.env.YOGURT_NODE_COMMAND || (app.isPackaged
+        ? process.execPath
+        : 'node')
+      const codexLaunch = resolveCodexLaunch({
+        runtimeRoot,
+        isPackaged: app.isPackaged,
+        execPath: process.execPath
+      })
+      const codexClient = new CodexAppServerClient({
+        command: codexLaunch.command,
+        commandPrefixArgs: codexLaunch.commandPrefixArgs,
+        args: createYogurtCodexArgs({ repoRoot: runtimeRoot, nodeCommand: cowartMcpCommand }),
+        cwd: projectDir,
+        env: { ...process.env, ...(codexLaunch.env || {}) },
+        clientInfo: {
+          name: 'yogurt_ai_desktop',
+          title: 'Yogurt AI Desktop',
+          version: process.env.YOGURT_DESKTOP_VERSION || '0.1.0'
+        },
+        experimentalApi: false
+      })
+      const sessionFile = path.join(canvasDir, '.yogurt-agent-session.json')
+      agentService = new YogurtAgentService({
+        client: codexClient,
+        projectDir,
+        canvasDir,
+        initialThreadId: readPersistedThreadId(sessionFile),
+        onThreadChanged: (threadId) => persistThreadId(sessionFile, canvasDir, threadId)
+      })
+    } catch (error) {
+      agentStartError = error
+      console.warn('Yogurt AI will open without Codex Agent:', error)
+    }
+  }
+
+  desktopRuntime = new YogurtDesktopRuntime({
+    agentService,
+    agentStartError,
+    configuredWorkspace: workspace.configured,
+    projectDir,
+    canvasDir,
+    workspaceSource: workspace.source
+  })
+}
 
 function trustedWebContents() {
   return mainWindow?.webContents ?? provisionalWebContents
@@ -95,9 +204,11 @@ function ensureIpcRegistered() {
   if (unregisterIpc) return
   unregisterIpc = registerYogurtAgentIpc({
     ipcMain,
-    agentService,
+    agentService: desktopRuntime,
     getTrustedWebContents: trustedWebContents,
-    claimBootstrapWebContents
+    claimBootstrapWebContents,
+    selectWorkspace: chooseWorkspaceAndRelaunch,
+    openExternal: (url) => shell.openExternal(url)
   })
 }
 
@@ -186,7 +297,8 @@ async function captureDesktopIfRequested() {
 
 await app.whenReady()
 session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
-agentService.start().catch((error) => {
+await initializeDesktopRuntime()
+desktopRuntime.start().catch((error) => {
   console.error('Yogurt AI Codex sidecar failed to start:', error)
 })
 await createMainWindow()
@@ -207,7 +319,7 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   quitAfterCleanup = true
   unregisterIpc?.()
-  agentService.dispose()
+  desktopRuntime?.dispose()
     .catch((error) => console.error('Could not stop Yogurt AI Codex sidecar cleanly:', error))
     .finally(() => app.quit())
 })

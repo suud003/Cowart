@@ -5,6 +5,8 @@ __pycache__/
 .DS_Store
 /canvas/
 /output/
+/packaging/yogurt-ai-icon.png
+/packaging/TLDRAW-LICENSE.txt
 .codex-plugin/analytics.local.json
 /screenshots/*profile*/
 /screenshots/chrome-*/

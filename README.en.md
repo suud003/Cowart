@@ -10,10 +10,10 @@
 
 <p align="center">
   <a href="README.md">中文</a> ·
+  <a href="#windows-desktop-app-beta">Windows download</a> ·
   <a href="#one-complete-product-workflow">Product experience</a> ·
   <a href="#core-experience">Core experience</a> ·
   <a href="#complete-case-an-ai-interactive-filmgame">Complete case</a> ·
-  <a href="#install-and-launch-the-desktop-app-beta">Desktop app</a> ·
   <a href="#three-minute-quick-start">Quick start</a>
 </p>
 
@@ -25,6 +25,17 @@ The agent reads the active page and stable object IDs while streaming status, pl
   <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop shows the native canvas and Codex Agent workbench in one window">
 </p>
 <p align="center"><sub>The native canvas and Codex Agent workbench share the active project, page, and object context in one window.</sub></p>
+
+## Windows Desktop App (Beta)
+
+Regular users do not need to install Node.js, Git, or a global Codex CLI. Start with the Windows x64 installer:
+
+1. Download `Yogurt-AI-Beta-Setup-<version>-x64.exe`. The installer is currently supplied by the maintainer or a local build; it is publicly available only when an attachment is actually present on GitHub Releases.
+2. Double-click the installer and follow the setup wizard. It creates Desktop and Start Menu shortcuts.
+3. On first launch, choose a product folder as the workspace. Canvas data, generated files, and the project session stay there. Cancelling the picker does not crash the app; you can choose a folder later from the Agent panel.
+4. After the canvas opens, Codex Agent connects through the bundled, compatibility-tested Codex and Node runtimes and reuses the current Codex sign-in on the computer. If sign-in is required, click **Sign in to Codex** in the panel: Yogurt AI opens the official browser authorization flow and connects automatically after success—no terminal command is required.
+
+The current local Beta installer is unsigned, so Windows SmartScreen may display a “Windows protected your PC” warning. Run only an installer obtained from a trusted source whose filename and checksum match the maintainer's information. This notice does not imply that an installer has been uploaded to GitHub Releases.
 
 ## One Complete Product Workflow
 
@@ -131,52 +142,36 @@ Yogurt AI keeps creation and delivery tools in the same menu:
 
 [Browse the complete product case](examples/product-bridge/ai-interactive-film-case/) · [Browse the canvas line-diagram case](examples/semantic-diagram/ai-interactive-film-system/)
 
-## Install And Launch The Desktop App (Beta)
+## Developer And Advanced Use
 
-Yogurt AI Desktop currently targets local trials and development validation. It starts the canvas and the Codex Agent bridge on your machine, while project material, canvas data, and the session reference remain in the workspace you choose.
+The installer already includes the pinned Codex and Node runtimes required by the desktop app. The source workflow below is for development, debugging, or custom integration—not normal installation.
 
-### Prerequisites
-
-- Node.js, npm, and Git.
-- Codex CLI installed and already signed in.
-- On Windows, install it globally through npm and keep npm's default location so the desktop app can find it automatically.
+<details>
+<summary><strong>Run from source</strong></summary>
 
 ```bash
-npm install -g @openai/codex
-codex login
 git clone https://github.com/suud003/Cowart.git
 cd Cowart
 npm install
 npm run desktop
 ```
 
-`npm run desktop` builds the renderer and opens the Yogurt AI window. The current directory is the default workspace. To save the canvas and run the agent in another product repository, set its path first.
-
-PowerShell:
+Source launch builds the renderer and opens Electron. First launch still uses the native folder picker; developers may also set a workspace explicitly:
 
 ```powershell
 $env:YOGURT_WORKSPACE_ROOT = 'D:\path\to\your-product'
 npm run desktop
 ```
 
-macOS / Linux:
-
-```bash
-YOGURT_WORKSPACE_ROOT=/path/to/your-product npm run desktop
-```
-
-If Windows cannot locate Codex CLI automatically, point Yogurt AI at the npm-installed entry explicitly:
+A global installation or entry override is needed only when debugging an external Codex CLI:
 
 ```powershell
+npm install -g @openai/codex
+codex login
 $env:YOGURT_CODEX_JS = "$env:APPDATA\npm\node_modules\@openai\codex\bin\codex.js"
-npm run desktop
 ```
 
-The desktop bridge uses [Codex App Server](https://learn.chatgpt.com/docs/app-server), which is still experimental. After upgrading Codex CLI, run `npm run probe:desktop` to check compatibility. A distributable build should pin and validate the matching Codex version. See [`desktop/README.md`](desktop/README.md) for implementation and troubleshooting notes.
-
-### Enable The Complete Yogurt AI Workflow (Recommended)
-
-The desktop app already includes its controlled canvas bridge. To also enable the repository's purpose-built skills for source organization, semantic diagrams, Product Bridge, and image creation, install the plugin once:
+Developers can also validate the repository's Codex plugin workflow:
 
 ```bash
 npm run build
@@ -185,13 +180,15 @@ codex plugin add cowart-thinking-canvas@cowart-thinking-github
 codex plugin list
 ```
 
-After installation, enter `/plugins` in Codex CLI to confirm that Yogurt AI is enabled, then reopen the desktop app or start a new Codex task so its full capabilities load. See the [Codex Plugins documentation](https://learn.chatgpt.com/docs/plugins) for other installation surfaces.
+See [`desktop/README.md`](desktop/README.md) for implementation details, environment variables, and troubleshooting.
+
+</details>
 
 ## Three-minute Quick Start
 
-### 1. Open A Real Project
+### 1. Choose A Real Project
 
-Point `YOGURT_WORKSPACE_ROOT` at a product repository and run `npm run desktop`. Yogurt AI reads and saves its canvas there, while the panel on the right connects to the local Codex Agent.
+Open Yogurt AI from its Desktop shortcut and choose a product folder in the first-launch window. The app reads and saves the canvas in that workspace while the panel on the right connects to the local Codex Agent automatically. If authorization is required, click **Sign in to Codex** in the Agent panel and finish in the browser.
 
 ### 2. Add Material And Build The First Structure
 
@@ -227,6 +224,7 @@ Follow the agent's plan and change summaries in the workbench, approving control
 - Precise SVG blocks pass structural and script-safety validation before entering the canvas.
 - Files outside the project are copied into canvas materials only with explicit user permission.
 - The desktop app connects to Codex App Server over local stdio. The web renderer cannot issue arbitrary RPC calls, shell commands, process-spawn requests, or MCP tool calls outside the allowlist.
+- Yogurt AI does not call private `chatgpt.com/backend-api/...` endpoints. The desktop agent uses the local stdio Codex App Server bridge. Any future direct model API integration must use the public `https://api.openai.com/v1/responses` endpoint with API Key authentication.
 - Agent requests to change files or execute commands are surfaced in the workbench for user approval.
 
 ## Technical Information
@@ -294,7 +292,7 @@ https://www.jiqiren.ai
 
 This repository is a public fork of [zhongerxin/Cowart](https://github.com/zhongerxin/Cowart). It preserves the GitHub fork relationship and the upstream MIT license. The current public version is maintained at [`suud003/Cowart`](https://github.com/suud003/Cowart).
 
-- [tldraw/tldraw](https://github.com/tldraw/tldraw) provides the infinite canvas, shape editing, and interaction runtime. Version `5.1.1` is pinned. tldraw uses its own license; public production deployment requires an applicable trial, commercial, or other license. See [`licenses/TLDRAW-LICENSE.md`](licenses/TLDRAW-LICENSE.md).
+- [tldraw/tldraw](https://github.com/tldraw/tldraw) provides the infinite canvas, shape editing, and interaction runtime. Version `5.1.1` is pinned. Before public or commercial distribution, obtain an applicable tldraw license and configure a valid license key. See [`licenses/TLDRAW-LICENSE.md`](licenses/TLDRAW-LICENSE.md).
 - [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) is the design reference for toolbar layout, hand-drawn visual language, and interaction details. It is not a runtime dependency.
 - Excalifont, Xiaolai, and Assistant fonts use the SIL Open Font License 1.1. See [`src/assets/fonts/FONT-LICENSES.md`](src/assets/fonts/FONT-LICENSES.md).
 - [PptxGenJS](https://github.com/gitbrent/PptxGenJS) generates standards-compliant `.pptx` files in the browser under the MIT License.

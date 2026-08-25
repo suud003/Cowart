@@ -1,41 +1,38 @@
-# Yogurt AI Desktop (Beta)
+# Yogurt AI Desktop（Beta）
 
-Yogurt AI Desktop is the local Electron host for the Yogurt canvas and its Codex Agent workbench. It keeps the editable canvas, agent task stream, approvals, and project-local files in one application.
+Yogurt AI Desktop 把可编辑无限画布与 Codex Agent 工作台装进同一个 Windows 应用。普通用户不需要准备 Node.js、Git、npm 或全局 Codex CLI。
 
-## Start The App
+## 安装并开始使用
 
-You need Node.js, npm, Git, and a Codex CLI that is already signed in. The current Windows discovery path expects the default global npm installation unless you provide an override.
+1. 获取 Windows x64 安装包 `Yogurt-AI-Beta-Setup-<version>-x64.exe`。当前安装包由维护者或本地构建流程提供；只有 GitHub Releases 页面实际出现附件时，才代表它已经公开上传。
+2. 双击安装包并完成安装。安装程序会创建桌面和开始菜单快捷方式，也允许选择安装目录。
+3. 第一次启动时，选择一个产品文件夹作为 Yogurt AI 工作区。画布、页面素材、生成文件和项目会话都会保存在该文件夹中。
+4. 打开画布后，右侧 Codex Agent 会使用应用内置、经过兼容性验证的 Codex 与 Node 运行时自动连接，并复用当前电脑已有的 Codex 登录状态。未登录时，点击面板里的“登录 Codex”，在浏览器完成官方授权即可。
 
-```powershell
-npm install -g @openai/codex
-codex login
-npm install
-npm run desktop
-```
+如果暂时不选择工作区，应用仍会正常打开并展示使用引导；可以稍后在 Agent 面板点击“选择文件夹”。已进入项目后，也可以点击项目上下文中的“更换”切换工作区，应用会安全重启并加载新项目。
 
-`npm run desktop` builds the renderer before launching Electron. The current directory is used as the default product workspace. To work in another repository:
+如果 Codex 尚未登录，面板会直接发起 [Codex App Server 官方管理的浏览器登录流程](https://learn.chatgpt.com/docs/app-server#auth-endpoints)，授权完成后通过通知自动连接；安装版无需调用 PATH 中的 `codex login`。组件缺失或其他连接异常仍会单独显示并提供“重新检测”。画布读写不依赖 Agent 启动，因此 Codex 暂时不可用时仍可打开和编辑本地画布。
 
-```powershell
-$env:YOGURT_WORKSPACE_ROOT = 'D:\path\to\your-product'
-npm run desktop
-```
+## 当前 Beta 提示
 
-Canvas data is stored under `<workspace>/canvas/`. The saved Codex thread reference lives at `<workspace>/canvas/.yogurt-agent-session.json`, allowing the application to resume the project session on the next launch.
+- 当前本地 Beta 安装包未进行代码签名，Windows SmartScreen 可能显示“Windows 已保护你的电脑”。仅运行来自可信渠道、文件名和校验信息与维护者提供内容一致的安装包。
+- 卸载应用不会删除用户选择的工作区或其中的画布数据。
+- 当前构建使用 tldraw。公开或商业分发前必须取得适用的 tldraw 许可并配置合法 license key；本地 Beta 中出现的授权水印不是应用故障。
+- Codex App Server 仍可能随 Codex 版本演进，因此安装包固定并验证配套运行时，而不是依赖用户电脑中的随机全局版本。
 
-## Windows Codex Discovery
+## 本地数据与安全边界
 
-On Windows, Yogurt AI looks for the JavaScript entry created by the global npm package at `%APPDATA%\npm\node_modules\@openai\codex\bin\codex.js`. This avoids depending on shell wrappers or Windows application aliases.
+画布数据保存在 `<workspace>/canvas/`，Codex 项目会话引用保存在 `<workspace>/canvas/.yogurt-agent-session.json`。Yogurt AI 不会把启动终端的当前目录默认为用户项目；首次选择会持久化到应用设置中。
 
-If Codex is installed elsewhere, set the entry explicitly:
+桌面桥接的边界如下：
 
-```powershell
-$env:YOGURT_CODEX_JS = 'D:\tools\node_modules\@openai\codex\bin\codex.js'
-npm run desktop
-```
-
-`YOGURT_CODEX_COMMAND` may point to a native executable. Windows `.cmd`, `.bat`, and `.ps1` wrappers are rejected; use `YOGURT_CODEX_JS` for npm installations.
-
-## How The Bridge Works
+- Electron 开启 context isolation、renderer sandbox 与 web security，并关闭 renderer 的 Node 集成。
+- Renderer 只能访问经过白名单约束的 Yogurt Agent、画布工具与工作区选择 IPC。
+- Renderer 不能选择任意 App Server RPC、Shell 命令、进程、MCP Server 或白名单外工具。
+- “登录 Codex”只调用固定的 `account/login/start`，主进程仅会打开 App Server 返回、且通过 HTTPS 与 OpenAI/ChatGPT 域名校验的授权地址；授权地址不会返回给 Renderer。
+- 主进程拥有 `projectDir` 与 `canvasDir`；Renderer 传入的同名路径不会覆盖它们。
+- Codex 的文件修改与命令执行请求会回到工作台，由用户批准、拒绝或中断。
+- Yogurt AI 不调用 `chatgpt.com/backend-api/...` 等 ChatGPT 内部接口。Agent 通过本机 stdio Codex App Server 工作；未来若增加直接模型 API 集成，必须使用公开的 `https://api.openai.com/v1/responses` 并通过 API Key 鉴权。
 
 ```text
 Yogurt renderer
@@ -43,73 +40,76 @@ Yogurt renderer
   -> allowlisted Electron IPC
   -> Yogurt Agent service
   -> Codex App Server over local stdio
-       -> bundled cowart_thinking_mcp
-       -> project canvas and files
+       -> cowart_thinking_mcp
+       -> selected workspace canvas and files
 ```
 
-The workbench can start or steer an agent turn, stream agent messages, plans, and diffs, surface approvals, and interrupt active work. Before a canvas task is sent, the renderer saves the page and includes its page ID plus exact selected shape IDs. The bundled Yogurt MCP server then gives Codex controlled access to the same project-local canvas.
+## 开发者：从源码启动
 
-## Security Boundary
+以下内容仅供开发和调试。安装包用户无需执行这些命令。
 
-- Electron uses context isolation, renderer sandboxing, web security, and disabled Node integration.
-- The renderer can access only `window.yogurtAgent`, the allowlisted `window.cowartMcp` surface, and project metadata exposed through `window.openai.toolOutput`.
-- Renderer input cannot choose arbitrary App Server RPC methods, shell commands, processes, MCP servers, or MCP tool names.
-- The main process owns `projectDir` and `canvasDir`; any path fields supplied by the renderer are replaced before MCP calls.
-- New windows, webviews, unexpected navigation, and renderer permission requests are denied.
-- Codex command and file-change requests are returned to the UI for explicit approval.
+```powershell
+git clone https://github.com/suud003/Cowart.git
+cd Cowart
+npm install
+npm run desktop
+```
 
-## Development And Verification
+首次运行会打开系统目录选择器。开发时也可以预先指定项目：
 
-For Vite development, start the renderer in one terminal:
+```powershell
+$env:YOGURT_WORKSPACE_ROOT = 'D:\path\to\your-product'
+npm run desktop
+```
+
+只有在调试外部 Codex CLI 时，才需要全局安装或覆盖入口：
+
+```powershell
+npm install -g @openai/codex
+codex login
+$env:YOGURT_CODEX_JS = "$env:APPDATA\npm\node_modules\@openai\codex\bin\codex.js"
+npm run desktop
+```
+
+Vite 联调：
 
 ```powershell
 npm run dev
-```
-
-Then launch Electron from a second terminal with the Vite loopback URL:
-
-```powershell
 $env:YOGURT_VITE_DEV_URL = 'http://127.0.0.1:5173'
 npx electron ./desktop/launcher.cjs
 ```
 
-Only loopback HTTP URLs are accepted. Production loading uses the built `dist/index.html`.
+仅接受 loopback HTTP 开发地址。生产模式从应用资源中加载 `dist/index.html`，不依赖启动命令所在目录。
 
-Run the end-to-end local probe after installing or upgrading Codex CLI:
+## 开发者：构建 Windows 安装包
+
+```powershell
+npm run dist:win
+```
+
+NSIS 安装包输出到 `output/desktop/`，文件名为 `Yogurt-AI-Beta-Setup-<version>-x64.exe`。这是本地构建产物；构建完成不等于已经上传到 GitHub Releases。
+
+验证未打包与打包运行时：
 
 ```powershell
 npm run probe:desktop
+npm run verify:packaged
 ```
 
-The probe starts Codex App Server over stdio, creates a temporary thread, verifies the bundled `cowart_thinking_mcp` server, reads the canvas through MCP, archives the temporary thread, and exits.
+打包版本把固定 Codex CLI、Node 运行时与 MCP 运行文件放在可执行的 unpacked resources 中，避免从 Electron ASAR 虚拟路径或用户的当前工作目录启动子进程。
 
-Environment variables:
+## 开发环境变量
 
-| Variable | Purpose |
+| 变量 | 用途 |
 | --- | --- |
-| `YOGURT_WORKSPACE_ROOT` | Product project used for Codex work and canvas persistence |
-| `YOGURT_CODEX_JS` | Explicit JavaScript entry for an npm-installed Codex CLI |
-| `YOGURT_CODEX_COMMAND` | Native Codex executable override |
-| `YOGURT_NODE_COMMAND` | Node executable used for Codex and the bundled MCP server |
-| `YOGURT_VITE_DEV_URL` | Loopback Vite URL loaded by Electron during development |
-| `YOGURT_DESKTOP_VERSION` | Version reported by the desktop App Server client |
-| `YOGURT_DESKTOP_DEBUG` | Set to `1` to mirror renderer load and console errors to the terminal |
-| `YOGURT_DESKTOP_CAPTURE_PATH` | Path for a one-shot PNG capture; the app exits after saving |
-| `YOGURT_DESKTOP_CAPTURE_DELAY_MS` | Delay before a requested capture, clamped from 250 to 15,000 ms |
+| `YOGURT_WORKSPACE_ROOT` | 覆盖首次启动选择的产品工作区 |
+| `YOGURT_CODEX_JS` | 调试外部 Codex CLI 时指定 JavaScript 入口 |
+| `YOGURT_CODEX_COMMAND` | 调试时指定原生 Codex 可执行文件 |
+| `YOGURT_NODE_COMMAND` | Codex 与 MCP 使用的 Node 可执行文件 |
+| `YOGURT_VITE_DEV_URL` | Electron 开发模式加载的 loopback Vite 地址 |
+| `YOGURT_DESKTOP_VERSION` | App Server 客户端上报的桌面版本 |
+| `YOGURT_DESKTOP_DEBUG` | 设为 `1` 时把 renderer 错误输出到终端 |
+| `YOGURT_DESKTOP_CAPTURE_PATH` | 保存一次性桌面截图并退出 |
+| `YOGURT_DESKTOP_CAPTURE_DELAY_MS` | 截图前等待时间，限制在 250–15,000 ms |
 
-## Beta Compatibility
-
-The bridge uses the [Codex App Server](https://learn.chatgpt.com/docs/app-server) JSON-RPC protocol over stdio. App Server remains experimental, and its schemas can change with Codex CLI releases. This implementation is compatibility-tested against `codex-cli 0.144.3`; distributable builds should pin and test the Codex version they ship with. WebSocket transport and experimental App Server capabilities are not enabled.
-
-Normalized renderer events are:
-
-- `agent.delta`
-- `plan.updated`
-- `diff.updated`
-- `approval.requested`
-- `turn.started`
-- `turn.completed`
-- `error`
-- `state.changed`
-
-`sendTask` resolves when Codex accepts a new or steered turn. Completion arrives asynchronously through `turn.completed`.
+桌面桥接基于 [Codex App Server](https://learn.chatgpt.com/docs/app-server) 的本机 stdio 协议，并使用其 `account/read`、`account/login/start` 与登录完成通知实现应用内授权。当前安装包固定并验证 `@openai/codex 0.144.3`；升级依赖后应重新执行桌面与打包探针。

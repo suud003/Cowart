@@ -31,7 +31,8 @@ function normalizedCapabilities(capabilities) {
     streaming: Boolean(capabilities.streaming),
     approvals: Boolean(capabilities.approvals),
     interrupt: Boolean(capabilities.interrupt),
-    message: Object.freeze({ image: Boolean(capabilities.message?.image) })
+    message: Object.freeze({ image: Boolean(capabilities.message?.image) }),
+    ...(capabilities.setup ? { setup: Object.freeze(capabilities.setup) } : {})
   })
 }
 
@@ -43,7 +44,8 @@ function sameCapabilities(left, right) {
     left.streaming === right.streaming &&
     left.approvals === right.approvals &&
     left.interrupt === right.interrupt &&
-    left.message.image === right.message.image
+    left.message.image === right.message.image &&
+    JSON.stringify(left.setup ?? null) === JSON.stringify(right.setup ?? null)
   )
 }
 
@@ -520,6 +522,22 @@ export function createAgentBridge(adapter, {
     return await adapter.interrupt(options)
   }
 
+  async function selectWorkspace() {
+    if (disposed) throw new Error('The agent bridge has been disposed.')
+    if (typeof adapter?.selectWorkspace !== 'function') {
+      throw new Error('Workspace selection is only available in Yogurt AI Desktop.')
+    }
+    return await adapter.selectWorkspace()
+  }
+
+  async function startCodexLogin() {
+    if (disposed) throw new Error('The agent bridge has been disposed.')
+    if (typeof adapter?.startCodexLogin !== 'function') {
+      throw new Error('Codex login is only available in Yogurt AI Desktop.')
+    }
+    return await adapter.startCodexLogin()
+  }
+
   function subscribe(listener, { emitCurrent = false } = {}) {
     if (typeof listener !== 'function') throw new TypeError('AgentBridge listener must be a function.')
     if (disposed) return () => {}
@@ -558,6 +576,8 @@ export function createAgentBridge(adapter, {
     sendTask,
     respondApproval,
     interrupt,
+    selectWorkspace,
+    startCodexLogin,
     get capabilities() {
       return state.capabilities
     },

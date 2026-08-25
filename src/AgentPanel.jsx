@@ -5,11 +5,15 @@ import {
   ChevronRight,
   Circle,
   FileText,
+  FolderOpen,
   LoaderCircle,
+  LogIn,
   PanelRightClose,
+  RefreshCw,
   Send,
   Sparkles,
   Square,
+  Terminal,
   X,
   Workflow
 } from 'lucide-react'
@@ -54,6 +58,16 @@ function readContext(contextProvider) {
 }
 
 export function connectionPresentation(state) {
+  const setup = state?.capabilities?.setup
+  if (setup?.workspace?.status === 'required') {
+    return { label: '待设置', tone: 'offline' }
+  }
+  if (['starting', 'waiting-for-workspace', 'login-pending'].includes(setup?.codex?.status)) {
+    return { label: '连接中', tone: 'working' }
+  }
+  if (['missing', 'login-required'].includes(setup?.codex?.status)) {
+    return { label: '需配置', tone: 'offline' }
+  }
   if (
     state?.status === 'sending' ||
     (state?.capabilities?.streaming &&
@@ -90,6 +104,11 @@ export function taskStatusPresentation(status) {
     return { label: '发送失败', tone: 'error', Icon: AlertCircle }
   }
   return { label: '等待处理', tone: 'idle', Icon: Circle }
+}
+
+export function codexLoginButtonLabel(status, busy = false) {
+  if (busy) return '正在打开…'
+  return status === 'login-pending' ? '重新打开登录页' : '登录 Codex'
 }
 
 function taskStatusFromActivity(activity, fallbackStatus, followsActivity) {
@@ -304,6 +323,10 @@ export function CowartAgentPanel({
   const [activityItems, setActivityItems] = useState([])
   const [approvalResolution, setApprovalResolution] = useState({ requestId: null, status: 'idle' })
   const [isInterrupting, setIsInterrupting] = useState(false)
+  const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false)
+  const [isRefreshingCodex, setIsRefreshingCodex] = useState(false)
+  const [isStartingCodexLogin, setIsStartingCodexLogin] = useState(false)
+  const [setupNotice, setSetupNotice] = useState('')
   const [sendError, setSendError] = useState('')
   const textAreaRef = useRef(null)
 
@@ -397,6 +420,9 @@ export function CowartAgentPanel({
   }, [bridgeState.activity, bridgeState.capabilities?.streaming, bridgeTask, localTask])
 
   const connection = connectionPresentation(bridgeState)
+  const desktopSetup = bridgeState.capabilities?.setup ?? null
+  const workspaceSetup = desktopSetup?.workspace ?? null
+  const codexSetup = desktopSetup?.codex ?? null
   const isAvailable = Boolean(bridgeState.capabilities?.available)
   const activityPhase = bridgeState.activity?.phase || 'idle'
   const approvalRequestId = approvalRequestIdFromBridgeState(bridgeState)
@@ -416,6 +442,63 @@ export function CowartAgentPanel({
     setInstruction(prompt)
     window.requestAnimationFrame(() => textAreaRef.current?.focus())
   }, [])
+
+  async function handleSelectWorkspace() {
+    if (typeof bridge?.selectWorkspace !== 'function' || isSelectingWorkspace) return
+    setIsSelectingWorkspace(true)
+    setSetupNotice('')
+    try {
+      const result = await bridge.selectWorkspace()
+      if (result?.selected) {
+        setSetupNotice('工作区已保存，正在重新打开 Yogurt AI…')
+      } else if (result?.restarting) {
+        setSetupNotice('Yogurt AI 正在重新打开…')
+      } else {
+        setSetupNotice('没有选择文件夹。你仍可预览画布，稍后再设置。')
+      }
+      if (!result?.selected) setIsSelectingWorkspace(false)
+    } catch (error) {
+      console.error(error)
+      setSetupNotice(error?.message || '无法选择工作区。')
+      setIsSelectingWorkspace(false)
+    }
+  }
+
+  async function handleRefreshCodex() {
+    if (typeof bridge?.refreshCapabilities !== 'function' || isRefreshingCodex) return
+    setIsRefreshingCodex(true)
+    setSetupNotice('')
+    try {
+      await bridge.refreshCapabilities()
+      setSetupNotice('已重新检测 Codex 状态。')
+    } catch (error) {
+      console.error(error)
+      setSetupNotice(error?.message || 'Codex 状态检测失败。')
+    } finally {
+      setIsRefreshingCodex(false)
+    }
+  }
+
+  async function handleStartCodexLogin() {
+    if (typeof bridge?.startCodexLogin !== 'function' || isStartingCodexLogin) return
+    setIsStartingCodexLogin(true)
+    setSetupNotice('')
+    try {
+      const result = await bridge.startCodexLogin()
+      if (result?.alreadyAuthenticated) {
+        setSetupNotice('Codex 已登录，正在连接 Agent…')
+      } else if (result?.browserOpened) {
+        setSetupNotice('登录页已在浏览器打开；授权成功后会自动回到已连接状态。')
+      } else {
+        setSetupNotice('已发起 Codex 登录，请在浏览器完成授权。')
+      }
+    } catch (error) {
+      console.error(error)
+      setSetupNotice(error?.message || '无法打开 Codex 登录页。')
+    } finally {
+      setIsStartingCodexLogin(false)
+    }
+  }
 
   async function handleApproval(decision) {
     const requestId = approvalRequestId
@@ -536,11 +619,84 @@ export function CowartAgentPanel({
       </header>
 
       <div className="cowart-agent-panel-body">
+        {workspaceSetup?.status === 'required' && (
+          <section className="cowart-agent-setup-card" data-kind="workspace" aria-labelledby="cowart-agent-setup-title">
+            <span className="cowart-agent-setup-icon" aria-hidden="true">
+              <FolderOpen size={19} />
+            </span>
+            <div>
+              <strong id="cowart-agent-setup-title">先选择一个工作区</strong>
+              <p>画布和生成文件会保存在你选择的文件夹中，Yogurt AI 不再依赖启动位置。</p>
+              <button disabled={isSelectingWorkspace} onClick={handleSelectWorkspace} type="button">
+                <FolderOpen aria-hidden="true" size={14} />
+                {isSelectingWorkspace ? '正在打开…' : '选择文件夹'}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {workspaceSetup?.status === 'ready' && codexSetup && codexSetup.status !== 'ready' && (
+          <section className="cowart-agent-setup-card" data-kind="codex" aria-labelledby="cowart-agent-codex-setup-title">
+            <span className="cowart-agent-setup-icon" aria-hidden="true">
+              {['starting', 'login-pending'].includes(codexSetup.status) ? (
+                <LoaderCircle className="cowart-spin" size={19} />
+              ) : (
+                <Terminal size={19} />
+              )}
+            </span>
+            <div>
+              <strong id="cowart-agent-codex-setup-title">{codexSetup.title || '连接 Codex'}</strong>
+              <p>{codexSetup.message || '完成 Codex 设置后即可从画布发送任务。'}</p>
+              {codexSetup.command && <code>{codexSetup.command}</code>}
+              {codexSetup.canLogin && ['login-required', 'login-pending'].includes(codexSetup.status) ? (
+                <button
+                  disabled={isStartingCodexLogin}
+                  onClick={handleStartCodexLogin}
+                  type="button"
+                >
+                  {isStartingCodexLogin ? (
+                    <LoaderCircle aria-hidden="true" className="cowart-spin" size={14} />
+                  ) : (
+                    <LogIn aria-hidden="true" size={14} />
+                  )}
+                  {codexLoginButtonLabel(codexSetup.status, isStartingCodexLogin)}
+                </button>
+              ) : codexSetup.status !== 'starting' && (
+                <button disabled={isRefreshingCodex} onClick={handleRefreshCodex} type="button">
+                  <RefreshCw
+                    aria-hidden="true"
+                    className={isRefreshingCodex ? 'cowart-spin' : undefined}
+                    size={14}
+                  />
+                  {isRefreshingCodex ? '正在检测…' : '重新检测'}
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
+        {setupNotice && (
+          <p className="cowart-agent-setup-notice" role="status">{setupNotice}</p>
+        )}
+
         <section className="cowart-agent-context-card" aria-labelledby="cowart-agent-context-title">
           <div className="cowart-agent-section-heading">
             <span id="cowart-agent-context-title">项目上下文</span>
-            <span className="cowart-agent-scope-chip" data-selection={selectedCount > 0 ? 'true' : 'false'}>
-              {scopeLabel}
+            <span className="cowart-agent-context-actions">
+              {workspaceSetup?.status === 'ready' && typeof bridge?.selectWorkspace === 'function' && (
+                <button
+                  disabled={isSelectingWorkspace}
+                  onClick={handleSelectWorkspace}
+                  title="更换工作区并重新打开应用"
+                  type="button"
+                >
+                  <FolderOpen aria-hidden="true" size={12} />
+                  更换
+                </button>
+              )}
+              <span className="cowart-agent-scope-chip" data-selection={selectedCount > 0 ? 'true' : 'false'}>
+                {scopeLabel}
+              </span>
             </span>
           </div>
           <strong className="cowart-agent-project-name">
@@ -674,7 +830,9 @@ export function CowartAgentPanel({
           placeholder={
             isAvailable
               ? '例如：把这些想法整理成产品结构并补齐缺口…'
-              : '请先在 Codex 中打开 Yogurt AI'
+              : workspaceSetup?.status === 'required'
+                ? '选择工作区后即可连接 Codex Agent'
+                : '按上方提示完成 Codex 设置'
           }
           rows={4}
           value={instruction}
@@ -687,7 +845,7 @@ export function CowartAgentPanel({
         )}
         {!isAvailable && !sendError && (
           <p className="cowart-agent-offline-note">
-            连接 Codex Agent 后，这里会直接发送画布任务。
+            {codexSetup?.message || '连接 Codex Agent 后，这里会直接发送画布任务。'}
           </p>
         )}
         <div className="cowart-agent-composer-footer">

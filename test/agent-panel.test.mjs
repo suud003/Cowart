@@ -5,6 +5,7 @@ import { createServer } from 'vite'
 
 let buildAgentPanelMessage
 let approvalStatusForRequest
+let codexLoginButtonLabel
 let connectionPresentation
 let taskStatusPresentation
 let viteServer
@@ -20,6 +21,7 @@ test.before(async () => {
   ;({
     buildAgentPanelMessage,
     approvalStatusForRequest,
+    codexLoginButtonLabel,
     connectionPresentation,
     taskStatusPresentation
   } = await viteServer.ssrLoadModule('/src/AgentPanel.jsx'))
@@ -87,4 +89,34 @@ test('ordinary turn failures do not mark an available connection as broken', () 
     capabilities: { available: true },
     lastEvent: { type: 'turn.failed', payload: { source: 'sidecar' } }
   }), { label: '连接异常', tone: 'error' })
+})
+
+test('Agent panel presents desktop onboarding before generic connection state', () => {
+  assert.deepEqual(connectionPresentation({
+    status: 'unavailable',
+    capabilities: {
+      available: false,
+      setup: { workspace: { status: 'required' }, codex: { status: 'waiting-for-workspace' } }
+    }
+  }), { label: '待设置', tone: 'offline' })
+
+  assert.deepEqual(connectionPresentation({
+    status: 'unavailable',
+    capabilities: {
+      available: false,
+      setup: { workspace: { status: 'ready' }, codex: { status: 'login-required' } }
+    }
+  }), { label: '需配置', tone: 'offline' })
+
+  assert.deepEqual(connectionPresentation({
+    status: 'unavailable',
+    capabilities: {
+      available: false,
+      setup: { workspace: { status: 'ready' }, codex: { status: 'login-pending' } }
+    }
+  }), { label: '连接中', tone: 'working' })
+
+  assert.equal(codexLoginButtonLabel('login-required'), '登录 Codex')
+  assert.equal(codexLoginButtonLabel('login-pending'), '重新打开登录页')
+  assert.equal(codexLoginButtonLabel('login-pending', true), '正在打开…')
 })

@@ -25,16 +25,19 @@ function normalizedHostCapabilities(host) {
   }
 
   const capabilities = host.capabilities ?? {}
+  const advertisedSendTask = capabilities.available ?? capabilities.agent?.sendTask
+  const canSendTask = Boolean(host.sendTask) && advertisedSendTask !== false
   return {
-    available: Boolean(host.sendTask),
+    available: canSendTask,
     provider: host.provider,
-    sendTask: Boolean(host.sendTask),
-    streaming: Boolean(capabilities.streaming ?? host.subscribe),
-    approvals: Boolean(capabilities.approvals ?? host.respondApproval),
-    interrupt: Boolean(capabilities.interrupt ?? host.interrupt),
+    sendTask: canSendTask,
+    streaming: canSendTask && Boolean(capabilities.streaming ?? capabilities.agent?.streaming ?? host.subscribe),
+    approvals: canSendTask && Boolean(capabilities.approvals ?? capabilities.agent?.approvals ?? host.respondApproval),
+    interrupt: canSendTask && Boolean(capabilities.interrupt ?? capabilities.agent?.interrupt ?? host.interrupt),
     message: {
       image: Boolean(capabilities.message?.image ?? capabilities.messageImages)
-    }
+    },
+    ...(capabilities.setup ? { setup: capabilities.setup } : {})
   }
 }
 
@@ -74,7 +77,7 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
       preloadCapabilityReadStarted = false
     }
 
-    if (host.capabilities && !isPromiseLike(host.capabilities)) {
+    if (!preloadCapabilities && host.capabilities && !isPromiseLike(host.capabilities)) {
       preloadCapabilities = host.capabilities
     }
 
@@ -121,6 +124,12 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
           : null,
         interrupt: typeof yogurtAgent.interrupt === 'function'
           ? (options) => yogurtAgent.interrupt(options)
+          : null,
+        selectWorkspace: typeof yogurtAgent.selectWorkspace === 'function'
+          ? () => yogurtAgent.selectWorkspace()
+          : null,
+        startCodexLogin: typeof yogurtAgent.startCodexLogin === 'function'
+          ? () => yogurtAgent.startCodexLogin()
           : null,
         capabilities: readPreloadCapabilities(yogurtAgent)
       }
@@ -197,10 +206,12 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
 
     try {
       const unsubscribe = yogurtAgent.subscribe((...args) => {
-        notifyCapabilitiesChanged()
         const candidate = args[1]?.type || args[1]?.method
           ? args[1]
           : args[0]?.lastEvent ?? args[0]
+        preloadCapabilityReadStarted = false
+        readPreloadCapabilities(yogurtAgent)
+        notifyCapabilitiesChanged()
         if (candidate?.type || candidate?.method || candidate?.event) notifyAgentEvent(candidate)
       })
       hostUnsubscribers.set(yogurtAgent, typeof unsubscribe === 'function' ? unsubscribe : () => {})
@@ -258,6 +269,24 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
       const host = currentHost()
       if (!host?.interrupt) throw new Error('The current agent host does not support interruption.')
       return await host.interrupt(options)
+    },
+
+    async selectWorkspace() {
+      if (disposed) throw new Error('The Codex host adapter has been disposed.')
+      const host = currentHost({ requireSendTask: false })
+      if (!host?.selectWorkspace) {
+        throw new Error('Workspace selection is only available in Yogurt AI Desktop.')
+      }
+      return await host.selectWorkspace()
+    },
+
+    async startCodexLogin() {
+      if (disposed) throw new Error('The Codex host adapter has been disposed.')
+      const host = currentHost({ requireSendTask: false })
+      if (!host?.startCodexLogin) {
+        throw new Error('Codex login is only available in Yogurt AI Desktop.')
+      }
+      return await host.startCodexLogin()
     },
 
     refreshCapabilities() {

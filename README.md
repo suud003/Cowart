@@ -10,10 +10,10 @@
 
 <p align="center">
   <a href="README.en.md">English</a> ·
+  <a href="#windows-桌面应用beta">Windows 下载</a> ·
   <a href="#一条完整的产品工作流">产品体验</a> ·
   <a href="#核心体验">核心体验</a> ·
   <a href="#完整案例ai-互动影游">完整案例</a> ·
-  <a href="#安装并启动桌面应用beta">桌面应用</a> ·
   <a href="#三分钟上手">快速开始</a>
 </p>
 
@@ -25,6 +25,17 @@ Agent 会读取当前页面和稳定对象 ID，持续回传执行状态、计�
   <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop 在同一窗口中展示原生画布与 Codex Agent 工作台">
 </p>
 <p align="center"><sub>原生画布与 Codex Agent 工作台处于同一窗口，共享当前项目、页面与对象上下文。</sub></p>
+
+## Windows 桌面应用（Beta）
+
+普通用户不需要安装 Node.js、Git 或全局 Codex CLI。使用 Windows x64 安装包即可开始：
+
+1. 下载 `Yogurt-AI-Beta-Setup-<version>-x64.exe`。当前安装包由维护者或本地构建流程提供；仅当 GitHub Releases 页面实际出现附件时，才代表它已经公开上传。
+2. 双击安装包，按向导完成安装。安装程序会创建桌面和开始菜单快捷方式。
+3. 第一次打开 Yogurt AI 时，选择一个产品文件夹作为工作区。画布、生成文件和项目会话都会保存在这里；取消选择也不会导致应用崩溃，可以稍后从 Agent 面板重新选择。
+4. 进入画布后，右侧 Codex Agent 会使用应用内置、经过兼容性验证的 Codex 与 Node 运行时自动连接，并复用当前电脑已有的 Codex 登录状态。若尚未登录，直接点击面板里的“登录 Codex”：Yogurt AI 会打开官方浏览器授权页，并在成功后自动连接，无需运行终端命令。
+
+当前本地 Beta 安装包尚未进行代码签名，Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请只运行来自你信任渠道、文件名和校验信息与维护者提供内容一致的安装包。此说明不代表安装包已经上传到 GitHub Releases。
 
 ## 一条完整的产品工作流
 
@@ -131,52 +142,36 @@ Yogurt AI 的创作与交付工具都在同一个菜单中：
 
 [浏览完整产品案例](examples/product-bridge/ai-interactive-film-case/) · [浏览画布框线图案例](examples/semantic-diagram/ai-interactive-film-system/)
 
-## 安装并启动桌面应用（Beta）
+## 开发者与高级用法
 
-Yogurt AI Desktop 当前面向本地试用与开发验证。它会在本机启动画布和 Codex Agent 桥接，项目材料、画布数据与会话引用都保存在你选择的工作区中。
+安装包已经包含桌面运行所需的固定 Codex 与 Node 运行时。以下源码方式仅面向开发、调试或自定义集成，不是普通用户的安装步骤。
 
-### 准备环境
-
-- Node.js、npm 与 Git。
-- 已安装并完成登录的 Codex CLI。
-- Windows 用户推荐通过 npm 全局安装并保留默认位置，桌面应用会从中自动找到 Codex CLI。
+<details>
+<summary><strong>从源码启动</strong></summary>
 
 ```bash
-npm install -g @openai/codex
-codex login
 git clone https://github.com/suud003/Cowart.git
 cd Cowart
 npm install
 npm run desktop
 ```
 
-`npm run desktop` 会先构建前端，再打开 Yogurt AI 桌面窗口。默认工作区是当前目录；如果希望它为另一个产品项目保存画布并运行 Agent，请先指定项目目录。
-
-PowerShell：
+源码启动会先构建前端，再打开 Electron。首次启动仍会使用系统目录选择器；也可以显式指定开发工作区：
 
 ```powershell
 $env:YOGURT_WORKSPACE_ROOT = 'D:\path\to\your-product'
 npm run desktop
 ```
 
-macOS / Linux：
-
-```bash
-YOGURT_WORKSPACE_ROOT=/path/to/your-product npm run desktop
-```
-
-如果 Windows 没有自动找到 Codex CLI，可以显式指定 npm 安装的入口：
+只有在调试外部 Codex CLI 时才需要全局安装或入口覆盖：
 
 ```powershell
+npm install -g @openai/codex
+codex login
 $env:YOGURT_CODEX_JS = "$env:APPDATA\npm\node_modules\@openai\codex\bin\codex.js"
-npm run desktop
 ```
 
-桌面桥接基于仍处于实验阶段的 [Codex App Server](https://learn.chatgpt.com/docs/app-server)。升级 Codex CLI 后，建议先运行 `npm run probe:desktop` 完成兼容性检查；面向正式分发时，应固定并验证配套 Codex 版本。实现与故障排查见 [`desktop/README.md`](desktop/README.md)。
-
-### 启用完整 Yogurt AI 工作流（推荐）
-
-桌面应用已经自带画布读写桥接。要同时启用本仓库内针对材料梳理、语义框线图、Product Bridge 和图片创作优化过的 Skills，请再完成一次插件安装：
+桌面应用还可与仓库内的 Codex 插件能力一起开发和验证：
 
 ```bash
 npm run build
@@ -185,13 +180,15 @@ codex plugin add cowart-thinking-canvas@cowart-thinking-github
 codex plugin list
 ```
 
-安装后在 Codex CLI 输入 `/plugins` 确认 Yogurt AI 已启用，再重新打开桌面应用或开启一个 Codex 新任务以加载完整能力。更多安装方式见 [Codex Plugins 文档](https://learn.chatgpt.com/docs/plugins)。
+实现、环境变量和故障排查见 [`desktop/README.md`](desktop/README.md)。
+
+</details>
 
 ## 三分钟上手
 
-### 1. 打开一个真实项目
+### 1. 选择一个真实项目
 
-为产品项目设置 `YOGURT_WORKSPACE_ROOT`，运行 `npm run desktop`。Yogurt AI 会在该项目下读取和保存画布，并在右侧连接本地 Codex Agent。
+从桌面快捷方式打开 Yogurt AI，在首次启动窗口中选择产品文件夹。应用会在该工作区读取和保存画布，并在右侧自动连接本地 Codex Agent；首次需要授权时，在 Agent 面板点击“登录 Codex”并在浏览器完成登录即可。
 
 ### 2. 放入材料，形成第一版结构
 
@@ -226,6 +223,7 @@ codex plugin list
 - 精确 SVG 图块在写入画布前会经过结构与脚本安全校验。
 - 项目外文件只有在用户明确允许时，才会复制到画布材料目录。
 - 桌面应用通过本机 stdio 连接 Codex App Server；网页渲染层不能提交任意 RPC、Shell 命令、进程启动请求或白名单以外的 MCP 工具调用。
+- Yogurt AI 不调用 `chatgpt.com/backend-api/...` 等 ChatGPT 内部接口。桌面 Agent 使用本机 stdio Codex App Server；未来若增加直接模型 API 集成，必须使用公开的 `https://api.openai.com/v1/responses` 并通过 API Key 鉴权。
 - Agent 的文件修改与命令执行请求会在工作台内展示，是否继续由用户审批。
 
 ## 技术信息
@@ -293,7 +291,7 @@ https://www.jiqiren.ai
 
 本仓库是 [zhongerxin/Cowart](https://github.com/zhongerxin/Cowart) 的公开 Fork，保留 GitHub Fork 关系和上游 MIT 许可；当前公开版本维护在 [`suud003/Cowart`](https://github.com/suud003/Cowart)。
 
-- [tldraw/tldraw](https://github.com/tldraw/tldraw) 提供无限画布、形状编辑与交互运行时。项目固定使用 `5.1.1`；tldraw 使用其独立许可，公开生产部署需要适用的试用、商业或其他授权。详见 [`licenses/TLDRAW-LICENSE.md`](licenses/TLDRAW-LICENSE.md)。
+- [tldraw/tldraw](https://github.com/tldraw/tldraw) 提供无限画布、形状编辑与交互运行时。项目固定使用 `5.1.1`；tldraw 使用其独立许可，公开或商业分发前必须取得适用授权并配置合法 license key。详见 [`licenses/TLDRAW-LICENSE.md`](licenses/TLDRAW-LICENSE.md)。
 - [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) 是工具栏布局、手绘视觉语言与交互细节的设计参考，并非运行时依赖。
 - Excalifont、Xiaolai 和 Assistant 字体使用 SIL Open Font License 1.1。详见 [`src/assets/fonts/FONT-LICENSES.md`](src/assets/fonts/FONT-LICENSES.md)。
 - [PptxGenJS](https://github.com/gitbrent/PptxGenJS) 用于在浏览器中生成标准 `.pptx` 文件，采用 MIT 许可。

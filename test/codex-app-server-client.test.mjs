@@ -90,6 +90,61 @@ test('thread start uses a cold-start timeout longer than ordinary requests', asy
   await client.stop()
 })
 
+test('App Server client exposes only fixed managed-account login requests', async () => {
+  let child
+  const client = new CodexAppServerClient({
+    spawnProcess() {
+      child = fakeSidecar((message, process) => {
+        if (message.method === 'initialize') {
+          process.send({ id: message.id, result: {} })
+        } else if (message.method === 'account/read') {
+          process.send({
+            id: message.id,
+            result: { account: null, requiresOpenaiAuth: true }
+          })
+        } else if (message.method === 'account/login/start') {
+          process.send({
+            id: message.id,
+            result: {
+              type: 'chatgpt',
+              loginId: 'login_1',
+              authUrl: 'https://auth.openai.com/codex/authorize'
+            }
+          })
+        } else if (message.method === 'account/login/cancel') {
+          process.send({ id: message.id, result: {} })
+        }
+      })
+      return child
+    }
+  })
+
+  assert.deepEqual(await client.readAccount(), {
+    account: null,
+    requiresOpenaiAuth: true
+  })
+  const login = await client.startChatgptLogin()
+  assert.equal(login.loginId, 'login_1')
+  assert.deepEqual(
+    child.messages.find((message) => message.method === 'account/login/start')?.params,
+    {
+      type: 'chatgpt',
+      useHostedLoginSuccessPage: true,
+      appBrand: 'chatgpt'
+    }
+  )
+  await client.cancelLogin('login_1')
+  assert.deepEqual(
+    child.messages.find((message) => message.method === 'account/login/cancel')?.params,
+    { loginId: 'login_1' }
+  )
+  assert.throws(
+    () => client.startChatgptLogin({ appBrand: 'untrusted-host' }),
+    /appBrand/
+  )
+  await client.stop()
+})
+
 test('App Server client streams notifications and answers only known approvals', async () => {
   let child
   const client = new CodexAppServerClient({

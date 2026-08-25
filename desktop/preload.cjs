@@ -8,6 +8,8 @@ const CHANNELS = Object.freeze({
   event: 'yogurt-agent:event',
   getState: 'yogurt-agent:get-state',
   refreshCapabilities: 'yogurt-agent:refresh-capabilities',
+  selectWorkspace: 'yogurt-agent:select-workspace',
+  startCodexLogin: 'yogurt-agent:start-codex-login',
   respondApproval: 'yogurt-agent:respond-approval',
   sendTask: 'yogurt-agent:send-task',
   interrupt: 'yogurt-agent:interrupt'
@@ -29,10 +31,15 @@ const dispatchEvent = (_event, payload) => {
 ipcRenderer.on(CHANNELS.event, dispatchEvent)
 
 const yogurtAgent = Object.freeze({
+  capabilities: bootstrap.capabilities || null,
   sendTask: (task) => ipcRenderer.invoke(CHANNELS.sendTask, task),
   getState: () => ipcRenderer.invoke(CHANNELS.getState),
-  getCapabilities: () => bootstrap.capabilities || null,
+  getCapabilities: () => ipcRenderer
+    .invoke(CHANNELS.getState)
+    .then((state) => state?.capabilities || bootstrap.capabilities || null),
   refreshCapabilities: () => ipcRenderer.invoke(CHANNELS.refreshCapabilities),
+  selectWorkspace: () => ipcRenderer.invoke(CHANNELS.selectWorkspace),
+  startCodexLogin: () => ipcRenderer.invoke(CHANNELS.startCodexLogin),
   subscribe(callback) {
     if (typeof callback !== 'function') throw new TypeError('subscribe requires a function.')
     callbacks.add(callback)

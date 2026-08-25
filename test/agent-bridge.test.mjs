@@ -60,6 +60,59 @@ test('Codex host adapter prefers the Electron preload bridge', async () => {
   }])
 })
 
+test('Electron preload can advertise onboarding without exposing a usable Agent transport', async () => {
+  let selected = 0
+  const setup = {
+    workspace: { status: 'required', configured: false, path: null },
+    codex: { status: 'waiting-for-workspace', title: '选择工作区后连接 Codex' }
+  }
+  const windowObject = eventWindow({
+    yogurtAgent: {
+      capabilities: { available: false, agent: { sendTask: false }, setup },
+      getCapabilities: () => ({ available: false, agent: { sendTask: false }, setup }),
+      sendTask: async () => { throw new Error('must not send') },
+      selectWorkspace: async () => {
+        selected += 1
+        return { selected: false, restarting: false }
+      }
+    }
+  })
+
+  const adapter = createCodexHostAgentAdapter(windowObject)
+  const bridge = createAgentBridge(adapter)
+  assert.equal(bridge.capabilities.available, false)
+  assert.equal(bridge.capabilities.setup.workspace.status, 'required')
+  assert.deepEqual(await bridge.selectWorkspace(), { selected: false, restarting: false })
+  assert.equal(selected, 1)
+})
+
+test('Electron preload exposes the fixed Codex login action through the bridge', async () => {
+  let loginRequests = 0
+  const setup = {
+    workspace: { status: 'ready', configured: true, path: 'C:\\workspace' },
+    codex: { status: 'login-required', canLogin: true }
+  }
+  const windowObject = eventWindow({
+    yogurtAgent: {
+      capabilities: { available: false, agent: { sendTask: false }, setup },
+      getCapabilities: () => ({ available: false, agent: { sendTask: false }, setup }),
+      sendTask: async () => { throw new Error('must not send') },
+      startCodexLogin: async () => {
+        loginRequests += 1
+        return { status: 'waiting', browserOpened: true }
+      }
+    }
+  })
+
+  const adapter = createCodexHostAgentAdapter(windowObject)
+  const bridge = createAgentBridge(adapter)
+  assert.deepEqual(await bridge.startCodexLogin(), {
+    status: 'waiting',
+    browserOpened: true
+  })
+  assert.equal(loginRequests, 1)
+})
+
 test('Codex host adapter falls back from Cowart MCP to OpenAI host', async () => {
   const messages = []
   const windowObject = eventWindow({
