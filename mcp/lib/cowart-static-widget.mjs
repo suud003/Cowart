@@ -75,10 +75,10 @@ function npmInstallCommand() {
   if (process.platform === "win32") {
     return {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", "npm", "install"],
+      args: ["/d", "/s", "/c", "npm", "install", "--omit=dev"],
     };
   }
-  return { command: "npm", args: ["install"] };
+  return { command: "npm", args: ["install", "--omit=dev"] };
 }
 
 function runViteBuild(outDir) {
@@ -287,9 +287,23 @@ function isExternalResourceValue(value) {
 }
 
 async function readBuildAsset(outDir, assetPath, consumedAssets) {
-  const normalized = assetPath.replace(/^\//, "");
+  const normalized = normalizeBuildAssetPath(assetPath);
   consumedAssets?.add(normalized);
   return readFile(path.join(outDir, normalized), "utf8");
+}
+
+export function normalizeBuildAssetPath(assetPath) {
+  const normalized = String(assetPath || "").replace(/^(?:\.\/|\/)+/, "");
+  if (
+    !normalized
+    || normalized === ".."
+    || normalized.startsWith("../")
+    || normalized.includes("\\")
+    || path.isAbsolute(normalized)
+  ) {
+    throw new Error(`Invalid Yogurt AI widget build asset path: ${assetPath}`);
+  }
+  return normalized;
 }
 
 async function replaceAsync(source, pattern, replacer) {

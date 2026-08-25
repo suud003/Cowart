@@ -7,6 +7,7 @@ const DEFAULT_CLIENT_INFO = Object.freeze({
   title: 'Yogurt AI Desktop',
   version: '0.1.0'
 })
+const THREAD_LIFECYCLE_TIMEOUT_MS = 120_000
 
 const SIMPLE_APPROVAL_DECISIONS = new Set([
   'accept',
@@ -70,6 +71,7 @@ export class CodexAppServerClient extends EventEmitter {
   #child = null
   #clientInfo
   #command
+  #commandPrefixArgs
   #createLineReader
   #cwd
   #env
@@ -88,6 +90,7 @@ export class CodexAppServerClient extends EventEmitter {
 
   constructor({
     command = 'codex',
+    commandPrefixArgs = [],
     args = ['app-server', '--listen', 'stdio://'],
     cwd = process.cwd(),
     env = process.env,
@@ -102,11 +105,15 @@ export class CodexAppServerClient extends EventEmitter {
     if (typeof command !== 'string' || !command.trim()) {
       throw new TypeError('Codex sidecar command must be a non-empty string.')
     }
+    if (!Array.isArray(commandPrefixArgs) || commandPrefixArgs.some((arg) => typeof arg !== 'string')) {
+      throw new TypeError('Codex sidecar commandPrefixArgs must be an array of strings.')
+    }
     if (!isRecord(clientInfo) || !String(clientInfo.name || '').trim()) {
       throw new TypeError('clientInfo.name is required for the Codex App Server handshake.')
     }
 
     this.#command = command
+    this.#commandPrefixArgs = commandPrefixArgs.slice()
     this.#args = args.map(String)
     this.#cwd = cwd
     this.#env = env
@@ -159,7 +166,7 @@ export class CodexAppServerClient extends EventEmitter {
 
     let child
     try {
-      child = this.#spawnProcess(this.#command, this.#args, {
+      child = this.#spawnProcess(this.#command, [...this.#commandPrefixArgs, ...this.#args], {
         cwd: this.#cwd,
         env: this.#env,
         shell: false,
@@ -183,8 +190,8 @@ export class CodexAppServerClient extends EventEmitter {
       this.#stderr = `${this.#stderr}${text}`.slice(-32_000)
       this.emit('stderr', text)
     })
-    child.once('error', (error) => this.#handleProcessError(error))
-    child.once('exit', (code, signal) => this.#handleProcessExit(code, signal))
+    child.once('error', (error) => this.#handleProcessError(child, error))
+    child.once('exit', (code, signal) => this.#handleProcessExit(child, code, signal))
 
     try {
       const initializeResult = await this.#requestRaw('initialize', {
@@ -204,6 +211,8 @@ export class CodexAppServerClient extends EventEmitter {
           child.kill()
         } catch {
           // The process may already have exited while initialization failed.
+        } finally {
+          this.#cleanupChild(child)
         }
       }
       this.#transition('failed', { error: String(cause?.message || cause) })
@@ -253,12 +262,12 @@ export class CodexAppServerClient extends EventEmitter {
     return this.#write({ method, params: isRecord(params) ? params : {} })
   }
 
-  startThread(params = {}) {
-    return this.request('thread/start', params)
+  startThread(params = {}, { timeoutMs = THREAD_LIFECYCLE_TIMEOUT_MS } = {}) {
+    return this.request('thread/start', params, { timeoutMs })
   }
 
-  resumeThread(threadId, overrides = {}) {
-    return this.request('thread/resume', { ...overrides, threadId })
+  resumeThread(threadId, overrides = {}, { timeoutMs = THREAD_LIFECYCLE_TIMEOUT_MS } = {}) {
+    return this.request('thread/resume', { ...overrides, threadId }, { timeoutMs })
   }
 
   startTurn(threadId, input, overrides = {}) {
@@ -323,6 +332,26 @@ export class CodexAppServerClient extends EventEmitter {
     await this.#write({ id: request.id, result })
     this.#pendingServerRequests.delete(key)
     return { requestId: key }
+  }
+
+  async rejectServerRequest(requestId, {
+    code = -32601,
+    message = 'Yogurt AI does not support this Codex server request.'
+  } = {}) {
+    const key = String(requestId)
+    const request = this.#pendingServerRequests.get(key)
+    if (!request) throw new Error(`No pending server request exists for request ${key}.`)
+    const normalizedCode = Number.isInteger(code) ? code : -32601
+    const normalizedMessage = String(message || 'Unsupported Codex server request.').trim()
+    await this.#write({
+      id: request.id,
+      error: {
+        code: normalizedCode,
+        message: normalizedMessage || 'Unsupported Codex server request.'
+      }
+    })
+    this.#pendingServerRequests.delete(key)
+    return { requestId: key, code: normalizedCode }
   }
 
   async stop({ forceAfterMs = 2_000 } = {}) {
@@ -439,6 +468,12 @@ export class CodexAppServerClient extends EventEmitter {
 
     if (typeof message.method === 'string') {
       const notification = { method: message.method, params: message.params ?? {} }
+      if (message.method === 'serverRequest/resolved') {
+        const requestId = notification.params?.requestId
+        if (requestId !== undefined && requestId !== null) {
+          this.#pendingServerRequests.delete(String(requestId))
+        }
+      }
       this.emit('notification', notification)
       this.emit(`notification:${message.method}`, notification.params)
       return
@@ -447,16 +482,26 @@ export class CodexAppServerClient extends EventEmitter {
     this.emit('protocolError', lifecycleError('Codex App Server emitted an unrecognized JSONL message.'))
   }
 
-  #handleProcessError(cause) {
+  #handleProcessError(child, cause) {
+    if (this.#child !== child) return
     const error = lifecycleError('Codex App Server process error.', cause)
     this.emit('processError', error)
     this.#rejectPending(error)
+    this.#pendingServerRequests.clear()
+    try {
+      child.kill()
+    } catch {
+      // A failed child may already be gone.
+    } finally {
+      this.#cleanupChild(child)
+    }
     if (this.#status !== 'stopping' && this.#status !== 'stopped') {
       this.#transition('failed', { error: error.message })
     }
   }
 
-  #handleProcessExit(code, signal) {
+  #handleProcessExit(child, code, signal) {
+    if (this.#child !== child) return
     const wasStopping = this.#status === 'stopping' || this.#status === 'stopped'
     const details = {
       code: Number.isInteger(code) ? code : null,
@@ -468,7 +513,7 @@ export class CodexAppServerClient extends EventEmitter {
     )
     this.#rejectPending(error)
     this.#pendingServerRequests.clear()
-    this.#cleanupChild()
+    this.#cleanupChild(child)
     this.#transition(wasStopping ? 'stopped' : 'failed', details)
     this.emit('exit', details)
   }
@@ -481,7 +526,8 @@ export class CodexAppServerClient extends EventEmitter {
     this.#pending.clear()
   }
 
-  #cleanupChild() {
+  #cleanupChild(child = this.#child) {
+    if (child && this.#child !== child) return
     this.#stdoutReader?.close?.()
     this.#stdoutReader = null
     this.#child = null
@@ -517,5 +563,6 @@ export const CODEX_APP_SERVER_PROTOCOL = Object.freeze({
   transport: 'stdio-jsonl',
   websocket: false,
   experimentalApiDefault: false,
+  threadLifecycleTimeoutMs: THREAD_LIFECYCLE_TIMEOUT_MS,
   approvalDecisions: Object.freeze(Array.from(SIMPLE_APPROVAL_DECISIONS))
 })

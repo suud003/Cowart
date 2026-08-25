@@ -5,7 +5,10 @@ import { createReadStream, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 
+import { desktopCspPlugin } from './desktop/content-security-policy.mjs'
+
 const projectDir = resolve(process.env.COWART_PROJECT_DIR ?? process.cwd())
+const cowartWidgetBuild = process.env.COWART_WIDGET_BUILD === '1'
 const cowartAppVersion = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8')
 ).version
@@ -764,12 +767,13 @@ function canvasStoragePlugin() {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), canvasStoragePlugin()],
+export default defineConfig(({ command }) => ({
+  base: './',
+  plugins: [react(), desktopCspPlugin({ widgetBuild: cowartWidgetBuild }), canvasStoragePlugin()],
   define: {
-    __COWART_WIDGET_BUILD__: JSON.stringify(process.env.COWART_WIDGET_BUILD === '1'),
+    __COWART_WIDGET_BUILD__: JSON.stringify(cowartWidgetBuild),
     __COWART_APP_VERSION__: JSON.stringify(cowartAppVersion),
-    'process.env.NODE_ENV': JSON.stringify('development')
+    'process.env.NODE_ENV': JSON.stringify(command === 'serve' ? 'development' : 'production')
   },
   build: {
     modulePreload: false,
@@ -788,4 +792,4 @@ export default defineConfig({
       ignored: ['**/screenshots/**']
     }
   }
-})
+}))

@@ -4,54 +4,65 @@
   <img src="assets/app-icon.png" width="84" alt="Yogurt AI icon">
 </p>
 
-<p align="center"><strong>Turn scattered material into a product-thinking canvas you can understand, edit, and deliver.</strong></p>
+<p align="center"><strong>Think on the canvas, hand the work to Codex Agent, and bring the result back for the next iteration.</strong></p>
+
+<p align="center"><strong>Yogurt AI Desktop · Beta</strong> · Local-first · Editable canvas · Codex Agent bridge</p>
 
 <p align="center">
   <a href="README.md">中文</a> ·
-  <a href="#from-inspiration-to-deliverables">Product experience</a> ·
-  <a href="#core-capabilities">Capabilities</a> ·
+  <a href="#one-complete-product-workflow">Product experience</a> ·
+  <a href="#core-experience">Core experience</a> ·
   <a href="#complete-case-an-ai-interactive-filmgame">Complete case</a> ·
-  <a href="#installation">Installation</a> ·
+  <a href="#install-and-launch-the-desktop-app-beta">Desktop app</a> ·
   <a href="#three-minute-quick-start">Quick start</a>
 </p>
 
-Yogurt AI is a visual thinking and product-creation canvas for Codex. Give it documents, notes, images, conversation context, and accessible TAPD content. In one editable workspace, you can organize evidence and ideas, explain a system, generate PRDs and interactive prototypes, review the result, and turn the canvas into images, HTML, Slides, or PowerPoint.
+Yogurt AI is an installable AI product workspace, available as both a standalone desktop app and a Codex plugin. It puts a native tldraw infinite canvas and Codex Agent in the same interface. Bring in documents, notes, images, conversations, and authorized TAPD content; select real canvas objects; then ask the agent to organize material, complete a product structure, or generate a line diagram, PRD, or interactive prototype.
 
-The result is not a static picture. Cards, zones, relations, prototypes, and creative content remain available for selection, movement, follow-up questions, and revision. Important changes can be previewed and safely undone.
+The agent reads the active page and stable object IDs while streaming status, plans, and change summaries back into the workspace. Sensitive actions are approved in place. Results remain selectable, movable, editable, and open to follow-up questions instead of becoming a static image. The canvas is both the starting point for thought and the shared record after the agent finishes.
 
 <p align="center">
-  <img src="docs/images/yogurt-ai-knowledge-map.png" width="100%" alt="Yogurt AI organizes scattered research into an editable knowledge map">
+  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop shows the native canvas and Codex Agent workbench in one window">
 </p>
-<p align="center"><sub>Start with source material, behavioral observations, and open questions; grow them into hypotheses and a next experiment.</sub></p>
+<p align="center"><sub>The native canvas and Codex Agent workbench share the active project, page, and object context in one window.</sub></p>
 
-## From Inspiration To Deliverables
+## One Complete Product Workflow
 
 ```mermaid
 flowchart LR
-  A["Documents / notes / images / TAPD"] --> B["Organize sources, evidence, and questions"]
-  B --> C["Explain flows, systems, and key takeaways"]
-  C --> D["Generate PRDs and interactive prototypes"]
-  D --> E["Review, annotate, and return insights"]
-  E --> F["Images / HTML / Slides / PPTX"]
-  E --> B
+  A["Documents / notes / images / TAPD"] --> B["Organize evidence, hypotheses, and questions on canvas"]
+  B --> C["Select objects and hand a task to Codex Agent"]
+  C --> D["Agent creates diagrams / PRDs / prototypes"]
+  D --> E["Watch progress, approve actions, review results"]
+  E --> F["Return to canvas and export deliverables"]
+  F --> B
 ```
 
-| What you are doing | What Yogurt AI produces | What you can do next |
+| Where you begin | How Codex Agent participates | What remains |
 | --- | --- | --- |
-| Digesting research, meetings, and requirements | Source-linked cards that separate facts, observations, hypotheses, and questions | Cluster, connect, and question the material until a panorama emerges |
-| Explaining a complex flow or system | An editable line diagram with a central takeaway and clear reading order | Move nodes, rewrite relations, and add states or exceptions |
-| Turning a product idea into a plan | Shaping documents, module PRDs, and interactive pages | Annotate the real UI, review it beside the requirements, and return conclusions to the canvas |
-| Creating visual content and presentations | Generated or revised images, HTML, and Slides | Present, download, or consolidate everything into panorama HTML and PowerPoint |
+| Scattered research, meeting notes, and requirement links | Organizes source-grounded facts, observations, hypotheses, and open questions | A knowledge panorama you can keep clustering, connecting, and questioning |
+| A group of cards or a system that needs explanation | Reads the active page and exact selection, then plans and creates a semantic structure | Native editable cards, zones, and bound connectors |
+| An incomplete product idea | Completes constraints and acceptance criteria, then creates PRDs and interactive pages | A reviewable product workspace with annotations and canvas return |
+| A mature canvas | Consolidates cards, images, HTML, Slides, and freehand work | A shareable HTML panorama or editable PowerPoint |
 
-## Core Capabilities
+## Core Experience
 
-### 1. Organize Real Source Material On A Canvas
+### 1. Give The Canvas And Codex Agent The Same Context
+
+The desktop app includes a persistent Codex Agent workbench on the right. It knows the active project, page, selected objects, and their stable IDs. Yogurt AI saves the latest canvas before sending a task, so the agent works from the real structure in front of you instead of a screenshot with drifting coordinates.
+
+Write any request or start with `Organize selection`, `Generate PRD`, or `Generate diagram`. While Codex works, the panel streams replies, plans, change summaries, and task status. You can approve or reject controlled actions and interrupt an active turn. Reopening the same project resumes its saved agent session.
 
 After you import documents, images, and notes, Yogurt AI preserves source paths and verbatim excerpts while recording agent summaries and inference separately. Work with cards, relations, zones, and freehand annotations as you would on a whiteboard, or ask the agent to build a panorama around one question.
 
 When only a local area needs revision, use `AI 圈选` to circle the relevant objects and add arrows, strike-throughs, groups, or written instructions. The agent combines the selected content and your marks to update that area while leaving everything outside it in place.
 
-![Circle material and continue organizing it through annotations in Yogurt AI](docs/images/yogurt-ai-lasso.png)
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/yogurt-ai-knowledge-map.png" alt="Yogurt AI organizes scattered research into an editable knowledge map"><br><strong>Grow material into structure</strong>: turn sources, observations, and questions into hypotheses and a next experiment.</td>
+    <td width="50%"><img src="docs/images/yogurt-ai-lasso.png" alt="Circle material and continue organizing it through annotations in Yogurt AI"><br><strong>Change only what needs attention</strong>: select objects and add annotations while leaving the rest of the canvas in place.</td>
+  </tr>
+</table>
 
 ### 2. Turn Complex Relationships Into Editable Line Diagrams
 
@@ -120,35 +131,71 @@ Yogurt AI keeps creation and delivery tools in the same menu:
 
 [Browse the complete product case](examples/product-bridge/ai-interactive-film-case/) · [Browse the canvas line-diagram case](examples/semantic-diagram/ai-interactive-film-system/)
 
-## Installation
+## Install And Launch The Desktop App (Beta)
 
-You need Node.js and Git. Use Codex CLI to install the plugin; open the Codex desktop app for the full interactive canvas experience. Run:
+Yogurt AI Desktop currently targets local trials and development validation. It starts the canvas and the Codex Agent bridge on your machine, while project material, canvas data, and the session reference remain in the workspace you choose.
+
+### Prerequisites
+
+- Node.js, npm, and Git.
+- Codex CLI installed and already signed in.
+- On Windows, install it globally through npm and keep npm's default location so the desktop app can find it automatically.
 
 ```bash
+npm install -g @openai/codex
+codex login
 git clone https://github.com/suud003/Cowart.git
 cd Cowart
 npm install
+npm run desktop
+```
+
+`npm run desktop` builds the renderer and opens the Yogurt AI window. The current directory is the default workspace. To save the canvas and run the agent in another product repository, set its path first.
+
+PowerShell:
+
+```powershell
+$env:YOGURT_WORKSPACE_ROOT = 'D:\path\to\your-product'
+npm run desktop
+```
+
+macOS / Linux:
+
+```bash
+YOGURT_WORKSPACE_ROOT=/path/to/your-product npm run desktop
+```
+
+If Windows cannot locate Codex CLI automatically, point Yogurt AI at the npm-installed entry explicitly:
+
+```powershell
+$env:YOGURT_CODEX_JS = "$env:APPDATA\npm\node_modules\@openai\codex\bin\codex.js"
+npm run desktop
+```
+
+The desktop bridge uses [Codex App Server](https://learn.chatgpt.com/docs/app-server), which is still experimental. After upgrading Codex CLI, run `npm run probe:desktop` to check compatibility. A distributable build should pin and validate the matching Codex version. See [`desktop/README.md`](desktop/README.md) for implementation and troubleshooting notes.
+
+### Enable The Complete Yogurt AI Workflow (Recommended)
+
+The desktop app already includes its controlled canvas bridge. To also enable the repository's purpose-built skills for source organization, semantic diagrams, Product Bridge, and image creation, install the plugin once:
+
+```bash
 npm run build
-codex plugin marketplace add <absolute-path-to-Cowart>
+codex plugin marketplace add .
 codex plugin add cowart-thinking-canvas@cowart-thinking-github
 codex plugin list
 ```
 
-After installation, enter `/plugins` in Codex CLI to confirm that Yogurt AI is enabled, then start a new task so its skills and canvas tools load completely. See the [Codex Plugins documentation](https://learn.chatgpt.com/docs/plugins) for other installation surfaces.
+After installation, enter `/plugins` in Codex CLI to confirm that Yogurt AI is enabled, then reopen the desktop app or start a new Codex task so its full capabilities load. See the [Codex Plugins documentation](https://learn.chatgpt.com/docs/plugins) for other installation surfaces.
 
 ## Three-minute Quick Start
 
-### 1. Open The Canvas
+### 1. Open A Real Project
 
-In a new Codex task, ask:
+Point `YOGURT_WORKSPACE_ROOT` at a product repository and run `npm run desktop`. Yogurt AI reads and saves its canvas there, while the panel on the right connects to the local Codex Agent.
 
-```text
-Open the Yogurt AI canvas for this project.
-```
+### 2. Add Material And Build The First Structure
 
-### 2. Add Material And Grow The First Map
-
-Put documents, images, or notes in the active project, then ask:
+Put documents, images, or notes in the active project, then send this from the agent workbench:
 
 ```text
 Organize the material under docs/research in Yogurt AI.
@@ -157,14 +204,17 @@ hypotheses, and open questions, then build an editable panorama around
 “why users abandon this workflow.”
 ```
 
-### 3. Choose The Next Deliverable
+### 3. Select Objects And Hand Off The Next Step
 
-Circle content directly or open the `Yogurt AI` menu in the upper-right corner:
+Select the cards you want to advance, choose a quick task in the agent workbench, or state the goal directly:
 
-- To explain a flow or system, choose `生成画布框线图`.
-- To advance a product plan, choose `生成交互 PRD`.
-- To create visual content, add an `AI 图片`, `AI HTML`, or `AI Slides` shape.
-- To share the result, choose `整合为 HTML` or `整合为 PowerPoint`.
+- `Turn this selection into a line diagram that explains the central takeaway.`
+- `Use these materials and accessible TAPD content to create a reviewable PRD and interactive prototype.`
+- `Return the confirmed review conclusions to the original canvas while preserving provenance.`
+
+### 4. Review, Return, And Deliver
+
+Follow the agent's plan and change summaries in the workbench, approving controlled actions when needed. Continue moving or rewriting the resulting canvas objects. When the work is ready, use the `Yogurt AI` menu to consolidate it as HTML or PowerPoint, or continue creating AI images, HTML, and Slides.
 
 ![Yogurt AI brings canvas organization, diagrams, PRDs, creation, and export into one menu](examples/product-bridge/ai-interactive-film-case/docs/images/yogurt-new-actions.png)
 
@@ -176,6 +226,8 @@ Circle content directly or open the `Yogurt AI` menu in the upper-right corner:
 - Non-trivial changes show a preview first, write only after the canvas is still in the expected state, and retain guarded undo.
 - Precise SVG blocks pass structural and script-safety validation before entering the canvas.
 - Files outside the project are copied into canvas materials only with explicit user permission.
+- The desktop app connects to Codex App Server over local stdio. The web renderer cannot issue arbitrary RPC calls, shell commands, process-spawn requests, or MCP tool calls outside the allowlist.
+- Agent requests to change files or execute commands are surfaced in the workbench for user approval.
 
 ## Technical Information
 
@@ -210,6 +262,7 @@ node skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs --root <ar
 npm install
 npm run dev
 npm run build
+npm run desktop
 ```
 
 You can also start the Vite canvas preview for a specific user project:
@@ -218,13 +271,16 @@ You can also start the Vite canvas preview for a specific user project:
 ./scripts/start-canvas.sh /path/to/user/project
 ```
 
-The local Vite page is a UI development surface and does not include the Codex agent message bridge. Use the native Yogurt AI canvas inside Codex to send AI lasso, line-diagram, and Product Bridge requests directly.
+The local Vite page is only a canvas UI development surface and does not include the Codex Agent bridge. Run `npm run desktop` for the complete local agent workbench. You can also install the Yogurt AI plugin in Codex to use the native widget with the same canvas capabilities.
 
 Useful environment variables:
 
 - `COWART_PORT`: local service port, default `43217`.
 - `COWART_PROJECT_DIR`: the user project that owns the canvas data.
 - `COWART_CANVAS_DIR`: canvas data directory, default `$COWART_PROJECT_DIR/canvas`.
+- `YOGURT_WORKSPACE_ROOT`: product project used by the desktop app.
+- `YOGURT_CODEX_JS`: explicit Codex CLI JavaScript entry when Windows discovery is unavailable.
+- `YOGURT_VITE_DEV_URL`: local Vite URL for desktop development; only loopback HTTP URLs are accepted.
 
 </details>
 

@@ -65,6 +65,10 @@ function analyticsToolCaller(windowObject) {
   return null
 }
 
+function allowsGoogleTagFallback(windowObject) {
+  return !windowObject?.yogurtAgent
+}
+
 function anonymousClientId(windowObject) {
   try {
     const stored = windowObject.localStorage?.getItem(ANALYTICS_CLIENT_ID_STORAGE_KEY)
@@ -161,6 +165,13 @@ export function createCowartAnalytics({
     { eventCallback, eventTimeout = ANALYTICS_EVENT_TIMEOUT_MS } = {}
   ) {
     try {
+      // The desktop renderer exposes privileged Codex and canvas IPC bridges.
+      // Never execute a remote analytics script in that renderer; desktop
+      // events use the allowlisted MCP analytics tool exclusively.
+      if (!allowsGoogleTagFallback(windowObject)) {
+        eventCallback?.()
+        return false
+      }
       if (!initialize()) return false
 
       windowObject.gtag('event', eventName, {
@@ -208,7 +219,7 @@ export function createCowartAnalytics({
       }
       queueGoogleTagEvent(eventName, parameters, { eventCallback, eventTimeout })
     }).catch((error) => {
-      console.warn('Cowart MCP analytics delivery failed; trying the Google tag fallback.', error)
+      console.warn('Cowart MCP analytics delivery failed.', error)
       queueGoogleTagEvent(eventName, parameters, { eventCallback, eventTimeout })
     })
     return true

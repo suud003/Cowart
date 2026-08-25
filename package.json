@@ -1,7 +1,7 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.1+codex.20260825",
-  "description": "A source-grounded thinking canvas with reversible edits and reviewable product workspaces.",
+  "version": "0.2.2+codex.20260825",
+  "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
   "private": true,
   "license": "MIT",
   "repository": {
@@ -16,10 +16,12 @@
   "scripts": {
     "sync:excalidraw-fonts": "node ./scripts/sync-excalidraw-fonts.mjs",
     "check:plugin": "node ./scripts/check-plugin-metadata.mjs && node ./scripts/check-agent-plugin.mjs",
-    "check": "node --check ./mcp/server.mjs && node --check ./mcp/lib/plugin-root.mjs && node --check ./mcp/lib/widget-resource.mjs && node --check ./mcp/lib/cowart-static-widget.mjs && node --check ./mcp/lib/canvas-storage.mjs && node --check ./mcp/lib/ga4-analytics.mjs && node --check ./mcp/lib/thinking-canvas.mjs && node --check ./mcp/lib/thinking-layout.mjs && node --check ./mcp/lib/thinking-tools.mjs && node --check ./src/agentLasso.js && node --check ./src/agentLassoGeometry.js && node --check ./src/analytics.js && node --check ./src/annotationContext.js && node --check ./src/canvasExportDocument.js && node --check ./src/canvasPptx.js && node --check ./src/cowartGeoTypes.js && node --check ./src/cowartTheme.js && node --check ./src/cowartTypography.js && node --check ./src/excalidrawInteraction.js && node --check ./src/htmlDraftSecurity.js && node --check ./src/productBridgePrompt.js && node --check ./src/semanticDiagramPrompt.js && node --check ./src/selectionContext.js && node --check ./src/thinkingReviewPrompt.js && node --check ./src/widgetMessaging.js && node --check ./skills/cowart-product-bridge/assets/container/app.js && node --check ./skills/cowart-product-bridge/assets/container/annotation-geometry.js && node --check ./skills/cowart-product-bridge/assets/container/semantic-canvas-layout.js && node --check ./skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs && node --check ./scripts/probe-analytics.mjs && node --check ./scripts/probe-ga4.mjs && node --check ./scripts/probe-mcp.mjs && node --check ./scripts/start-mcp.mjs && node --check ./scripts/sync-excalidraw-fonts.mjs && node --check ./scripts/vite-build-once.mjs",
+    "check": "node --check ./mcp/server.mjs && node --check ./mcp/lib/plugin-root.mjs && node --check ./mcp/lib/widget-resource.mjs && node --check ./mcp/lib/cowart-static-widget.mjs && node --check ./mcp/lib/canvas-storage.mjs && node --check ./mcp/lib/ga4-analytics.mjs && node --check ./mcp/lib/thinking-canvas.mjs && node --check ./mcp/lib/thinking-layout.mjs && node --check ./mcp/lib/thinking-tools.mjs && node --check ./desktop/agent-service.mjs && node --check ./desktop/codex-app-server-client.mjs && node --check ./desktop/content-security-policy.mjs && node --check ./desktop/ipc-bridge.mjs && node --check ./desktop/launcher.cjs && node --check ./desktop/main.mjs && node --check ./desktop/preload.cjs && node --check ./desktop/runtime-config.mjs && node --check ./src/agentBridge.js && node --check ./src/codexHostAgentAdapter.js && node --check ./src/agentLasso.js && node --check ./src/agentLassoGeometry.js && node --check ./src/analytics.js && node --check ./src/annotationContext.js && node --check ./src/canvasExportDocument.js && node --check ./src/canvasPptx.js && node --check ./src/canvasSync.js && node --check ./src/cowartGeoTypes.js && node --check ./src/cowartTheme.js && node --check ./src/cowartTldrawAssets.js && node --check ./src/cowartTypography.js && node --check ./src/excalidrawInteraction.js && node --check ./src/htmlDraftSecurity.js && node --check ./src/productBridgePrompt.js && node --check ./src/semanticDiagramPrompt.js && node --check ./src/selectionContext.js && node --check ./src/thinkingReviewPrompt.js && node --check ./src/widgetMessaging.js && node --check ./skills/cowart-product-bridge/assets/container/app.js && node --check ./skills/cowart-product-bridge/assets/container/annotation-geometry.js && node --check ./skills/cowart-product-bridge/assets/container/semantic-canvas-layout.js && node --check ./skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs && node --check ./scripts/probe-analytics.mjs && node --check ./scripts/probe-desktop.mjs && node --check ./scripts/probe-ga4.mjs && node --check ./scripts/probe-mcp.mjs && node --check ./scripts/start-mcp.mjs && node --check ./scripts/sync-excalidraw-fonts.mjs && node --check ./scripts/vite-build-once.mjs",
     "test": "node --test test/*.test.mjs",
     "dev": "vite",
     "build": "node ./scripts/vite-build-once.mjs",
+    "desktop": "npm run build && electron ./desktop/launcher.cjs",
+    "probe:desktop": "node ./scripts/probe-desktop.mjs",
     "preview": "vite preview",
     "probe:mcp": "node ./scripts/probe-mcp.mjs",
     "probe:analytics": "node ./scripts/probe-analytics.mjs",
@@ -43,5 +45,8 @@
     "tldraw": "^5.1.1",
     "vite": "^7.0.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "electron": "44.0.0"
   }
 }

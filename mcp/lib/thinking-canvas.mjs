@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
@@ -8,6 +8,7 @@ import { generateKeyBetween } from "fractional-indexing";
 
 import { COWART_CARD_GEO } from "../../src/cowartGeoTypes.js";
 import {
+  cowartSnapshotRevision,
   readCowartCanvasState,
   readCowartSelectionState,
   resolveCanvasDir,
@@ -883,8 +884,7 @@ function shapeContext(store, shape, selected, maxTextLength) {
 }
 
 export function snapshotRevision(snapshot) {
-  const content = JSON.stringify(snapshot?.store ?? {});
-  return createHash("sha256").update(content).digest("hex").slice(0, 20);
+  return cowartSnapshotRevision(snapshot);
 }
 
 export function summarizeThinkingContext({
@@ -2566,7 +2566,10 @@ export async function applyThinkingOperations(args = {}, options = {}) {
 
   let saveResult;
   try {
-    saveResult = await saveCowartCanvasSnapshot(args, result.snapshot);
+    saveResult = await saveCowartCanvasSnapshot(
+      { ...args, baseRevision: state.revision },
+      result.snapshot,
+    );
     if (!saveResult.ok) {
       throw new Error(saveResult.message || "Yogurt AI refused to persist the thinking operation batch.");
     }
@@ -2632,7 +2635,10 @@ export async function undoThinkingOperation(args = {}, options = {}) {
   }
 
   const beforeSnapshot = await validateSnapshot(candidate.value.beforeSnapshot);
-  const saveResult = await saveCowartCanvasSnapshot(args, beforeSnapshot);
+  const saveResult = await saveCowartCanvasSnapshot(
+    { ...args, baseRevision: state.revision },
+    beforeSnapshot,
+  );
   if (!saveResult.ok) throw new Error(saveResult.message || "Yogurt AI refused to persist the undo snapshot.");
 
   const updatedHistory = {

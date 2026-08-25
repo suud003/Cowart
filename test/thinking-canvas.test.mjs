@@ -1201,6 +1201,25 @@ test("snapshot revisions change only when canvas records change", () => {
   assert.notEqual(snapshotRevision(initial), snapshotRevision(created.snapshot));
 });
 
+test("an MCP-shaped request can atomically create the first card on empty storage", async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), "cowart-thinking-empty-cas-"));
+  try {
+    const initial = await getThinkingContext({ projectDir }, { scope: "page" });
+    const input = {
+      projectDir,
+      baseRevision: initial.revision,
+      operations: [{ type: "create_card", role: "question", title: "First persisted card" }],
+    };
+
+    const applied = await applyThinkingOperations(input, input);
+    assert.equal(applied.applied, true);
+    assert.notEqual(applied.resultRevision, initial.revision);
+    assert.equal((await getThinkingContext({ projectDir }, { scope: "page" })).shapes.length, 1);
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
 test("persistent operation previews, applies, and undoes without overwriting later work", async () => {
   const projectDir = await mkdtemp(path.join(tmpdir(), "cowart-thinking-test-"));
   try {

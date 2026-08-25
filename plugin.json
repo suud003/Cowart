@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cowart-thinking-canvas",
-  "version": "0.2.1+codex.20260825",
-  "description": "A source-grounded thinking canvas with reversible edits and reviewable product workspaces.",
+  "version": "0.2.2+codex.20260825",
+  "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
   "author": {
     "name": "ZHONG XIN",
     "email": "zhongxin123456@gmail.com",
@@ -16,6 +16,8 @@
     "tldraw",
     "whiteboard",
     "image-generation",
-    "visual-collaboration"
+    "visual-collaboration",
+    "codex-agent",
+    "electron"
   ]
 }

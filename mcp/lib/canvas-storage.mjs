@@ -1,11 +1,17 @@
-import { randomUUID } from "node:crypto";
-import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { copyFile, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
 const PAGE_ID_PREFIX = "page:";
 const GLOBAL_ASSETS_ROUTE = "/assets/";
 const PAGE_ASSETS_ROUTE = "/page-assets/";
 const CANVAS_FILE_NAME = "cowart-canvas.json";
+const CANVAS_SAVE_LOCK_FILE = ".cowart-canvas-save.lock";
+const CANVAS_SAVE_LOCK_HEARTBEAT_MS = 2_000;
+const CANVAS_SAVE_LOCK_STALE_MS = 15_000;
+const CANVAS_SAVE_LOCK_HARD_STALE_MS = 5 * 60_000;
+const CANVAS_SAVE_LOCK_TIMEOUT_MS = 20_000;
+const canvasSaveQueues = new Map();
 
 const mimeTypes = new Map([
   [".apng", "image/apng"],
@@ -28,6 +34,26 @@ export function pathResolve(value) {
   return resolve(String(value));
 }
 
+function canonicalJsonValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalJsonValue);
+  if (!value || typeof value !== "object") return value;
+
+  const canonical = Object.create(null);
+  for (const key of Object.keys(value).sort()) {
+    canonical[key] = canonicalJsonValue(value[key]);
+  }
+  return canonical;
+}
+
+export function cowartSnapshotRevision(snapshot) {
+  // A tldraw store is an ID-addressed record map: object insertion order has no
+  // semantic meaning. Per-page persistence can legitimately reload the same
+  // records in a different order, so hash a canonical representation rather
+  // than the current in-memory key order.
+  const content = JSON.stringify(canonicalJsonValue(snapshot?.store ?? {}));
+  return createHash("sha256").update(content).digest("hex").slice(0, 20);
+}
+
 export function resolveCowartPaths(args = {}) {
   const explicitProjectDir = nonEmptyString(args.projectDir);
   const explicitCanvasDir = nonEmptyString(args.canvasDir);
@@ -46,6 +72,125 @@ export function resolveCowartPaths(args = {}) {
 
 export function resolveCanvasDir(args = {}) {
   return resolveCowartPaths(args).canvasDir;
+}
+
+function canvasSaveQueueKey(args) {
+  const canvasDir = resolveCanvasDir(args);
+  return process.platform === "win32" ? canvasDir.toLowerCase() : canvasDir;
+}
+
+function waitForCanvasSaveLock(delayMs) {
+  return new Promise((resolveWait) => setTimeout(resolveWait, delayMs));
+}
+
+function processExists(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+async function reclaimStaleCanvasSaveLock(lockPath) {
+  let lockStat;
+  let owner = null;
+  try {
+    [lockStat, owner] = await Promise.all([
+      stat(lockPath),
+      readFile(lockPath, "utf8")
+        .then((content) => JSON.parse(content))
+        .catch(() => null),
+    ]);
+  } catch (error) {
+    if (error?.code === "ENOENT") return true;
+    throw error;
+  }
+
+  const ageMs = Date.now() - lockStat.mtimeMs;
+  if (ageMs < CANVAS_SAVE_LOCK_STALE_MS) return false;
+  if (processExists(Number(owner?.pid)) && ageMs < CANVAS_SAVE_LOCK_HARD_STALE_MS) return false;
+
+  const stalePath = `${lockPath}.stale.${process.pid}.${randomUUID()}`;
+  try {
+    await rename(lockPath, stalePath);
+  } catch (error) {
+    if (["ENOENT", "EACCES", "EPERM"].includes(error?.code)) return false;
+    throw error;
+  }
+  await rm(stalePath, { force: true }).catch(() => undefined);
+  return true;
+}
+
+async function acquireCanvasSaveLock(args) {
+  const canvasDir = resolveCanvasDir(args);
+  const lockPath = join(canvasDir, CANVAS_SAVE_LOCK_FILE);
+  const token = `${process.pid}:${randomUUID()}`;
+  const startedAt = Date.now();
+  await mkdir(canvasDir, { recursive: true });
+
+  while (true) {
+    let lockHandle;
+    try {
+      lockHandle = await open(lockPath, "wx");
+      await lockHandle.writeFile(`${JSON.stringify({ version: 1, token, pid: process.pid })}\n`);
+
+      const heartbeat = setInterval(() => {
+        const now = new Date();
+        lockHandle.utimes(now, now).catch(() => undefined);
+      }, CANVAS_SAVE_LOCK_HEARTBEAT_MS);
+      heartbeat.unref?.();
+
+      return async () => {
+        clearInterval(heartbeat);
+        await lockHandle.close().catch(() => undefined);
+        try {
+          const owner = JSON.parse(await readFile(lockPath, "utf8"));
+          if (owner?.token === token) await rm(lockPath, { force: true });
+        } catch (error) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+      };
+    } catch (error) {
+      await lockHandle?.close().catch(() => undefined);
+      if (lockHandle && error?.code !== "EEXIST") {
+        await rm(lockPath, { force: true }).catch(() => undefined);
+      }
+      if (error?.code !== "EEXIST") throw error;
+      await reclaimStaleCanvasSaveLock(lockPath);
+      if (Date.now() - startedAt >= CANVAS_SAVE_LOCK_TIMEOUT_MS) {
+        const timeoutError = new Error(`Timed out waiting for the Yogurt AI canvas save lock at ${lockPath}.`);
+        timeoutError.code = "COWART_CANVAS_SAVE_LOCK_TIMEOUT";
+        throw timeoutError;
+      }
+      await waitForCanvasSaveLock(20 + Math.floor(Math.random() * 31));
+    }
+  }
+}
+
+async function withCanvasSaveLock(args, operation) {
+  const release = await acquireCanvasSaveLock(args);
+  try {
+    return await operation();
+  } finally {
+    await release();
+  }
+}
+
+function serializeCanvasSave(args, operation) {
+  const queueKey = canvasSaveQueueKey(args);
+  const previous = canvasSaveQueues.get(queueKey) ?? Promise.resolve();
+  const result = previous.then(() => withCanvasSaveLock(args, operation));
+  const tail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  canvasSaveQueues.set(queueKey, tail);
+
+  return result.finally(() => {
+    if (canvasSaveQueues.get(queueKey) === tail) canvasSaveQueues.delete(queueKey);
+  });
 }
 
 export function resolveSelectionFile(args = {}) {
@@ -650,6 +795,7 @@ export async function readCowartCanvasState(args = {}, { hydrateAssets = false }
     projectDir,
     canvasDir,
     snapshot: hydrated.snapshot,
+    revision: cowartSnapshotRevision(loaded.snapshot),
     path: loaded.path,
     storage: loaded.storage,
     viewState,
@@ -671,25 +817,46 @@ export async function saveCowartCanvasSnapshot(args = {}, snapshot) {
     };
   }
 
-  const previous = await loadStoredCanvasSnapshot(args);
-  const imageLosses = await getUnacknowledgedImageLosses(args, previous.snapshot, sanitized.snapshot);
-  if (imageLosses.length > 0) {
-    return {
-      ok: false,
-      storage: "blocked-destructive-image-loss",
-      paths: [],
-      skippedRecords: sanitized.skippedRecords,
-      blockedImageLosses: imageLosses,
-      message: `Yogurt AI refused to save because ${imageLosses.length} existing image shape(s) disappeared without a user delete confirmation.`,
-    };
-  }
+  return serializeCanvasSave(args, async () => {
+    const previous = await loadStoredCanvasSnapshot(args);
+    const currentRevision = cowartSnapshotRevision(previous.snapshot);
+    const expectedRevision = nonEmptyString(args.baseRevision);
+    if (expectedRevision && expectedRevision !== currentRevision) {
+      return {
+        ok: false,
+        storage: "revision-conflict",
+        paths: [],
+        expectedRevision,
+        currentRevision,
+        skippedRecords: sanitized.skippedRecords,
+        message: `Yogurt AI canvas changed from ${expectedRevision} to ${currentRevision}; reload and merge before saving.`,
+      };
+    }
+    const imageLosses = await getUnacknowledgedImageLosses(args, previous.snapshot, sanitized.snapshot);
+    if (imageLosses.length > 0) {
+      return {
+        ok: false,
+        storage: "blocked-destructive-image-loss",
+        paths: [],
+        skippedRecords: sanitized.skippedRecords,
+        blockedImageLosses: imageLosses,
+        message: `Yogurt AI refused to save because ${imageLosses.length} existing image shape(s) disappeared without a user delete confirmation.`,
+      };
+    }
 
-  const result = await saveStoredCanvasSnapshot(args, sanitized.snapshot);
-  return {
-    ok: true,
-    ...result,
-    skippedRecords: sanitized.skippedRecords,
-  };
+    const result = await saveStoredCanvasSnapshot(args, sanitized.snapshot);
+    const persisted = await loadStoredCanvasSnapshot(args);
+    return {
+      ok: true,
+      ...result,
+      baseRevision: currentRevision,
+      // Persistence can normalize assets (for example, a data URL becomes a
+      // page-local asset URL). Return the revision clients will observe on the
+      // next read, not a hash of the pre-persistence in-memory representation.
+      revision: cowartSnapshotRevision(persisted.snapshot),
+      skippedRecords: sanitized.skippedRecords,
+    };
+  });
 }
 
 export async function readCowartSelectionState(args = {}) {

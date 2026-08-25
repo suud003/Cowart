@@ -70,6 +70,7 @@ import html2canvas from 'html2canvas'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Download, FileCode, Image as ImageIcon, LassoSelect, LockKeyhole, Play, X } from 'lucide-react'
 import 'tldraw/tldraw.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { CowartAgentPanel } from './AgentPanel.jsx'
 import aiHtmlToolIconRaw from './assets/ai-html.svg?raw'
 import aiImageToolIconRaw from './assets/ai-image.svg?raw'
 import aiSlidesToolIconRaw from './assets/ai-slides.svg?raw'
@@ -93,7 +94,7 @@ import {
   hasCowartWidgetBridge,
   loadCowartCanvasState,
   readCowartPageAsset,
-  refreshCowartCanvasSnapshot,
+  refreshCowartCanvasState,
   saveCowartCanvasSnapshot,
   saveCowartReferenceImage,
   saveCowartSelectionState,
@@ -101,10 +102,18 @@ import {
   updateCowartHtmlDraft
 } from './cowartClient.js'
 import {
+  buildCowartTldrawFontUrls,
+  isYogurtDesktopRenderer
+} from './cowartTldrawAssets.js'
+import {
   describeSkippedRecord,
   isCanvasSnapshot,
   sanitizeCanvasSnapshotForTldraw
 } from './canvasSnapshot.js'
+import {
+  classifyRemoteCanvasRefresh,
+  REMOTE_CANVAS_REFRESH_ACTION
+} from './canvasSync.js'
 import {
   COWART_FONT_SIZE_MAX,
   COWART_FONT_SIZE_MIN,
@@ -122,6 +131,7 @@ import { COWART_CARD_GEO } from './cowartGeoTypes.js'
 import {
   imageContentFromDataUrl as dataUrlToImageContent,
   followUpSender,
+  getCowartAgentBridge,
   supportsMessageImages as supportsCowartMessageImages
 } from './widgetMessaging.js'
 import { CowartThinkingReviewToolbar } from './ThinkingReviewToolbar.jsx'
@@ -150,7 +160,7 @@ import {
 } from './semanticDiagramPrompt.js'
 import { getCowartHtmlDraftSandbox } from './htmlDraftSecurity.js'
 
-installCowartHandDrawnFontFaces()
+if (!isYogurtDesktopRenderer()) installCowartHandDrawnFontFaces()
 
 const SELECTION_STATE_ELEMENT_ID = 'cowart-selection-state'
 const PAGE_ASSETS_ROUTE = '/page-assets/'
@@ -189,6 +199,7 @@ const AI_IMAGE_GENERATION_PANEL_ESTIMATED_H = 226
 const AI_IMAGE_GENERATION_STATUS_RESET_MS = 2200
 const AI_IMAGE_REFERENCE_MAX_FILES = 10
 const SKIPPED_RECORDS_NOTICE_AUTO_HIDE_MS = 5000
+const COWART_AGENT_CONTEXT_MAX_SHAPE_IDS = 250
 const COWART_HTML_DRAFT_URL_ORIGIN = 'http://cowart.local'
 const COWART_HTML_DRAFT_EMBED_TYPE = 'cowart_html_draft'
 const AI_IMAGE_ASPECT_PRESETS = [
@@ -347,6 +358,14 @@ const iconSvgSources = import.meta.glob(
   '../node_modules/@tldraw/assets/icons/icon/*.svg',
   { eager: true, query: '?raw', import: 'default' }
 )
+const tldrawFontSources = (
+  typeof __COWART_WIDGET_BUILD__ !== 'undefined' && __COWART_WIDGET_BUILD__
+)
+  ? {}
+  : import.meta.glob(
+      '../node_modules/@tldraw/assets/fonts/*.woff2',
+      { eager: true, query: '?url', import: 'default' }
+    )
 const cowartAssetUrls = buildCowartAssetUrls()
 const cowartAssetObjectUrlCache = new Map()
 const cowartAssetSourceKeys = new Map()
@@ -371,7 +390,12 @@ function buildCowartAssetUrls() {
     const name = path.split('/').pop().replace(/\.svg$/, '')
     icons[name] = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(source)))}`
   }
-  return { icons }
+  if (!isYogurtDesktopRenderer()) return { icons }
+
+  return {
+    icons,
+    fonts: buildCowartTldrawFontUrls(tldrawFontSources)
+  }
 }
 
 function isCowartLocalAssetUrl(src) {
@@ -2619,6 +2643,10 @@ function buildAiSlidesAnnotationEditPrompt({
 async function sendAiSlidesAnnotationEditRequest(editor, slidesShapeId) {
   const sender = followUpSender()
   if (!sender) throw new Error('当前 Yogurt AI 画布没有可用的 Codex MCP 消息桥。')
+  const flushCanvasSnapshot = cowartCanvasSnapshotFlushers.get(editor)
+  if (!flushCanvasSnapshot) {
+    throw new Error('Yogurt AI 画布保存尚未就绪，请稍后再修改 AI Slides。')
+  }
 
   const sourceSlidesShape = editor.getShape(slidesShapeId)
   const sourceItems = getAiSlidesItems(editor, slidesShapeId)
@@ -2636,10 +2664,7 @@ async function sendAiSlidesAnnotationEditRequest(editor, slidesShapeId) {
   const targetSlidesShapeId = createAiSlidesBelowSource(editor, sourceSlidesShape)
 
   try {
-    const saveResult = await saveCowartCanvasSnapshot(editor.store.getStoreSnapshot(), {
-      protectImageRecords: true
-    })
-    if (saveResult?.ok === false) throw new Error(saveResult.message || '新的 AI Slides 保存失败。')
+    await flushCanvasSnapshot()
 
     const prompt = buildAiSlidesAnnotationEditPrompt({
       sourceSlidesShape,
@@ -2672,7 +2697,13 @@ async function sendAiSlidesAnnotationEditRequest(editor, slidesShapeId) {
     )
   } catch (error) {
     editor.deleteShapes([targetSlidesShapeId])
-    await saveCowartCanvasSnapshot(editor.store.getStoreSnapshot(), { protectImageRecords: true })
+    try {
+      await flushCanvasSnapshot()
+    } catch (rollbackError) {
+      if (rollbackError?.code !== 'COWART_REVISION_CONFLICT') {
+        console.error('Yogurt AI could not persist the AI Slides rollback.', rollbackError)
+      }
+    }
     throw error
   }
 }
@@ -6489,11 +6520,96 @@ function writeCowartSelectionState(selectionSnapshot) {
   })
 }
 
+function cowartProjectName(windowObject = globalThis.window) {
+  const toolOutput =
+    windowObject?.yogurtAgent?.toolOutput ??
+    windowObject?.cowartMcp?.toolOutput ??
+    windowObject?.openai?.toolOutput ??
+    null
+  const explicitName = String(
+    toolOutput?.projectName || toolOutput?.workspaceName || toolOutput?.canvasName || ''
+  ).trim()
+  if (explicitName) return explicitName
+
+  const projectDir = String(toolOutput?.projectDir || '').trim().replace(/[\\/]+$/, '')
+  if (!projectDir) return 'Yogurt AI 画布'
+  return projectDir.split(/[\\/]/).filter(Boolean).at(-1) || 'Yogurt AI 画布'
+}
+
+function getCowartAgentPanelContext(windowObject = globalThis.window) {
+  const editor = windowObject?.__cowartEditor
+  const liveSelection = windowObject?.__cowartSelection?.() ?? []
+  const selectedRootShapeIds = liveSelection
+    .map((shape) => shape?.id)
+    .filter((shapeId) => typeof shapeId === 'string' && shapeId)
+  const frozenSelection = editor
+    ? getCowartFrozenSelectionIds(editor)
+    : { selectedRootShapeIds, exactShapeIds: selectedRootShapeIds }
+  const page = editor?.getCurrentPage?.()
+  const pageId = editor?.getCurrentPageId?.() ?? null
+  const pageName = String(page?.name || '').trim() || '未命名页面'
+  const pageShapeCount = editor?.getCurrentPageShapeIds?.().size ?? 0
+  const selectedShapeIds = frozenSelection.selectedRootShapeIds.slice(
+    0,
+    COWART_AGENT_CONTEXT_MAX_SHAPE_IDS
+  )
+  const exactShapeIds = frozenSelection.exactShapeIds.slice(0, COWART_AGENT_CONTEXT_MAX_SHAPE_IDS)
+
+  return {
+    projectName: cowartProjectName(windowObject),
+    pageId,
+    pageName,
+    pageShapeCount,
+    scope: frozenSelection.selectedRootShapeIds.length > 0 ? 'selection' : 'page',
+    selectedCount: frozenSelection.selectedRootShapeIds.length,
+    selectedShapeIds,
+    exactShapeIds,
+    shapeIdsTruncated:
+      selectedShapeIds.length < frozenSelection.selectedRootShapeIds.length ||
+      exactShapeIds.length < frozenSelection.exactShapeIds.length
+  }
+}
+
+async function prepareCowartAgentTask() {
+  const editor = globalThis.window?.__cowartEditor
+  if (!editor) throw new Error('Yogurt AI 画布尚未就绪，请稍后再发送。')
+
+  const flushCanvasSnapshot = cowartCanvasSnapshotFlushers.get(editor)
+  if (flushCanvasSnapshot) await flushCanvasSnapshot()
+
+  const context = getCowartAgentPanelContext()
+  const selectionState = {
+    selectedShapes: context.exactShapeIds.map((id) => ({ id })),
+    selectedRootShapeIds: context.selectedShapeIds,
+    exactShapeIds: context.exactShapeIds,
+    scope: context.scope,
+    currentPageId: context.pageId,
+    currentPageName: context.pageName,
+    requestType: 'agent-panel',
+    updatedAt: new Date().toISOString()
+  }
+  writeCowartSelectionState(selectionState)
+  await saveCowartSelectionState(selectionState)
+  return context
+}
+
 export default function App() {
   const [snapshot, setSnapshot] = useState()
   const [viewState, setViewState] = useState()
   const [loadError, setLoadError] = useState(null)
   const [skippedRecords, setSkippedRecords] = useState([])
+  const [canvasSyncConflict, setCanvasSyncConflict] = useState(null)
+  const [agentBridge, setAgentBridge] = useState(null)
+  const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(true)
+  const canvasRevisionRef = useRef(null)
+
+  useEffect(() => {
+    const nextBridge = getCowartAgentBridge(window)
+    setAgentBridge(nextBridge)
+    Promise.resolve(nextBridge.refreshCapabilities()).catch((error) => {
+      console.warn('Yogurt AI could not initialize the Agent bridge.', error)
+    })
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -6503,6 +6619,7 @@ export default function App() {
         const canvasState = await loadCowartCanvasState(controller.signal)
         const sanitized = sanitizeCanvasSnapshotForTldraw(canvasState.snapshot)
         setSnapshot(sanitized.snapshot)
+        canvasRevisionRef.current = canvasState.revision ?? null
         setSkippedRecords(sanitized.skippedRecords)
         setViewState(canvasState.viewState ?? null)
       } catch (error) {
@@ -6653,9 +6770,16 @@ export default function App() {
     let documentChangeVersion = 0
     let isSyncingAnnotationShape = false
     let remoteLoadController = null
+    let canvasSaveBlockedByConflict = false
     const acknowledgedImageShapeDeletes = new Set()
 
     async function saveCanvas({ force = false, rethrow = false } = {}) {
+      if (canvasSaveBlockedByConflict) {
+        const error = new Error('画布已在其他位置更新。请先重新载入 Agent 版本，再继续编辑。')
+        error.code = 'COWART_REVISION_CONFLICT'
+        if (rethrow) throw error
+        return null
+      }
       if (!force && !hasUnsavedChanges) return null
       if (force) window.clearTimeout(saveTimer)
 
@@ -6679,6 +6803,7 @@ export default function App() {
       const acknowledgedDeletesInSave = new Set(acknowledgedImageShapeDeletes)
       try {
         const saveResult = await saveCowartCanvasSnapshot(editor.store.getStoreSnapshot(), {
+          baseRevision: canvasRevisionRef.current,
           protectImageRecords: true,
           acknowledgedImageShapeDeletes: Array.from(acknowledgedImageShapeDeletes)
         })
@@ -6688,12 +6813,24 @@ export default function App() {
         for (const imageShapeId of acknowledgedDeletesInSave) {
           acknowledgedImageShapeDeletes.delete(imageShapeId)
         }
+        canvasRevisionRef.current = saveResult?.revision ?? canvasRevisionRef.current
         hasUnsavedChanges = documentChangeVersion !== savingVersion
         return saveResult
       } catch (error) {
-        console.error(error)
-        if (rethrow) throw error
-        return null
+        if (error?.code === 'COWART_REVISION_CONFLICT') {
+          canvasSaveBlockedByConflict = true
+          hasUnsavedChanges = false
+          hasPendingSave = false
+          setCanvasSyncConflict({
+            message: error.message,
+            currentRevision: error.details?.currentRevision ?? null
+          })
+          if (rethrow) throw error
+        } else {
+          console.error(error)
+          if (rethrow) throw error
+          return null
+        }
       } finally {
         isSaving = false
         resolveSaveCompletion()
@@ -6721,34 +6858,48 @@ export default function App() {
     }
 
     async function loadRemoteCanvasSnapshot() {
+      if (canvasSaveBlockedByConflict) return
       remoteLoadController?.abort()
       const controller = new AbortController()
       remoteLoadController = controller
 
       const preserveLocalChanges = hasUnsavedChanges || isSaving
       const preFetchStore = preserveLocalChanges ? null : editor.store.getStoreSnapshot().store
+      const revisionBeforeFetch = canvasRevisionRef.current
 
       try {
-        const nextSnapshot = await refreshCowartCanvasSnapshot(controller.signal)
+        const canvasState = await refreshCowartCanvasState(controller.signal)
+        const nextSnapshot = canvasState.snapshot
         const effectivePreserve =
           preserveLocalChanges || (preFetchStore && storeChangedSinceSnapshot(editor, preFetchStore))
-        const { changedRecords, skippedRecords: nextSkippedRecords } = applyRemoteCanvasSnapshot(
+        const remoteRevision = canvasState.revision ?? null
+        const refreshAction = classifyRemoteCanvasRefresh({
+          revisionBeforeFetch,
+          currentRevision: canvasRevisionRef.current,
+          remoteRevision,
+          preserveLocalChanges: effectivePreserve
+        })
+
+        if (refreshAction === REMOTE_CANVAS_REFRESH_ACTION.CONFLICT) {
+          canvasSaveBlockedByConflict = true
+          hasPendingSave = false
+          window.clearTimeout(saveTimer)
+          setCanvasSyncConflict({
+            message: 'Agent 在本地编辑尚未保存时更新了画布。',
+            currentRevision: remoteRevision
+          })
+          return
+        }
+
+        if (refreshAction === REMOTE_CANVAS_REFRESH_ACTION.IGNORE) return
+
+        const { skippedRecords: nextSkippedRecords } = applyRemoteCanvasSnapshot(
           editor,
           nextSnapshot,
-          {
-            preserveLocalChanges: effectivePreserve
-          }
+          { preserveLocalChanges: false }
         )
         setSkippedRecords(nextSkippedRecords)
-
-        if (changedRecords > 0 && effectivePreserve) {
-          hasUnsavedChanges = true
-          if (isSaving) {
-            hasPendingSave = true
-          } else {
-            scheduleSave()
-          }
-        }
+        canvasRevisionRef.current = remoteRevision
       } catch (error) {
         if (error.name === 'AbortError') return
         console.error(error)
@@ -6893,22 +7044,51 @@ export default function App() {
   }
 
   return (
-    <main className="cowart-canvas" aria-label="Yogurt AI infinite canvas">
-      <SkippedRecordsNotice records={skippedRecords} />
-      <Tldraw
-        snapshot={snapshot ?? undefined}
-        assetUrls={cowartAssetUrls}
-        assets={cowartTldrawAssetStore}
-        inferDarkMode
-        onMount={handleMount}
-        options={cowartTldrawOptions}
-        overrides={cowartUiOverrides}
-        components={cowartComponents}
-        shapeUtils={cowartShapeUtils}
-        themes={cowartTldrawThemes}
-        tools={[CowartAnnotationTool, CowartAgentLassoTool]}
+    <main
+      className={`cowart-workbench${isAgentPanelOpen ? '' : ' cowart-workbench--agent-closed'}`}
+      aria-label="Yogurt AI workspace"
+    >
+      <section className="cowart-canvas" aria-label="Yogurt AI infinite canvas">
+        <CanvasSyncConflictNotice conflict={canvasSyncConflict} />
+        <SkippedRecordsNotice records={skippedRecords} />
+        <Tldraw
+          snapshot={snapshot ?? undefined}
+          assetUrls={cowartAssetUrls}
+          assets={cowartTldrawAssetStore}
+          inferDarkMode
+          onMount={handleMount}
+          options={cowartTldrawOptions}
+          overrides={cowartUiOverrides}
+          components={cowartComponents}
+          shapeUtils={cowartShapeUtils}
+          themes={cowartTldrawThemes}
+          tools={[CowartAnnotationTool, CowartAgentLassoTool]}
+        />
+      </section>
+      <CowartAgentPanel
+        beforeSend={prepareCowartAgentTask}
+        bridge={agentBridge}
+        contextProvider={getCowartAgentPanelContext}
+        isOpen={isAgentPanelOpen}
+        onOpenChange={setIsAgentPanelOpen}
       />
     </main>
+  )
+}
+
+function CanvasSyncConflictNotice({ conflict }) {
+  if (!conflict) return null
+
+  return (
+    <aside className="cowart-sync-conflict" role="alert">
+      <span>
+        <strong>画布出现并发更新，Yogurt AI 已停止自动保存。</strong>
+        <small>本地画面仍保留，但没有覆盖 Agent 的新结果。重新载入后可继续编辑。</small>
+      </span>
+      <button onClick={() => window.location.reload()} type="button">
+        重新载入 Agent 版本
+      </button>
+    </aside>
   )
 }
 

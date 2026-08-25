@@ -23,7 +23,12 @@ export function createDesktopBootstrap(agentService) {
   })
 }
 
-export function registerYogurtAgentIpc({ ipcMain, agentService, getTrustedWebContents }) {
+export function registerYogurtAgentIpc({
+  ipcMain,
+  agentService,
+  getTrustedWebContents,
+  claimBootstrapWebContents
+}) {
   if (!ipcMain || typeof ipcMain.handle !== 'function') {
     throw new TypeError('registerYogurtAgentIpc requires Electron ipcMain.')
   }
@@ -31,17 +36,23 @@ export function registerYogurtAgentIpc({ ipcMain, agentService, getTrustedWebCon
     throw new TypeError('registerYogurtAgentIpc requires a YogurtAgentService.')
   }
 
-  const trustedSender = (event) => {
+  const trustedSender = (event, { allowBootstrapClaim = false } = {}) => {
     const trusted = getTrustedWebContents?.()
-    if (!sameWebContents(event?.sender, trusted)) {
-      throw new Error('Rejected IPC from an untrusted renderer.')
+    if (sameWebContents(event?.sender, trusted)) return trusted
+    if (
+      allowBootstrapClaim &&
+      !trusted &&
+      typeof claimBootstrapWebContents === 'function' &&
+      claimBootstrapWebContents(event?.sender) === true
+    ) {
+      return event.sender
     }
-    return trusted
+    throw new Error('Rejected IPC from an untrusted renderer.')
   }
 
   const bootstrapHandler = (event) => {
     try {
-      trustedSender(event)
+      trustedSender(event, { allowBootstrapClaim: true })
       event.returnValue = createDesktopBootstrap(agentService)
     } catch (error) {
       event.returnValue = { error: String(error?.message || error) }

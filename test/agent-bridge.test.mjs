@@ -1,0 +1,346 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import { createAgentBridge } from '../src/agentBridge.js'
+import { createCodexHostAgentAdapter } from '../src/codexHostAgentAdapter.js'
+
+function eventWindow(initial = {}) {
+  const listeners = new Map()
+  return {
+    ...initial,
+    addEventListener(type, listener) {
+      const entries = listeners.get(type) ?? new Set()
+      entries.add(listener)
+      listeners.set(type, entries)
+    },
+    removeEventListener(type, listener) {
+      listeners.get(type)?.delete(listener)
+    },
+    dispatch(type) {
+      for (const listener of listeners.get(type) ?? []) listener({ type })
+    }
+  }
+}
+
+test('Codex host adapter prefers the Electron preload bridge', async () => {
+  const calls = []
+  const windowObject = eventWindow({
+    yogurtAgent: {
+      getCapabilities: () => ({ message: { image: true } }),
+      sendTask: async (message, options) => {
+        calls.push({ provider: 'yogurtAgent', message, options })
+        return { accepted: true }
+      }
+    },
+    cowartMcp: {
+      sendFollowUpMessage: async () => calls.push({ provider: 'cowartMcp' })
+    },
+    openai: {
+      sendFollowUpMessage: async () => calls.push({ provider: 'openai' })
+    }
+  })
+
+  const adapter = createCodexHostAgentAdapter(windowObject)
+  assert.deepEqual(adapter.getCapabilities(), {
+    available: true,
+    provider: 'yogurtAgent',
+    sendTask: true,
+    streaming: false,
+    approvals: false,
+    interrupt: false,
+    message: { image: true }
+  })
+  assert.deepEqual(await adapter.sendTask({ prompt: 'Map this.' }, { taskId: 'task:1' }), {
+    accepted: true
+  })
+  assert.deepEqual(calls, [{
+    provider: 'yogurtAgent',
+    message: { prompt: 'Map this.' },
+    options: { taskId: 'task:1' }
+  }])
+})
+
+test('Codex host adapter falls back from Cowart MCP to OpenAI host', async () => {
+  const messages = []
+  const windowObject = eventWindow({
+    cowartMcp: {
+      getHostCapabilities: () => ({ message: { image: true } }),
+      sendFollowUpMessage: async (message) => messages.push(['cowart', message])
+    },
+    openai: {
+      hostCapabilities: { message: { image: false } },
+      sendFollowUpMessage: async (message) => messages.push(['openai', message])
+    }
+  })
+  const adapter = createCodexHostAgentAdapter(windowObject)
+
+  assert.equal(adapter.getCapabilities().provider, 'cowartMcp')
+  assert.equal(adapter.getCapabilities().message.image, true)
+  await adapter.sendTask('first')
+
+  delete windowObject.cowartMcp.sendFollowUpMessage
+  assert.equal(adapter.getCapabilities().provider, 'openai')
+  assert.equal(adapter.getCapabilities().message.image, false)
+  await adapter.sendTask('second')
+
+  assert.deepEqual(messages, [['cowart', 'first'], ['openai', 'second']])
+})
+
+test('AgentBridge records host acceptance without treating it as agent completion', async () => {
+  let now = 10
+  const events = []
+  const adapter = {
+    getCapabilities: () => ({
+      available: true,
+      provider: 'test',
+      sendTask: true,
+      message: { image: true }
+    }),
+    sendTask: async (message, options) => ({ message, taskId: options.taskId })
+  }
+  const bridge = createAgentBridge(adapter, {
+    clock: () => now++,
+    taskIdFactory: () => 'task:test'
+  })
+  bridge.subscribe((state, event) => events.push({ state, event }))
+
+  const result = await bridge.sendTask({ prompt: 'Build a diagram.' }, {
+    metadata: { source: 'selection' }
+  })
+
+  assert.deepEqual(result, {
+    message: { prompt: 'Build a diagram.' },
+    taskId: 'task:test'
+  })
+  assert.deepEqual(events.map(({ event }) => event.type), [
+    'task.started',
+    'task.accepted'
+  ])
+  assert.equal(events[0].state.status, 'sending')
+  assert.deepEqual(events[0].state.pendingTaskIds, ['task:test'])
+  assert.equal(bridge.getState().status, 'idle')
+  assert.equal(bridge.getState().lastTask.status, 'accepted')
+  assert.equal(bridge.getState().activity.phase, 'running')
+  assert.equal(Object.isFrozen(bridge.getState()), true)
+  assert.equal(Object.isFrozen(bridge.getState().pendingTaskIds), true)
+})
+
+test('AgentBridge normalizes streamed App Server activity and completes the accepted task', async () => {
+  let emitAgentEvent
+  const responses = []
+  const interruptions = []
+  const adapter = {
+    getCapabilities: () => ({
+      available: true,
+      provider: 'desktop',
+      sendTask: true,
+      streaming: true,
+      approvals: true,
+      interrupt: true
+    }),
+    sendTask: async () => ({ thread: { id: 'thread:one' }, turn: { id: 'turn:one' } }),
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => { emitAgentEvent = null }
+    },
+    respondApproval: async (requestId, decision) => responses.push([requestId, decision]),
+    interrupt: async (options) => interruptions.push(options)
+  }
+  const bridge = createAgentBridge(adapter, { taskIdFactory: () => 'task:stream' })
+  const eventTypes = []
+  bridge.subscribe((_state, event) => eventTypes.push(event.type))
+
+  await bridge.sendTask('stream this')
+  emitAgentEvent({
+    method: 'item/agentMessage/delta',
+    params: { threadId: 'thread:one', turnId: 'turn:one', delta: 'Hello ' }
+  })
+  emitAgentEvent({
+    method: 'turn/plan/updated',
+    params: { threadId: 'thread:one', turnId: 'turn:one', plan: [{ step: 'Draw' }] }
+  })
+  emitAgentEvent({
+    id: 42,
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: 'thread:one', turnId: 'turn:one', command: 'npm test' }
+  })
+
+  assert.equal(bridge.getState().activity.phase, 'waiting_approval')
+  assert.equal(bridge.getState().activity.message, 'Hello ')
+  assert.deepEqual(bridge.getState().activity.plan, [{ step: 'Draw' }])
+  assert.equal(bridge.getState().lastEvent.requestId, 42)
+  await bridge.respondApproval(42, 'accept')
+  await bridge.interrupt({ reason: 'user' })
+  assert.deepEqual(responses, [[42, 'accept']])
+  assert.deepEqual(interruptions, [{ reason: 'user' }])
+
+  emitAgentEvent({
+    method: 'turn/completed',
+    params: { threadId: 'thread:one', turnId: 'turn:one' }
+  })
+  assert.equal(bridge.getState().activity.phase, 'completed')
+  assert.equal(bridge.getState().lastTask.status, 'succeeded')
+  assert.deepEqual(bridge.getState().session, {
+    threadId: 'thread:one',
+    turnId: 'turn:one'
+  })
+  assert.deepEqual(eventTypes, [
+    'task.started',
+    'task.accepted',
+    'agent.delta',
+    'agent.plan',
+    'approval.requested',
+    'turn.completed'
+  ])
+})
+
+test('AgentBridge ignores streamed terminal events from a different turn', async () => {
+  let emitAgentEvent
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({ available: true, provider: 'desktop', sendTask: true, streaming: true }),
+    sendTask: async () => ({ threadId: 'thread:one', turnId: 'turn:active' }),
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => {}
+    }
+  }, { taskIdFactory: () => 'task:active' })
+  const eventTypes = []
+  bridge.subscribe((_state, event) => eventTypes.push(event.type))
+
+  await bridge.sendTask('keep this turn active')
+  emitAgentEvent({ type: 'turn.completed', threadId: 'thread:one', turnId: 'turn:stale' })
+
+  assert.equal(bridge.getState().lastTask.status, 'accepted')
+  assert.equal(bridge.getState().activity.phase, 'running')
+  assert.deepEqual(eventTypes, ['task.started', 'task.accepted'])
+
+  emitAgentEvent({ type: 'turn.completed', threadId: 'thread:one', turnId: 'turn:active' })
+  assert.equal(bridge.getState().lastTask.status, 'succeeded')
+  assert.equal(bridge.getState().activity.phase, 'completed')
+})
+
+test('AgentBridge preserves an early matching completion received before turn/start resolves', async () => {
+  let emitAgentEvent
+  let resolveTask
+  const taskAccepted = new Promise((resolve) => { resolveTask = resolve })
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({ available: true, provider: 'desktop', sendTask: true, streaming: true }),
+    sendTask: async () => taskAccepted,
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => {}
+    }
+  }, { taskIdFactory: () => 'task:early-completion' })
+
+  const sending = bridge.sendTask('finish quickly')
+  emitAgentEvent({ type: 'turn.started', threadId: 'thread:one', turnId: 'turn:fast' })
+  emitAgentEvent({ type: 'turn.completed', threadId: 'thread:one', turnId: 'turn:fast' })
+  resolveTask({ threadId: 'thread:one', turnId: 'turn:fast' })
+  await sending
+
+  assert.equal(bridge.getState().lastTask.status, 'succeeded')
+  assert.equal(bridge.getState().lastTask.turnId, 'turn:fast')
+  assert.equal(bridge.getState().activity.phase, 'completed')
+  assert.deepEqual(bridge.getState().pendingTaskIds, [])
+})
+
+test('failed App Server completions and service errors become turn failures', async () => {
+  let emitAgentEvent
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({ available: true, provider: 'desktop', sendTask: true, streaming: true }),
+    sendTask: async () => ({ turnId: 'turn:failed' }),
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => {}
+    }
+  }, { taskIdFactory: () => 'task:failed-turn' })
+  await bridge.sendTask('fail later')
+
+  emitAgentEvent({ type: 'turn.completed', turnId: 'turn:failed', status: 'failed' })
+  assert.equal(bridge.getState().lastEvent.type, 'turn.failed')
+  assert.equal(bridge.getState().lastTask.status, 'failed')
+  assert.equal(bridge.getState().activity.phase, 'failed')
+
+  emitAgentEvent({ type: 'error', turnId: 'turn:failed', message: 'Codex failed.' })
+  assert.equal(bridge.getState().lastEvent.type, 'turn.failed')
+  assert.equal(bridge.getState().activity.message, 'Codex failed.')
+})
+
+test('AgentBridge exposes failures without swallowing the host error', async () => {
+  const expectedError = new Error('Host rejected task.')
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({ available: true, provider: 'test', sendTask: true }),
+    sendTask: async () => { throw expectedError }
+  }, { taskIdFactory: () => 'task:failed' })
+
+  await assert.rejects(() => bridge.sendTask('fail'), expectedError)
+  assert.equal(bridge.getState().status, 'error')
+  assert.deepEqual(bridge.getState().lastTask.error, {
+    name: 'Error',
+    message: 'Host rejected task.'
+  })
+  assert.equal(bridge.getState().lastEvent.type, 'task.failed')
+})
+
+test('AgentBridge refreshes availability when the host announces new globals', () => {
+  const windowObject = eventWindow()
+  const adapter = createCodexHostAgentAdapter(windowObject)
+  const bridge = createAgentBridge(adapter)
+  const events = []
+  bridge.subscribe((_state, event) => events.push(event.type))
+
+  assert.equal(bridge.getState().status, 'unavailable')
+  windowObject.openai = {
+    sendFollowUpMessage: async () => ({ ok: true }),
+    hostCapabilities: { message: { image: true } }
+  }
+  windowObject.dispatch('openai:set_globals')
+
+  assert.equal(bridge.getState().status, 'idle')
+  assert.equal(bridge.capabilities.provider, 'openai')
+  assert.equal(bridge.capabilities.message.image, true)
+  assert.deepEqual(events, ['capabilities.changed'])
+})
+
+test('AgentBridge reports pre-aborted tasks as cancelled without contacting the host', async () => {
+  let sent = false
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({ available: true, provider: 'test', sendTask: true }),
+    sendTask: async () => { sent = true }
+  }, { taskIdFactory: () => 'task:cancelled' })
+  const controller = new AbortController()
+  controller.abort()
+
+  await assert.rejects(
+    () => bridge.sendTask('cancel', { signal: controller.signal }),
+    (error) => error.name === 'AbortError'
+  )
+  assert.equal(sent, false)
+  assert.equal(bridge.getState().status, 'idle')
+  assert.equal(bridge.getState().lastTask.status, 'cancelled')
+})
+
+test('async preload capabilities update the live bridge after resolution', async () => {
+  let resolveCapabilities
+  const capabilitiesReady = new Promise((resolve) => { resolveCapabilities = resolve })
+  const windowObject = eventWindow({
+    yogurtAgent: {
+      sendTask: async () => ({ accepted: true }),
+      getCapabilities: () => capabilitiesReady,
+      respondApproval: async () => ({}),
+      interrupt: async () => ({})
+    }
+  })
+  const adapter = createCodexHostAgentAdapter(windowObject)
+  const bridge = createAgentBridge(adapter)
+
+  assert.equal(bridge.capabilities.streaming, false)
+  assert.equal(bridge.capabilities.approvals, true)
+  resolveCapabilities({ streaming: true, approvals: true, interrupt: true })
+  await capabilitiesReady
+  await Promise.resolve()
+
+  assert.equal(bridge.capabilities.streaming, true)
+  assert.equal(bridge.capabilities.approvals, true)
+  assert.equal(bridge.capabilities.interrupt, true)
+})

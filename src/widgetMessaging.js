@@ -1,4 +1,29 @@
 import { sendTrackedWidgetMessage } from './analytics.js'
+import { createAgentBridge } from './agentBridge.js'
+import { createCodexHostAgentAdapter } from './codexHostAgentAdapter.js'
+
+const bridgesByWindow = new WeakMap()
+
+export function getCowartAgentBridge(windowObject = globalThis.window) {
+  if (!windowObject || (typeof windowObject !== 'object' && typeof windowObject !== 'function')) {
+    return createAgentBridge(null)
+  }
+
+  let bridge = bridgesByWindow.get(windowObject)
+  if (bridge) return bridge
+
+  const adapter = createCodexHostAgentAdapter(windowObject)
+  bridge = createAgentBridge(adapter, {
+    dispatchTask: (currentAdapter, message, options) =>
+      sendTrackedWidgetMessage(
+        (value) => currentAdapter.sendTask(value, options),
+        message,
+        options.analyticsContext
+      )
+  })
+  bridgesByWindow.set(windowObject, bridge)
+  return bridge
+}
 
 export function imageContentFromDataUrl(dataUrl, meta = {}) {
   const match = String(dataUrl).match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
@@ -12,31 +37,15 @@ export function imageContentFromDataUrl(dataUrl, meta = {}) {
 }
 
 export function followUpSender(windowObject = globalThis.window) {
-  let sendMessage = null
-  if (typeof windowObject?.cowartMcp?.sendFollowUpMessage === 'function') {
-    sendMessage = (message) => windowObject.cowartMcp.sendFollowUpMessage(message)
-  } else if (typeof windowObject?.openai?.sendFollowUpMessage === 'function') {
-    sendMessage = (message) => windowObject.openai.sendFollowUpMessage(message)
-  }
-  if (!sendMessage) return null
+  const bridge = getCowartAgentBridge(windowObject)
+  bridge.refreshCapabilities({ emit: false })
+  if (!bridge.capabilities.sendTask) return null
 
-  return (message, analyticsContext = {}) =>
-    sendTrackedWidgetMessage(sendMessage, message, analyticsContext)
-}
-
-function hostCapabilities(windowObject = globalThis.window) {
-  try {
-    return (
-      windowObject?.cowartMcp?.getHostCapabilities?.() ||
-      windowObject?.openai?.hostCapabilities ||
-      globalThis.__COWART_MCP_APP__?.getHostCapabilities?.() ||
-      null
-    )
-  } catch (_error) {
-    return null
-  }
+  return (message, analyticsContext = {}) => bridge.sendTask(message, { analyticsContext })
 }
 
 export function supportsMessageImages(windowObject = globalThis.window) {
-  return Boolean(hostCapabilities(windowObject)?.message?.image)
+  const bridge = getCowartAgentBridge(windowObject)
+  bridge.refreshCapabilities({ emit: false })
+  return bridge.capabilities.message.image
 }

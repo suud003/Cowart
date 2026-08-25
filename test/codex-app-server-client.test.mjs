@@ -39,9 +39,11 @@ test('App Server client performs initialize/initialized and stdio JSONL requests
   let child
   const client = new CodexAppServerClient({
     cwd: '/workspace',
+    command: 'node',
+    commandPrefixArgs: ['/tools/codex.js'],
     spawnProcess(command, args, options) {
-      assert.equal(command, 'codex')
-      assert.deepEqual(args, ['app-server', '--listen', 'stdio://'])
+      assert.equal(command, 'node')
+      assert.deepEqual(args, ['/tools/codex.js', 'app-server', '--listen', 'stdio://'])
       assert.equal(options.shell, false)
       child = fakeSidecar((message, process) => {
         if (message.method === 'initialize') {
@@ -63,6 +65,28 @@ test('App Server client performs initialize/initialized and stdio JSONL requests
   assert.equal(child.messages[1].method, 'initialized')
   assert.equal(child.messages[2].method, 'thread/start')
   assert.equal(client.state.transport, 'stdio')
+  await client.stop()
+})
+
+test('thread start uses a cold-start timeout longer than ordinary requests', async () => {
+  const client = new CodexAppServerClient({
+    requestTimeoutMs: 5,
+    spawnProcess() {
+      return fakeSidecar((message, process) => {
+        if (message.method === 'initialize') {
+          process.send({ id: message.id, result: {} })
+        } else if (message.method === 'thread/start') {
+          setTimeout(() => {
+            process.send({ id: message.id, result: { thread: { id: 'thr_cold' } } })
+          }, 25)
+        }
+      })
+    }
+  })
+
+  await client.start()
+  assert.equal((await client.startThread()).thread.id, 'thr_cold')
+  assert.equal(CODEX_APP_SERVER_PROTOCOL.threadLifecycleTimeoutMs, 120_000)
   await client.stop()
 })
 
@@ -100,6 +124,86 @@ test('App Server client streams notifications and answers only known approvals',
     client.respondToApproval('missing', 'accept'),
     /No pending command or file approval/
   )
+  await client.stop()
+})
+
+test('App Server client rejects unsupported server requests and clears server-resolved requests', async () => {
+  let child
+  const client = new CodexAppServerClient({
+    spawnProcess() {
+      child = fakeSidecar((message, process) => {
+        if (message.method === 'initialize') process.send({ id: message.id, result: {} })
+      })
+      return child
+    }
+  })
+  await client.start()
+
+  const unsupportedPromise = once(client, 'serverRequest')
+  child.send({ id: 'unsupported-1', method: 'item/permissions/requestApproval', params: {} })
+  await unsupportedPromise
+  assert.equal(client.pendingServerRequests.length, 1)
+  await client.rejectServerRequest('unsupported-1', {
+    code: -32601,
+    message: 'Unsupported request.'
+  })
+  assert.deepEqual(child.messages.at(-1), {
+    id: 'unsupported-1',
+    error: { code: -32601, message: 'Unsupported request.' }
+  })
+  assert.equal(client.pendingServerRequests.length, 0)
+
+  const approvalPromise = once(client, 'serverRequest')
+  child.send({ id: 'approval-2', method: 'item/fileChange/requestApproval', params: {} })
+  await approvalPromise
+  assert.equal(client.pendingServerRequests.length, 1)
+  const resolvedPromise = once(client, 'notification')
+  child.send({
+    method: 'serverRequest/resolved',
+    params: { threadId: 'thr_1', requestId: 'approval-2' }
+  })
+  await resolvedPromise
+  assert.equal(client.pendingServerRequests.length, 0)
+  await client.stop()
+})
+
+test('a stale sidecar exit cannot tear down a successfully restarted client', async () => {
+  let spawnCount = 0
+  let staleChild
+  let activeChild
+  const client = new CodexAppServerClient({
+    spawnProcess() {
+      spawnCount += 1
+      const child = fakeSidecar((message, process) => {
+        if (message.method === 'initialize') {
+          if (spawnCount === 1) {
+            process.send({ id: message.id, error: { code: -32602, message: 'Bad init.' } })
+          } else {
+            process.send({ id: message.id, result: {} })
+          }
+        } else if (message.method === 'thread/start') {
+          process.send({ id: message.id, result: { thread: { id: 'thr_restarted' } } })
+        }
+      })
+      child.pid = spawnCount
+      if (spawnCount === 1) {
+        staleChild = child
+        child.kill = () => true
+      } else {
+        activeChild = child
+      }
+      return child
+    }
+  })
+
+  await assert.rejects(client.start(), /Bad init/)
+  await client.start()
+  staleChild.emit('exit', 1, null)
+  await Promise.resolve()
+
+  assert.equal(client.state.status, 'ready')
+  assert.equal(client.state.pid, activeChild.pid)
+  assert.equal((await client.startThread()).thread.id, 'thr_restarted')
   await client.stop()
 })
 

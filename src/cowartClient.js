@@ -95,7 +95,12 @@ async function callCowartServerTool(name, args = {}, options = {}) {
   })
   if (result?.isError) {
     const message = result.content?.find((item) => item.type === 'text')?.text
-    throw new Error(message || `Yogurt AI server tool failed: ${name}`)
+    const error = new Error(message || `Yogurt AI server tool failed: ${name}`)
+    error.code = result.structuredContent?.storage === 'revision-conflict'
+      ? 'COWART_REVISION_CONFLICT'
+      : 'COWART_TOOL_ERROR'
+    error.details = result.structuredContent ?? null
+    throw error
   }
   return result.structuredContent ?? result
 }
@@ -117,6 +122,7 @@ export async function loadCowartCanvasState(signal) {
     )
     return {
       snapshot: state.snapshot,
+      revision: state.revision ?? null,
       viewState: state.viewState ?? null,
       storage: state.storage,
       skippedRecords: []
@@ -129,6 +135,7 @@ export async function loadCowartCanvasState(signal) {
   ])
   return {
     snapshot: canvasData.snapshot,
+    revision: canvasData.revision ?? null,
     viewState: viewStateData.viewState ?? null,
     storage: canvasData.storage,
     skippedRecords: []
@@ -149,10 +156,27 @@ export async function refreshCowartCanvasSnapshot(signal) {
   return canvasData.snapshot
 }
 
+export async function refreshCowartCanvasState(signal) {
+  if (hasCowartWidgetBridge()) {
+    return callCowartServerTool(
+      TOOL_GET_CANVAS_STATE,
+      { hydrateAssets: false },
+      { signal }
+    )
+  }
+
+  const canvasData = await fetchJson(CANVAS_ENDPOINT, { signal })
+  return {
+    snapshot: canvasData.snapshot,
+    revision: canvasData.revision ?? null
+  }
+}
+
 export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
   if (hasCowartWidgetBridge()) {
     return callCowartServerTool(TOOL_SAVE_CANVAS_STATE, {
       snapshot,
+      baseRevision: options.baseRevision,
       protectImageRecords: options.protectImageRecords,
       acknowledgedImageShapeDeletes: options.acknowledgedImageShapeDeletes
     })

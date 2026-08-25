@@ -11,7 +11,8 @@ const COWART_TOOL_NAMES = Object.freeze([
   'save_cowart_canvas_state',
   'save_cowart_reference_image',
   'save_cowart_selection_state',
-  'save_cowart_view_state'
+  'save_cowart_view_state',
+  'track_cowart_analytics_event'
 ])
 const COWART_TOOL_SET = new Set(COWART_TOOL_NAMES)
 const APPROVAL_DECISIONS = Object.freeze(['accept', 'acceptForSession', 'decline', 'cancel'])
@@ -103,11 +104,19 @@ export class YogurtAgentService extends EventEmitter {
   #capabilities
   #client
   #lastError = null
+  #onThreadChanged
   #projectDir
   #startPromise = null
   #status = 'idle'
+  #threadNeedsResume = false
 
-  constructor({ client, projectDir, canvasDir = path.join(projectDir, 'canvas') } = {}) {
+  constructor({
+    client,
+    projectDir,
+    canvasDir = path.join(projectDir, 'canvas'),
+    initialThreadId = null,
+    onThreadChanged = null
+  } = {}) {
     super()
     if (!client || typeof client.start !== 'function') {
       throw new TypeError('YogurtAgentService requires a Codex App Server client.')
@@ -115,6 +124,11 @@ export class YogurtAgentService extends EventEmitter {
     this.#client = client
     this.#projectDir = path.resolve(requiredString(projectDir, 'projectDir', 4_096))
     this.#canvasDir = path.resolve(requiredString(canvasDir, 'canvasDir', 4_096))
+    this.#activeThreadId = initialThreadId
+      ? requiredString(initialThreadId, 'initialThreadId', 512)
+      : null
+    this.#threadNeedsResume = Boolean(this.#activeThreadId)
+    this.#onThreadChanged = typeof onThreadChanged === 'function' ? onThreadChanged : null
     this.#capabilities = this.#baseCapabilities()
     this.#bindClientEvents()
   }
@@ -261,11 +275,13 @@ export class YogurtAgentService extends EventEmitter {
       throw new Error(`Cowart tool is not exposed by the desktop bridge: ${name}`)
     }
     const suppliedArguments = isRecord(request.arguments) ? request.arguments : {}
-    const args = {
-      ...suppliedArguments,
-      projectDir: this.#projectDir,
-      canvasDir: this.#canvasDir
-    }
+    const args = name === 'track_cowart_analytics_event'
+      ? suppliedArguments
+      : {
+          ...suppliedArguments,
+          projectDir: this.#projectDir,
+          canvasDir: this.#canvasDir
+        }
     return this.#client.callMcpServerTool(
       this.#activeThreadId,
       COWART_MCP_SERVER,
@@ -280,11 +296,23 @@ export class YogurtAgentService extends EventEmitter {
     await this.#client.dispose()
     this.#status = 'stopped'
     this.#activeTurnId = null
+    this.#threadNeedsResume = Boolean(this.#activeThreadId)
     this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
   }
 
   async #ensureThread() {
-    if (this.#activeThreadId) return this.#activeThreadId
+    if (this.#activeThreadId && !this.#threadNeedsResume) return this.#activeThreadId
+    if (this.#activeThreadId && this.#threadNeedsResume) {
+      const persistedThreadId = this.#activeThreadId
+      try {
+        await this.#resumeThread(persistedThreadId)
+        return this.#activeThreadId
+      } catch (_error) {
+        this.#activeThreadId = null
+        this.#activeTurnId = null
+        this.#threadNeedsResume = false
+      }
+    }
     const result = await this.#client.startThread({
       cwd: this.#projectDir,
       approvalPolicy: 'on-request',
@@ -294,6 +322,7 @@ export class YogurtAgentService extends EventEmitter {
     const threadId = result?.thread?.id
     if (!threadId) throw new Error('Codex App Server did not return a thread id.')
     this.#activeThreadId = threadId
+    await this.#notifyThreadChanged(threadId)
     return threadId
   }
 
@@ -307,6 +336,17 @@ export class YogurtAgentService extends EventEmitter {
     if (!resumedThreadId) throw new Error('Codex App Server did not return the resumed thread id.')
     this.#activeThreadId = resumedThreadId
     this.#activeTurnId = null
+    this.#threadNeedsResume = false
+    await this.#notifyThreadChanged(resumedThreadId)
+  }
+
+  async #notifyThreadChanged(threadId) {
+    if (!this.#onThreadChanged) return
+    try {
+      await this.#onThreadChanged(threadId)
+    } catch (_error) {
+      // Session persistence is a convenience; the active Codex thread remains usable.
+    }
   }
 
   #baseCapabilities() {
@@ -345,6 +385,8 @@ export class YogurtAgentService extends EventEmitter {
       if (status === 'failed') {
         this.#status = 'failed'
         this.#lastError = details.error || details.stderr || 'Codex App Server failed.'
+        this.#activeTurnId = null
+        this.#threadNeedsResume = Boolean(this.#activeThreadId)
         this.#emitError(new Error(this.#lastError), 'sidecar')
       }
     })
@@ -407,6 +449,13 @@ export class YogurtAgentService extends EventEmitter {
       }
       return
     }
+    if (method === 'serverRequest/resolved') {
+      this.#emitEvent(normalizedEvent('approval.resolved', {
+        threadId: params.threadId ?? this.#activeThreadId,
+        requestId: params.requestId == null ? null : String(params.requestId)
+      }))
+      return
+    }
     if (method === 'error') {
       this.#emitError(new Error(params.error?.message || 'Codex turn failed.'), 'turn', {
         threadId: params.threadId,
@@ -420,8 +469,20 @@ export class YogurtAgentService extends EventEmitter {
   #handleServerRequest(request) {
     const kind = approvalKind(request.method)
     if (kind === 'unsupported') {
-      this.#emitError(new Error(`Unsupported Codex server request: ${request.method}`), 'protocol', {
+      const message = `Unsupported Codex server request: ${request.method}`
+      this.#emitError(new Error(message), 'protocol', {
         requestId: request.requestId
+      })
+      Promise.resolve(
+        this.#client.rejectServerRequest?.(request.requestId, {
+          code: -32601,
+          message
+        })
+      ).catch((error) => {
+        this.#emitError(error, 'protocol', {
+          requestId: request.requestId,
+          rejectedMethod: request.method
+        })
       })
       return
     }
@@ -463,6 +524,7 @@ export const YOGURT_DESKTOP_CAPABILITY_CONTRACT = Object.freeze({
     'plan.updated',
     'diff.updated',
     'approval.requested',
+    'approval.resolved',
     'turn.started',
     'turn.completed',
     'error',

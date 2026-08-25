@@ -4,54 +4,65 @@
   <img src="assets/app-icon.png" width="84" alt="Yogurt AI 图标">
 </p>
 
-<p align="center"><strong>把零散材料变成看得见、改得动、交付得出去的产品思考画布。</strong></p>
+<p align="center"><strong>在画布里想清楚，交给 Codex Agent 做出来，再把结果带回画布继续迭代。</strong></p>
+
+<p align="center"><strong>Yogurt AI Desktop · Beta</strong> · 本地优先 · 可编辑画布 · Codex Agent 桥接</p>
 
 <p align="center">
   <a href="README.en.md">English</a> ·
-  <a href="#从灵感到可交付成果">产品体验</a> ·
-  <a href="#核心能力">核心能力</a> ·
+  <a href="#一条完整的产品工作流">产品体验</a> ·
+  <a href="#核心体验">核心体验</a> ·
   <a href="#完整案例ai-互动影游">完整案例</a> ·
-  <a href="#安装">安装</a> ·
+  <a href="#安装并启动桌面应用beta">桌面应用</a> ·
   <a href="#三分钟上手">快速开始</a>
 </p>
 
-Yogurt AI 是运行在 Codex 中的 AI 思考与产品创作画布。你可以把文档、笔记、图片、对话和可访问的 TAPD 内容直接交给它，在同一个可编辑工作区里梳理证据与观点、画清系统关系、生成 PRD 和交互原型、完成评审标注，再把结果整理成图片、HTML、Slides 或 PowerPoint。
+Yogurt AI 是一个可安装的 AI 产品工作台，同时提供独立桌面应用和 Codex 插件。它把 tldraw 原生无限画布与 Codex Agent 放进同一个界面：你可以把文档、笔记、图片、对话和已授权的 TAPD 内容放到画布上，圈选一组真实对象，直接让 Agent 梳理材料、补全产品结构、生成框线图、PRD 或交互原型。
 
-它不是只给你一张静态结果图。卡片、分区、连线、原型和创作内容都可以继续圈选、拖拽、追问和修改，重要变更还支持预演与安全撤销。
+Agent 会读取当前页面和稳定对象 ID，持续回传执行状态、计划与修改摘要；遇到敏感操作时，审批就在工作台内完成。结果仍然是可选择、可拖拽、可改写、可追问的画布对象，而不是一张无法继续工作的静态图。画布由此既是思考的起点，也是 Agent 工作后的统一归档。
 
 <p align="center">
-  <img src="docs/images/yogurt-ai-knowledge-map.png" width="100%" alt="Yogurt AI 把零散研究材料整理成可编辑的知识关系图">
+  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop 在同一窗口中展示原生画布与 Codex Agent 工作台">
 </p>
-<p align="center"><sub>从来源材料、行为观察和待回答问题出发，逐步形成假设与下一步实验。</sub></p>
+<p align="center"><sub>原生画布与 Codex Agent 工作台处于同一窗口，共享当前项目、页面与对象上下文。</sub></p>
 
-## 从灵感到可交付成果
+## 一条完整的产品工作流
 
 ```mermaid
 flowchart LR
-  A["文档 / 笔记 / 图片 / TAPD"] --> B["整理来源、证据与问题"]
-  B --> C["画清流程、系统与关键判断"]
-  C --> D["生成 PRD 与交互原型"]
-  D --> E["评审、标注与回流"]
-  E --> F["图片 / HTML / Slides / PPTX"]
-  E --> B
+  A["文档 / 笔记 / 图片 / TAPD"] --> B["在画布整理证据、假设与问题"]
+  B --> C["圈选对象，把任务交给 Codex Agent"]
+  C --> D["Agent 生成框线图 / PRD / 交互原型"]
+  D --> E["查看过程、审批操作、评审结果"]
+  E --> F["结果回到画布并导出交付"]
+  F --> B
 ```
 
-| 你正在做的事 | Yogurt AI 帮你完成 | 你可以继续做什么 |
+| 从哪里开始 | Codex Agent 如何参与 | 最终留下什么 |
 | --- | --- | --- |
-| 消化研究、会议和需求材料 | 提取带来源的卡片，区分事实、观点、假设和问题 | 聚类、连线、追问，逐步长成知识全景 |
-| 解释一个复杂流程或系统 | 提炼核心判断，生成可编辑框线图与清晰阅读顺序 | 移动节点、改写关系、补充状态和例外 |
-| 把产品想法变成方案 | 生成 shaping、模块 PRD 和可交互页面 | 在真实界面上标注、对照需求评审并回流画布 |
-| 制作视觉内容与汇报 | 生成或修改图片、HTML 和 Slides | 演示、下载，或整合为全景 HTML 和 PowerPoint |
+| 零散研究、会议记录与需求链接 | 按来源整理事实、观察、假设和待确认问题 | 可继续聚类、连线和追问的知识全景 |
+| 一组画布卡片或一个待解释系统 | 读取当前页与精确选区，规划并生成语义结构 | 原生可编辑的卡片、分区和绑定连线 |
+| 一个还不完整的产品想法 | 补齐约束与验收标准，生成 PRD 和可交互页面 | 可评审、可标注、可回流的产品工作区 |
+| 已完成的整张画布 | 汇总卡片、图片、HTML、Slides 与手绘内容 | 可分享 HTML 全景或可编辑 PowerPoint |
 
-## 核心能力
+## 核心体验
 
-### 1. 在画布上整理真实材料
+### 1. 画布与 Codex Agent 共用同一份上下文
+
+桌面应用右侧是常驻的 Codex Agent 工作台。它知道当前项目、页面、选中对象和它们的稳定 ID；发送任务前会先保存最新画布，因此 Agent 处理的是你眼前的真实内容，而不是一张容易错位的截图。
+
+你可以直接输入要求，也可以从 `整理选区`、`生成 PRD`、`生成框线图` 开始。执行过程中，工作台会持续显示回复、计划、修改摘要和任务状态；你可以批准或拒绝受控操作，也可以随时中断。再次打开同一个项目时，桌面应用会继续使用该项目已保存的 Agent 会话。
 
 把文档、图片和笔记导入画布后，Yogurt AI 会保留来源路径与原文摘录，并把 Agent 的总结和推断分开记录。你可以像使用白板一样组织卡片、关系、分区和手绘标注，也可以让 Agent 围绕一个问题自动搭建全景结构。
 
 当你只想修改局部时，使用 `AI 圈选` 圈住相关对象，再用箭头、划掉、分组或文字说明意图。Agent 会结合选区内容和标注完成局部调整，圈外内容保持不动。
 
-![在 Yogurt AI 中圈选内容并通过批注继续整理](docs/images/yogurt-ai-lasso.png)
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/yogurt-ai-knowledge-map.png" alt="Yogurt AI 把零散研究材料整理成可编辑的知识关系图"><br><strong>让材料长成结构</strong>：从来源、观察和问题出发，形成假设与下一步实验。</td>
+    <td width="50%"><img src="docs/images/yogurt-ai-lasso.png" alt="在 Yogurt AI 中圈选内容并通过批注继续整理"><br><strong>只改需要推进的部分</strong>：圈选对象并添加批注，圈外内容保持不动。</td>
+  </tr>
+</table>
 
 ### 2. 把复杂关系画成可编辑框线图
 
@@ -120,35 +131,71 @@ Yogurt AI 的创作与交付工具都在同一个菜单中：
 
 [浏览完整产品案例](examples/product-bridge/ai-interactive-film-case/) · [浏览画布框线图案例](examples/semantic-diagram/ai-interactive-film-system/)
 
-## 安装
+## 安装并启动桌面应用（Beta）
 
-需要 Node.js 与 Git。使用 Codex CLI 安装插件；完整交互画布请在 Codex 桌面端使用。运行：
+Yogurt AI Desktop 当前面向本地试用与开发验证。它会在本机启动画布和 Codex Agent 桥接，项目材料、画布数据与会话引用都保存在你选择的工作区中。
+
+### 准备环境
+
+- Node.js、npm 与 Git。
+- 已安装并完成登录的 Codex CLI。
+- Windows 用户推荐通过 npm 全局安装并保留默认位置，桌面应用会从中自动找到 Codex CLI。
 
 ```bash
+npm install -g @openai/codex
+codex login
 git clone https://github.com/suud003/Cowart.git
 cd Cowart
 npm install
+npm run desktop
+```
+
+`npm run desktop` 会先构建前端，再打开 Yogurt AI 桌面窗口。默认工作区是当前目录；如果希望它为另一个产品项目保存画布并运行 Agent，请先指定项目目录。
+
+PowerShell：
+
+```powershell
+$env:YOGURT_WORKSPACE_ROOT = 'D:\path\to\your-product'
+npm run desktop
+```
+
+macOS / Linux：
+
+```bash
+YOGURT_WORKSPACE_ROOT=/path/to/your-product npm run desktop
+```
+
+如果 Windows 没有自动找到 Codex CLI，可以显式指定 npm 安装的入口：
+
+```powershell
+$env:YOGURT_CODEX_JS = "$env:APPDATA\npm\node_modules\@openai\codex\bin\codex.js"
+npm run desktop
+```
+
+桌面桥接基于仍处于实验阶段的 [Codex App Server](https://learn.chatgpt.com/docs/app-server)。升级 Codex CLI 后，建议先运行 `npm run probe:desktop` 完成兼容性检查；面向正式分发时，应固定并验证配套 Codex 版本。实现与故障排查见 [`desktop/README.md`](desktop/README.md)。
+
+### 启用完整 Yogurt AI 工作流（推荐）
+
+桌面应用已经自带画布读写桥接。要同时启用本仓库内针对材料梳理、语义框线图、Product Bridge 和图片创作优化过的 Skills，请再完成一次插件安装：
+
+```bash
 npm run build
-codex plugin marketplace add <Cowart-绝对路径>
+codex plugin marketplace add .
 codex plugin add cowart-thinking-canvas@cowart-thinking-github
 codex plugin list
 ```
 
-安装后可在 Codex CLI 输入 `/plugins` 确认 Yogurt AI 已启用，再开启一个新任务，让 Skill 和画布工具完整加载。更多安装方式见 [Codex Plugins 文档](https://learn.chatgpt.com/docs/plugins)。
+安装后在 Codex CLI 输入 `/plugins` 确认 Yogurt AI 已启用，再重新打开桌面应用或开启一个 Codex 新任务以加载完整能力。更多安装方式见 [Codex Plugins 文档](https://learn.chatgpt.com/docs/plugins)。
 
 ## 三分钟上手
 
-### 1. 打开画布
+### 1. 打开一个真实项目
 
-在新的 Codex 任务中说：
+为产品项目设置 `YOGURT_WORKSPACE_ROOT`，运行 `npm run desktop`。Yogurt AI 会在该项目下读取和保存画布，并在右侧连接本地 Codex Agent。
 
-```text
-打开这个项目的 Yogurt AI 画布。
-```
+### 2. 放入材料，形成第一版结构
 
-### 2. 放入材料，长出第一张图
-
-把文档、图片或笔记放进当前项目，然后说：
+把文档、图片或笔记放进当前项目，再从 Agent 工作台发送：
 
 ```text
 把 docs/research 里的材料整理到 Yogurt AI。
@@ -156,14 +203,17 @@ codex plugin list
 再围绕“用户为什么会放弃这个流程”生成一张可编辑全景图。
 ```
 
-### 3. 选择下一步成果
+### 3. 圈选对象，把下一步交给 Agent
 
-直接圈选画布内容，或打开右上角 `Yogurt AI` 菜单：
+圈选需要推进的卡片，使用 Agent 工作台的快捷任务，或直接描述目标：
 
-- 想解释流程与系统：选择 `生成画布框线图`。
-- 想推进产品方案：选择 `生成交互 PRD`。
-- 想做视觉内容：创建 `AI 图片`、`AI HTML` 或 `AI Slides`。
-- 想分享成果：选择 `整合为 HTML` 或 `整合为 PowerPoint`。
+- `把选区整理成一张说明核心判断的框线图。`
+- `基于这些材料和 TAPD 内容，生成可评审的 PRD 与交互原型。`
+- `把评审中确认的结论写回原画布，并保留来源。`
+
+### 4. 评审、回流与交付
+
+在工作台查看 Agent 的计划和修改摘要，需要时完成审批；随后继续拖拽或改写画布对象。成熟成果可以通过右上角 `Yogurt AI` 菜单整合为 HTML 或 PowerPoint，也可以继续生成 AI 图片、HTML 与 Slides。
 
 ![Yogurt AI 将画布整理、框线图、PRD、创作与导出能力集中在同一菜单](examples/product-bridge/ai-interactive-film-case/docs/images/yogurt-new-actions.png)
 
@@ -175,6 +225,8 @@ codex plugin list
 - 复杂变更会先展示预览，确认画布仍处于预期状态后再一次性写入，并保留安全撤销能力。
 - 精确 SVG 图块在写入画布前会经过结构与脚本安全校验。
 - 项目外文件只有在用户明确允许时，才会复制到画布材料目录。
+- 桌面应用通过本机 stdio 连接 Codex App Server；网页渲染层不能提交任意 RPC、Shell 命令、进程启动请求或白名单以外的 MCP 工具调用。
+- Agent 的文件修改与命令执行请求会在工作台内展示，是否继续由用户审批。
 
 ## 技术信息
 
@@ -209,6 +261,7 @@ node skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs --root <ar
 npm install
 npm run dev
 npm run build
+npm run desktop
 ```
 
 也可以为指定用户项目启动 Vite 画布预览：
@@ -217,13 +270,16 @@ npm run build
 ./scripts/start-canvas.sh /path/to/user/project
 ```
 
-本地 Vite 页面用于 UI 开发，不包含 Codex Agent 消息桥。直接发送 AI 圈选、生成框线图和 Product Bridge 请求，请使用 Codex 中的 Yogurt AI 原生画布。
+本地 Vite 页面只用于画布 UI 开发，不包含 Codex Agent 桥接；`npm run desktop` 才会启动带本地 Agent 工作台的完整桌面体验。也可以在 Codex 中安装 Yogurt AI 插件，使用原生 Widget 与相同的画布能力。
 
 常用环境变量：
 
 - `COWART_PORT`：本地服务端口，默认 `43217`。
 - `COWART_PROJECT_DIR`：拥有画布数据的用户项目目录。
 - `COWART_CANVAS_DIR`：画布数据目录，默认 `$COWART_PROJECT_DIR/canvas`。
+- `YOGURT_WORKSPACE_ROOT`：桌面应用当前操作的产品项目目录。
+- `YOGURT_CODEX_JS`：Windows 上需要显式指定时使用的 Codex CLI JavaScript 入口。
+- `YOGURT_VITE_DEV_URL`：桌面端开发模式加载的本机 Vite 地址，仅接受 loopback HTTP URL。
 
 </details>
 

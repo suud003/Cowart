@@ -1,7 +1,7 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.1+codex.20260825",
-  "description": "A source-grounded thinking canvas with reversible edits and reviewable product workspaces.",
+  "version": "0.2.2+codex.20260825",
+  "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
   "author": {
     "name": "ZHONG XIN",
     "email": "zhongxin123456@gmail.com",
@@ -15,14 +15,16 @@
     "tldraw",
     "whiteboard",
     "image-generation",
-    "visual-collaboration"
+    "visual-collaboration",
+    "codex-agent",
+    "electron"
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Yogurt AI",
-    "shortDescription": "Turn sources into editable canvases, semantic diagrams, PRDs, and prototypes.",
-    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, annotation-driven editing, native editable semantic diagrams with a safe SVG precision route, and separately reviewable product workspaces for PRDs and interactive prototypes.",
+    "shortDescription": "Think on an editable canvas, hand work to Codex Agent, and bring the result back.",
+    "longDescription": "Yogurt AI is an installable AI product workspace that combines a tldraw-powered native canvas with a canvas-aware Codex Agent workbench. Organize source material, send the active page or exact selection to the agent, follow plans and changes, approve controlled actions, and return editable semantic diagrams, PRDs, prototypes, images, HTML, and presentations to one persistent project canvas.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -31,6 +33,8 @@
     "composerIcon": "./assets/app-icon.png",
     "capabilities": [
       "Interactive canvas",
+      "Desktop Codex Agent workbench",
+      "Canvas-aware Agent tasks and approvals",
       "Native Codex widget",
       "Source-grounded reasoning",
       "Atomic reversible edits",

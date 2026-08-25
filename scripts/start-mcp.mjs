@@ -29,10 +29,10 @@ function npmInstallCommand() {
   if (process.platform === "win32") {
     return {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", "npm", "install"],
+      args: ["/d", "/s", "/c", "npm", "install", "--omit=dev"],
     };
   }
-  return { command: "npm", args: ["install"] };
+  return { command: "npm", args: ["install", "--omit=dev"] };
 }
 
 function runNpmInstall() {

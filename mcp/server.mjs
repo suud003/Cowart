@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { COPYFILE_EXCL } from "node:constants";
 import { readFileSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, platform, tmpdir } from "node:os";
@@ -323,6 +324,46 @@ async function uniqueFilePath(dir, requestedName) {
   }
 }
 
+async function copyFileToUniquePath(dir, requestedName, sourcePath) {
+  await mkdir(dir, { recursive: true });
+  const safeName = sanitizeFileName(requestedName);
+  const ext = extname(safeName);
+  const base = safeName.slice(0, safeName.length - ext.length);
+  let candidate = safeName;
+  let counter = 2;
+  while (true) {
+    const candidatePath = join(dir, candidate);
+    try {
+      await copyFile(sourcePath, candidatePath, COPYFILE_EXCL);
+      return { fileName: candidate, filePath: candidatePath };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      candidate = `${base}-v${counter}${ext}`;
+      counter += 1;
+    }
+  }
+}
+
+async function writeFileToUniquePath(dir, requestedName, content) {
+  await mkdir(dir, { recursive: true });
+  const safeName = sanitizeFileName(requestedName);
+  const ext = extname(safeName);
+  const base = safeName.slice(0, safeName.length - ext.length);
+  let candidate = safeName;
+  let counter = 2;
+  while (true) {
+    const candidatePath = join(dir, candidate);
+    try {
+      await writeFile(candidatePath, content, { flag: "wx" });
+      return { fileName: candidate, filePath: candidatePath };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      candidate = `${base}-v${counter}${ext}`;
+      counter += 1;
+    }
+  }
+}
+
 async function uniqueDirectoryPath(dir, requestedName) {
   const safeName = sanitizeDirectoryName(requestedName);
   let candidate = safeName;
@@ -567,6 +608,10 @@ async function insertCowartImage(args = {}) {
   if (!snapshot || typeof snapshot !== "object" || !snapshot.schema || !snapshot.store) {
     throw new Error("No Yogurt AI canvas snapshot exists yet. Open the Yogurt AI widget for the target project and create or save the canvas before inserting images.");
   }
+  const baseRevision = canvasState.revision;
+  if (nonEmptyString(args.baseRevision) && args.baseRevision !== baseRevision) {
+    throw new Error(`Canvas revision changed from ${args.baseRevision} to ${baseRevision}; inspect again before inserting the image.`);
+  }
 
   const store = snapshot.store;
   const { selection } = await readCowartSelectionState(args);
@@ -624,7 +669,10 @@ async function insertCowartImage(args = {}) {
   if (!isSafeChildPath(resolveCanvasDir(args), assetsDir)) {
     throw new Error(`Unsafe page assets directory: ${assetsDir}`);
   }
-  const { fileName, filePath } = await uniqueFilePath(assetsDir, args.fileName || basename(sourceImagePath));
+  const requestedFileName = args.fileName || basename(sourceImagePath);
+  const { fileName, filePath } = args.dryRun
+    ? await uniqueFilePath(assetsDir, requestedFileName)
+    : await copyFileToUniquePath(assetsDir, requestedFileName, sourceImagePath);
   const recordSeed = sanitizeIdPart(fileName);
   const assetId = uniqueRecordId(store, "asset", recordSeed);
   const shapeId = uniqueRecordId(store, "shape", recordSeed);
@@ -692,24 +740,39 @@ async function insertCowartImage(args = {}) {
     typeName: "shape",
   };
 
+  let resultRevision = null;
   if (!args.dryRun) {
-    await mkdir(assetsDir, { recursive: true });
-    await copyFile(sourceImagePath, filePath);
-    for (const replacedShapeId of replacedShapeIds) {
-      delete store[replacedShapeId];
+    try {
+      for (const replacedShapeId of replacedShapeIds) {
+        delete store[replacedShapeId];
+      }
+      store[assetId] = assetRecord;
+      store[shapeId] = shapeRecord;
+      const saveArgs = {
+        ...args,
+        baseRevision,
+        ...(replacedImageShapeIds.length > 0
+          ? {
+              acknowledgedImageShapeDeletes: Array.from(new Set([
+                ...(Array.isArray(args.acknowledgedImageShapeDeletes) ? args.acknowledgedImageShapeDeletes : []),
+                ...replacedImageShapeIds,
+              ])),
+            }
+          : {}),
+      };
+      const saveResult = await saveCowartCanvasSnapshot(saveArgs, snapshot);
+      if (!saveResult.ok) {
+        throw new Error(saveResult.message || "Yogurt AI refused to persist the inserted image.");
+      }
+      resultRevision = saveResult.revision;
+    } catch (error) {
+      try {
+        await rm(filePath, { force: true });
+      } catch (rollbackError) {
+        throw new Error(`Image insertion failed and its asset rollback also failed: ${rollbackError.message}`, { cause: error });
+      }
+      throw error;
     }
-    store[assetId] = assetRecord;
-    store[shapeId] = shapeRecord;
-    const saveArgs = replacedImageShapeIds.length > 0
-      ? {
-          ...args,
-          acknowledgedImageShapeDeletes: Array.from(new Set([
-            ...(Array.isArray(args.acknowledgedImageShapeDeletes) ? args.acknowledgedImageShapeDeletes : []),
-            ...replacedImageShapeIds,
-          ])),
-        }
-      : args;
-    await saveCowartCanvasSnapshot(saveArgs, snapshot);
   }
 
   return {
@@ -728,6 +791,8 @@ async function insertCowartImage(args = {}) {
     bounds,
     replacedAiImageHolder: shouldReplaceAiImageHolder,
     replacedShapeIds,
+    baseRevision,
+    resultRevision,
     dryRun: Boolean(args.dryRun),
   };
 }
@@ -863,9 +928,12 @@ async function insertCowartHtmlDraft(args = {}) {
     existingFileName || args.fileName,
     `draft-${Date.now()}.html`,
   );
-  const fileTarget = shouldUpdateExistingDraft && existingFileName && !shouldForkSharedAsset
-    ? { fileName: requestedName, filePath: join(assetsDir, requestedName) }
-    : await uniqueFilePath(assetsDir, requestedName);
+  // HTML assets are immutable once referenced by a canvas revision. A new
+  // exclusive file prevents concurrent edits from overwriting the winning
+  // revision's content before the canvas CAS decides which mutation commits.
+  const fileTarget = args.dryRun
+    ? await uniqueFilePath(assetsDir, requestedName)
+    : await writeFileToUniquePath(assetsDir, requestedName, finalHtml);
   const { fileName, filePath } = fileTarget;
   if (!isSafeChildPath(assetsDir, filePath)) {
     throw new Error(`Unsafe HTML draft file path: ${filePath}`);
@@ -921,30 +989,21 @@ async function insertCowartHtmlDraft(args = {}) {
     typeName: "shape",
   };
 
+  let resultRevision = null;
   if (!args.dryRun) {
-    await mkdir(assetsDir, { recursive: true });
-    let previousFileContent = null;
-    let fileExisted = false;
-    try {
-      previousFileContent = await readFile(filePath);
-      fileExisted = true;
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    await writeFile(filePath, finalHtml);
     try {
       for (const replacedShapeId of replacedShapeIds) {
         delete store[replacedShapeId];
       }
       store[shapeId] = shapeRecord;
-      const saveResult = await saveCowartCanvasSnapshot(args, snapshot);
+      const saveResult = await saveCowartCanvasSnapshot({ ...args, baseRevision }, snapshot);
       if (!saveResult.ok) {
         throw new Error(saveResult.message || "Yogurt AI refused to persist the HTML draft.");
       }
+      resultRevision = saveResult.revision;
     } catch (error) {
       try {
-        if (fileExisted) await writeFile(filePath, previousFileContent);
-        else await rm(filePath, { force: true });
+        await rm(filePath, { force: true });
       } catch (rollbackError) {
         throw new Error(`HTML draft insertion failed and its asset rollback also failed: ${rollbackError.message}`, { cause: error });
       }
@@ -966,10 +1025,11 @@ async function insertCowartHtmlDraft(args = {}) {
     bounds,
     updatedExistingHtmlDraft: Boolean(shouldUpdateExistingDraft),
     forkedSharedHtmlDraftAsset: shouldForkSharedAsset,
+    versionedHtmlDraftAsset: Boolean(shouldUpdateExistingDraft),
     replacedAiDraftHolder: shouldReplaceDraftHolder,
     replacedShapeIds,
     baseRevision,
-    resultRevision: args.dryRun ? null : snapshotRevision(snapshot),
+    resultRevision,
     dryRun: Boolean(args.dryRun),
   };
 }
@@ -1395,6 +1455,7 @@ function registerCowartStateTools(mcpServer) {
       inputSchema: {
         ...projectArgsSchema,
         snapshot: z.any(),
+        baseRevision: z.string().trim().min(1).max(128).optional(),
         protectImageRecords: z.boolean().optional(),
         acknowledgedImageShapeDeletes: z.array(z.string()).optional(),
       },
@@ -1720,6 +1781,7 @@ function registerCowartImageTools(mcpServer) {
         annotationScreenshot: z.string().trim().optional(),
         shapeMeta: z.record(z.string(), z.unknown()).optional(),
         assetMeta: z.record(z.string(), z.unknown()).optional(),
+        baseRevision: z.string().trim().optional(),
         dryRun: z.boolean().optional(),
       },
       annotations: {

@@ -256,4 +256,36 @@ assert.deepEqual({
 assert.equal(mcpEventCallbackCompleted, true)
 assert.equal(mcpWindowObject.gtag, undefined)
 
+let desktopFallbackCompleted = false
+const desktopWindowObject = {
+  yogurtAgent: {},
+  cowartMcp: {
+    callServerTool() {
+      return Promise.resolve({ structuredContent: { configured: true, delivered: false } })
+    }
+  },
+  location: { search: '' }
+}
+const desktopAnalytics = createCowartAnalytics({
+  windowObject: desktopWindowObject,
+  documentObject: {
+    head: {
+      append() {
+        throw new Error('Desktop analytics must never load a remote script')
+      }
+    }
+  },
+  appVersion: 'test-version',
+  debugMode: false
+})
+desktopAnalytics.trackWidgetPromptSent({
+  promptType: 'other',
+  eventCallback() {
+    desktopFallbackCompleted = true
+  }
+})
+await new Promise((resolve) => setTimeout(resolve, 0))
+assert.equal(desktopFallbackCompleted, true)
+assert.equal(desktopWindowObject.gtag, undefined)
+
 console.log('Cowart analytics probe OK')
