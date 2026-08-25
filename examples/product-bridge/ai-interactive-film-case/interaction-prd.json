@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "product": {
+    "name": "分岔回声｜AI互动影游",
+    "stage": "MVP / REVIEW",
+    "viewport": { "width": 1280, "height": 800 }
+  },
+  "settings": { "showShaping": true },
+  "bridge": {
+    "sourcePacketPath": "bridge/source-packet.json",
+    "traceMapPath": "bridge/trace-map.json",
+    "syncStatePath": "bridge/sync-state.json"
+  },
+  "documents": [
+    { "id": "brief", "title": "01 · 产品 Brief", "kind": "shaping", "path": "shaping/01-brief.md" },
+    { "id": "requirements", "title": "02 · 需求与验收", "kind": "shaping", "path": "shaping/02-requirements.md" },
+    { "id": "flows", "title": "03 · 玩家与创作者流程", "kind": "shaping", "path": "shaping/03-flows.md" },
+    { "id": "module-plan", "title": "04 · 模块计划", "kind": "shaping", "path": "shaping/04-module-plan.md" },
+    { "id": "design", "title": "DESIGN · 体验与视觉基线", "kind": "design", "path": "DESIGN.md" },
+    { "id": "diagram-prompt", "title": "语义框线图 · 复用 Prompt", "kind": "design", "path": "diagrams/ai-interactive-film-system.prompt.md" }
+  ],
+  "modules": [
+    {
+      "id": "story-engine",
+      "title": "AI 叙事引擎",
+      "status": "review",
+      "summary": "将创作者约束编译为 AI 导演可执行的叙事、状态、安全与镜头装配规则",
+      "prdPath": "prd/story-engine.md",
+      "pages": [
+        {
+          "id": "system-overview",
+          "title": "系统关系总览",
+          "prototypePath": "diagrams/ai-interactive-film-system.html",
+          "viewport": { "width": 1280, "height": 800 },
+          "position": { "x": 80, "y": 80 },
+          "annotations": [],
+          "transitions": [
+            { "to": "studio", "label": "定义约束", "type": "association", "direction": "none", "path": "primary", "payload": "世界圣经与红线" },
+            { "to": "play", "label": "驱动运行时", "type": "dispatch", "direction": "forward", "path": "primary", "payload": "可执行叙事包" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "player-experience",
+      "title": "玩家体验",
+      "status": "review",
+      "summary": "发现作品、进入电影化场景、选择或自由行动、理解结局并重玩",
+      "prdPath": "prd/player-experience.md",
+      "pages": [
+        {
+          "id": "discover",
+          "title": "作品发现与开场",
+          "prototypePath": "prototypes/discover.html",
+          "viewport": { "width": 1280, "height": 800 },
+          "position": { "x": 520, "y": 80 },
+          "annotations": [
+            {
+              "id": 1, "x": 36, "y": 54,
+              "anchor": { "type": "element", "key": "discover.case-card", "point": { "x": 0.96, "y": 0.35 }, "offset": { "x": 0, "y": 0 } },
+              "title": "先建立作品承诺",
+              "body": "开场明确题材、时长和 AI 参与边界，避免把受控模拟包装成无限生成。",
+              "requirementId": "F-play-01"
+            },
+            {
+              "id": 2, "x": 80, "y": 86,
+              "anchor": { "type": "element", "key": "discover.start", "point": { "x": 0.86, "y": 0.5 }, "offset": { "x": 0, "y": 0 } },
+              "title": "一键进入第一幕",
+              "body": "保留故事选择并进入可交互播放页；原型使用本地确定性状态。",
+              "requirementId": "F-play-01"
+            }
+          ],
+          "transitions": [
+            { "to": "play", "label": "进入第一幕", "type": "flow", "direction": "forward", "path": "primary", "payload": "作品与初始状态" }
+          ]
+        },
+        {
+          "id": "play",
+          "title": "互动播放",
+          "prototypePath": "prototypes/play.html",
+          "viewport": { "width": 1280, "height": 800 },
+          "position": { "x": 960, "y": 80 },
+          "annotations": [
+            {
+              "id": 1, "x": 48, "y": 20,
+              "anchor": { "type": "element", "key": "play.scene", "point": { "x": 0.5, "y": 0.12 }, "offset": { "x": 0, "y": 0 } },
+              "title": "电影化场景仍受故事约束",
+              "body": "镜头、对白和提示共同表达当前叙事承诺，而不是每次无上下文地重新生成。",
+              "requirementId": "F-play-02"
+            },
+            {
+              "id": 2, "x": 28, "y": 76,
+              "anchor": { "type": "element", "key": "play.choice", "point": { "x": 0.08, "y": 0.5 }, "offset": { "x": 0, "y": 0 } },
+              "title": "低摩擦的预设行动",
+              "body": "选择会立即写入关系与线索状态，并触发下一段受控剧情。",
+              "requirementId": "F-play-02"
+            },
+            {
+              "id": 3, "x": 55, "y": 84,
+              "anchor": { "type": "element", "key": "play.free-action", "point": { "x": 0.5, "y": 0.5 }, "offset": { "x": 0, "y": 0 } },
+              "title": "自由行动有清晰边界",
+              "body": "自由输入经过可行性与安全校验；超出世界规则时给出解释和替代行动。",
+              "requirementId": "F-play-03"
+            },
+            {
+              "id": 4, "x": 86, "y": 42,
+              "anchor": { "type": "element", "key": "play.state-ledger", "point": { "x": 0.94, "y": 0.25 }, "offset": { "x": 0, "y": 0 } },
+              "title": "让 AI 记住了什么可见",
+              "body": "关系、线索和叙事承诺以状态账本呈现，为后续分支与结局提供解释。",
+              "requirementId": "F-play-04"
+            }
+          ],
+          "transitions": [
+            { "to": "ending", "label": "抵达结局", "type": "flow", "direction": "forward", "path": "primary", "payload": "状态账本与关键选择" },
+            { "to": "discover", "label": "退出本局", "type": "flow", "direction": "forward", "path": "alternative", "payload": "保存点" }
+          ]
+        },
+        {
+          "id": "ending",
+          "title": "可解释结局",
+          "prototypePath": "prototypes/ending.html",
+          "viewport": { "width": 1280, "height": 800 },
+          "position": { "x": 1400, "y": 80 },
+          "annotations": [
+            {
+              "id": 1, "x": 52, "y": 48,
+              "anchor": { "type": "element", "key": "ending.explanation", "point": { "x": 0.96, "y": 0.3 }, "offset": { "x": 0, "y": 0 } },
+              "title": "结局来自可追溯状态",
+              "body": "展示决定结局的关系、线索与承诺，不用“AI 随机生成”解释因果。",
+              "requirementId": "F-play-05"
+            },
+            {
+              "id": 2, "x": 84, "y": 87,
+              "anchor": { "type": "element", "key": "ending.replay", "point": { "x": 0.86, "y": 0.5 }, "offset": { "x": 0, "y": 0 } },
+              "title": "用差异重玩驱动留存",
+              "body": "重玩保留已发现结局，但重置本局状态并提示尚未探索的关键分歧。",
+              "requirementId": "F-play-06"
+            }
+          ],
+          "transitions": [
+            { "to": "discover", "label": "选择新路径", "type": "flow", "direction": "forward", "path": "primary", "payload": "已发现结局" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "creator-studio",
+      "title": "创作者工作台",
+      "status": "review",
+      "summary": "从故事简报与世界规则生成叙事图，模拟风险并发布受控作品",
+      "prdPath": "prd/creator-studio.md",
+      "pages": [
+        {
+          "id": "studio",
+          "title": "故事编排",
+          "prototypePath": "prototypes/studio.html",
+          "viewport": { "width": 1280, "height": 800 },
+          "position": { "x": 960, "y": 580 },
+          "annotations": [
+            {
+              "id": 1, "x": 22, "y": 20,
+              "anchor": { "type": "element", "key": "studio.brief", "point": { "x": 0.96, "y": 0.3 }, "offset": { "x": 0, "y": 0 } },
+              "title": "先明确作品承诺",
+              "body": "题材、目标时长、核心冲突与受众构成可版本化的故事简报。",
+              "requirementId": "F-studio-01"
+            },
+            {
+              "id": 2, "x": 23, "y": 52,
+              "anchor": { "type": "element", "key": "studio.world-rules", "point": { "x": 0.96, "y": 0.25 }, "offset": { "x": 0, "y": 0 } },
+              "title": "约束是生成输入，不是补救",
+              "body": "角色秘密、世界规则、禁区和不可违背节拍在生成前编译。",
+              "requirementId": "F-studio-02"
+            },
+            {
+              "id": 3, "x": 67, "y": 50,
+              "anchor": { "type": "element", "key": "studio.compile", "point": { "x": 0.5, "y": 0.5 }, "offset": { "x": 0, "y": 0 } },
+              "title": "编译为可执行叙事包",
+              "body": "将自然语言设定转为状态字段、节拍图与回退规则，并返回可修复错误。",
+              "requirementId": "F-studio-03"
+            },
+            {
+              "id": 4, "x": 83, "y": 84,
+              "anchor": { "type": "element", "key": "studio.simulate", "point": { "x": 0.86, "y": 0.5 }, "offset": { "x": 0, "y": 0 } },
+              "title": "发布前先跑分支模拟",
+              "body": "用确定性样例验证死路、角色越界、成本峰值与结局可达性。",
+              "requirementId": "F-studio-04"
+            }
+          ],
+          "transitions": [
+            { "to": "review", "label": "提交发布检查", "type": "flow", "direction": "forward", "path": "primary", "payload": "叙事包与模拟报告" }
+          ]
+        },
+        {
+          "id": "review",
+          "title": "发布与安全检查",
+          "prototypePath": "prototypes/review.html",
+          "viewport": { "width": 1280, "height": 800 },
+          "position": { "x": 1400, "y": 580 },
+          "annotations": [
+            {
+              "id": 1, "x": 50, "y": 48,
+              "anchor": { "type": "element", "key": "review.checks", "point": { "x": 0.96, "y": 0.28 }, "offset": { "x": 0, "y": 0 } },
+              "title": "安全、连贯性和成本一起评审",
+              "body": "阻塞项与警告分层；每项都可回到具体规则或叙事节点修复。",
+              "requirementId": "F-story-04"
+            },
+            {
+              "id": 2, "x": 84, "y": 88,
+              "anchor": { "type": "element", "key": "review.publish", "point": { "x": 0.86, "y": 0.5 }, "offset": { "x": 0, "y": 0 } },
+              "title": "只有通过门槛才能发布",
+              "body": "发布生成不可变版本号并保留模型、规则与素材来源，便于回滚和追责。",
+              "requirementId": "F-studio-05"
+            }
+          ],
+          "transitions": [
+            { "to": "discover", "label": "发布到作品库", "type": "dispatch", "direction": "forward", "path": "primary", "payload": "已发布版本" },
+            { "to": "studio", "label": "返回修复", "type": "flow", "direction": "forward", "path": "alternative", "payload": "阻塞项" }
+          ]
+        }
+      ]
+    }
+  ]
+}

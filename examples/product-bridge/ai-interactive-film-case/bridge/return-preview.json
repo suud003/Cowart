@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "workspaceId": "ai-interactive-film-case",
+  "pageId": "page:cowart-thinking",
+  "status": "applied",
+  "baseRevision": "713f675638706e19fa1b",
+  "operationDigest": "d2c944bdda45eb28f3fe35ad99bf9f813d0969a57ec84afae80d9bba5fac17d7",
+  "operations": [
+    {
+      "type": "create_zone", "key": "zone-case-input", "title": "01｜Case 输入与证据",
+      "body": "只放用户真实输入、来源状态与明确标注的 AI 假设。", "x": 0, "y": 0, "w": 700, "h": 520, "color": "light-grey",
+      "sourceRefs": ["src-user-case-brief"],
+      "bridge": { "mappingId": "map-case-input", "workspaceId": "ai-interactive-film-case", "sourceIds": ["src-user-case-brief"], "yogurtShapeIds": [], "zoneId": "zone-case-input", "requirementIds": [], "pageIds": [], "annotationRefs": [], "returnedShapeIds": [], "lastSyncedRevision": null }
+    },
+    {
+      "type": "create_zone", "key": "zone-product-shaping", "title": "02｜产品定位与 MVP",
+      "body": "把案例收敛成可验证的用户价值、范围和成功标准。", "x": 760, "y": 0, "w": 700, "h": 520, "color": "light-blue",
+      "sourceRefs": ["src-user-case-brief"],
+      "bridge": { "mappingId": "map-product-shaping", "workspaceId": "ai-interactive-film-case", "sourceIds": ["src-user-case-brief"], "yogurtShapeIds": [], "zoneId": "zone-product-shaping", "requirementIds": ["F-story-01", "F-play-01", "F-studio-01"], "pageIds": ["system-overview", "discover", "studio"], "annotationRefs": ["discover#1", "discover#2", "studio#1"], "returnedShapeIds": [], "lastSyncedRevision": null }
+    },
+    {
+      "type": "create_zone", "key": "zone-core-loop", "title": "03｜玩家核心体验循环",
+      "body": "观看 → 选择或自由行动 → AI 导演续写 → 状态更新 → 可解释分支。", "x": 1520, "y": 0, "w": 700, "h": 680, "color": "light-violet",
+      "sourceRefs": ["src-user-case-brief"],
+      "bridge": { "mappingId": "map-player-loop", "workspaceId": "ai-interactive-film-case", "sourceIds": ["src-user-case-brief"], "yogurtShapeIds": [], "zoneId": "zone-core-loop", "requirementIds": ["F-play-01", "F-play-02", "F-play-03", "F-play-04", "F-play-05", "F-play-06"], "pageIds": ["discover", "play", "ending"], "annotationRefs": ["discover#1", "discover#2", "play#1", "play#2", "play#3", "play#4", "ending#1", "ending#2"], "returnedShapeIds": [], "lastSyncedRevision": null }
+    },
+    {
+      "type": "create_zone", "key": "zone-ai-system", "title": "04｜AI 叙事与镜头系统",
+      "body": "约束优先的叙事编译、运行时导演、安全闸门与混合镜头装配。", "x": 2280, "y": 0, "w": 700, "h": 680, "color": "light-green",
+      "sourceRefs": ["src-user-case-brief"],
+      "bridge": { "mappingId": "map-story-system", "workspaceId": "ai-interactive-film-case", "sourceIds": ["src-user-case-brief"], "yogurtShapeIds": [], "zoneId": "zone-ai-system", "requirementIds": ["F-story-01", "F-story-02", "F-story-03", "F-story-04", "F-story-05"], "pageIds": ["system-overview", "play", "review"], "annotationRefs": ["review#1"], "returnedShapeIds": [], "lastSyncedRevision": null }
+    },
+    {
+      "type": "create_zone", "key": "zone-prototype-review", "title": "05｜PRD 与交互原型评审",
+      "body": "完整工作区、五个可交互页面和一张可复用语义框线图。", "x": 0, "y": 760, "w": 1460, "h": 560, "color": "light-yellow",
+      "sourceRefs": ["src-user-case-brief"],
+      "bridge": { "mappingId": "map-studio-review", "workspaceId": "ai-interactive-film-case", "sourceIds": ["src-user-case-brief"], "yogurtShapeIds": [], "zoneId": "zone-prototype-review", "requirementIds": ["F-studio-01", "F-studio-02", "F-studio-03", "F-studio-04", "F-studio-05"], "pageIds": ["studio", "review"], "annotationRefs": ["studio#1", "studio#2", "studio#3", "studio#4", "review#2"], "returnedShapeIds": [], "lastSyncedRevision": null }
+    },
+    {
+      "type": "create_zone", "key": "zone-risks-decisions", "title": "06｜风险与开放决策",
+      "body": "把尚未验证的用户、生成边界、延迟成本与内容安全单独保留。", "x": 1520, "y": 760, "w": 1460, "h": 560, "color": "light-red",
+      "sourceRefs": ["src-user-case-brief"],
+      "bridge": { "mappingId": "map-risks-decisions", "workspaceId": "ai-interactive-film-case", "sourceIds": ["src-user-case-brief"], "yogurtShapeIds": [], "zoneId": "zone-risks-decisions", "requirementIds": ["NFR-story-01", "NFR-story-02", "NFR-story-03", "NFR-play-01", "NFR-play-02", "NFR-play-03", "NFR-studio-01", "NFR-studio-02", "NFR-studio-03"], "pageIds": [], "annotationRefs": [], "returnedShapeIds": [], "lastSyncedRevision": null }
+    },
+    {
+      "type": "create_card", "key": "card-user-evidence", "parentZoneId": "zone-case-input", "role": "evidence", "title": "用户明确提出的 Case",
+      "body": "把 PRD 生成、画图和布局一起推送到 Yogurt AI，并以“AI 互动影游”作为完整示例。\n\n证据状态：用户直接提供；本次没有 TAPD 链接。", "w": 300, "h": 140, "color": "grey", "sourceRefs": ["src-user-case-brief"],
+      "source": { "id": "src-user-case-brief", "kind": "user-note", "title": "AI 互动影游案例请求", "summary": "用户希望将 PRD 与画布能力组合为一个可推送案例。", "excerpt": "以一个特定的 case，如做一个 AI 互动影游来作为 case", "yogurtShapeIds": [], "provenance": { "origin": "user-authored", "uri": null }, "accessStatus": "available" }
+    },
+    {
+      "type": "create_card", "key": "card-ai-assumptions", "parentZoneId": "zone-case-input", "role": "assumption", "title": "AI 假设｜示例叙事与 MVP",
+      "body": "故事：近未来雾港记忆调查，玩家寻找失踪者林夏。\nMVP：运行时生成叙事/对白/状态；视觉装配预生成镜头。\n端优先级：桌面 Web。", "w": 300, "h": 140, "color": "yellow", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-open-decisions", "parentZoneId": "zone-case-input", "role": "question", "title": "仍需用户确认",
+      "body": "1. 首发是玩家、独立创作者还是影视 IP 团队？\n2. 运行时生成边界到对白、静帧还是完整视频？\n3. 优先验证何种付费方式？", "w": 300, "h": 140, "color": "orange", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-value-prop", "parentZoneId": "zone-product-shaping", "role": "summary", "title": "一句话价值",
+      "body": "让创作者把“故事规则”变成可玩的电影，让玩家的每个行动都被记住、被回应，并最终形成可解释结局。", "w": 300, "h": 130, "color": "blue", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-target-users", "parentZoneId": "zone-product-shaping", "role": "assumption", "title": "AI 假设｜首发用户",
+      "body": "玩家：喜欢悬疑、剧情选择与重玩。\n创作者：会写故事但缺少游戏工程能力的独立叙事创作者。", "w": 300, "h": 130, "color": "violet", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-mvp-scope", "parentZoneId": "zone-product-shaping", "role": "decision", "title": "MVP 范围",
+      "body": "1 个 20–30 分钟示范章节；3 个可达结局；选择 + 自由行动；世界圣经、分支模拟、发布闸门；不做实时长视频生成。", "w": 300, "h": 130, "color": "green", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-success-metrics", "parentZoneId": "zone-product-shaping", "role": "assumption", "title": "验证指标（待基线）",
+      "body": "首幕完成率、自由行动成功理解率、结局可解释评分、二次开局率；创作者侧关注首个可玩版本完成时长与阻塞检查修复率。", "w": 300, "h": 130, "color": "blue", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-creator-constraints", "parentZoneId": "zone-core-loop", "role": "idea", "title": "① 创作者先给约束",
+      "body": "世界观、角色秘密、不可违背节拍、内容红线和可用镜头资产形成版本化叙事包。", "w": 300, "h": 130, "color": "violet", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-player-input", "parentZoneId": "zone-core-loop", "role": "idea", "title": "② 玩家选择或自由行动",
+      "body": "预设选择降低摩擦；自由输入增加能动性。所有行动先过世界可行性与安全检查。", "w": 300, "h": 130, "color": "blue", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-ai-director", "parentZoneId": "zone-core-loop", "role": "insight", "title": "③ AI 导演续写",
+      "body": "读取当前场景、人物目标、玩家行动和未兑现承诺，选择下一个叙事节拍并生成对白与镜头意图。", "w": 300, "h": 130, "color": "green", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-state-ledger", "parentZoneId": "zone-core-loop", "role": "decision", "title": "④ 状态账本更新",
+      "body": "显式记录角色关系、线索、资源、承诺和安全标志；每次变化都保留触发行动和规则。", "w": 300, "h": 130, "color": "orange", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-ending-graph", "parentZoneId": "zone-core-loop", "role": "summary", "title": "⑤ 分支与可解释结局",
+      "body": "状态满足阈值后进入结局图谱；结局页解释决定它的关键选择、关系与线索，并支持差异重玩。", "w": 300, "h": 130, "color": "violet", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-world-bible", "parentZoneId": "zone-ai-system", "role": "decision", "title": "世界圣经与红线",
+      "body": "定义事实、角色边界、时间线、禁区、语气和不可改写的关键节拍；约束必须先于生成。", "w": 300, "h": 130, "color": "violet", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-narrative-compiler", "parentZoneId": "zone-ai-system", "role": "insight", "title": "叙事编译器",
+      "body": "把自然语言设定编译成状态字段、节拍图、条件、回退规则和模型提示包；错误可定位到源规则。", "w": 300, "h": 130, "color": "green", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-safety-gate", "parentZoneId": "zone-ai-system", "role": "decision", "title": "安全与成本闸门",
+      "body": "运行前检查内容安全、角色越界、延迟预算和生成成本；不通过时使用可解释回退，不静默漂移。", "w": 300, "h": 130, "color": "red", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-shot-assembler", "parentZoneId": "zone-ai-system", "role": "assumption", "title": "混合镜头装配器",
+      "body": "MVP 从预生成镜头、角色状态和短过渡中装配电影化呈现；实时重点生成叙事计划、对白与配音参数。", "w": 300, "h": 130, "color": "blue", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-fallback-policy", "parentZoneId": "zone-ai-system", "role": "decision", "title": "回退与可观测性",
+      "body": "超时使用预写分支；规则冲突提示玩家改写行动；记录模型、规则版本、耗时、成本与触发的回退原因。", "w": 300, "h": 130, "color": "orange", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-prd-workspace", "parentZoneId": "zone-prototype-review", "role": "material", "title": "完整 Interaction PRD 工作区",
+      "body": "3 份模块 PRD + 4 份 shaping 文档 + 14 个稳定元素锚点 + 端到端 trace map。\n本地路径：outputs/ai-interactive-film-case", "w": 300, "h": 140, "color": "yellow", "sourceRefs": ["src-user-case-brief"]
+    },
+    {
+      "type": "create_card", "key": "card-prototype-discover", "parentZoneId": "zone-prototype-review", "role": "material", "title": "原型 01｜作品发现",
+      "body": "选择记忆调查模式、查看作品承诺并进入第一幕。\n文件：prototypes/discover.html", "w": 300, "h": 120, "color": "grey"
+    },
+    {
+      "type": "create_card", "key": "card-prototype-play", "parentZoneId": "zone-prototype-review", "role": "material", "title": "原型 02｜互动播放",
+      "body": "预设选择、自由行动、状态账本与确定性 AI 导演反馈。\n文件：prototypes/play.html", "w": 300, "h": 120, "color": "grey"
+    },
+    {
+      "type": "create_card", "key": "card-prototype-ending", "parentZoneId": "zone-prototype-review", "role": "material", "title": "原型 03｜可解释结局",
+      "body": "查看状态因果、关键选择和未探索分歧，并开启差异重玩。\n文件：prototypes/ending.html", "w": 300, "h": 120, "color": "grey"
+    },
+    {
+      "type": "create_card", "key": "card-prototype-studio", "parentZoneId": "zone-prototype-review", "role": "material", "title": "原型 04–05｜创作与发布",
+      "body": "编辑故事简报与世界规则、编译叙事包、模拟分支并完成发布检查。\n文件：prototypes/studio.html、prototypes/review.html", "w": 300, "h": 120, "color": "grey"
+    },
+    {
+      "type": "create_card", "key": "card-system-diagram", "parentZoneId": "zone-prototype-review", "role": "material", "title": "可复用系统框线图",
+      "body": "HTML + 可访问内联 SVG + 语义关系规格 + 复现 Prompt；已按 html-line-svg 规则校验。\n文件：diagrams/ai-interactive-film-system.html", "w": 300, "h": 120, "color": "blue"
+    },
+    {
+      "type": "create_card", "key": "card-risk-consistency", "parentZoneId": "zone-risks-decisions", "role": "counterpoint", "title": "一致性风险",
+      "body": "自由输入可能破坏角色动机与关键节拍。应以状态契约、角色测试和预写回退保障连续性。", "w": 320, "h": 150, "color": "red"
+    },
+    {
+      "type": "create_card", "key": "card-risk-safety", "parentZoneId": "zone-risks-decisions", "role": "counterpoint", "title": "内容安全与版权风险",
+      "body": "输入、生成和发布三层审核；记录素材与模型来源；高风险题材默认进入人工复核。", "w": 320, "h": 150, "color": "red"
+    },
+    {
+      "type": "create_card", "key": "card-risk-latency", "parentZoneId": "zone-risks-decisions", "role": "counterpoint", "title": "延迟与成本风险",
+      "body": "运行时长视频会破坏节奏和单位经济。MVP 使用预生成视觉池、分级模型和超时回退。", "w": 320, "h": 150, "color": "orange"
+    },
+    {
+      "type": "create_card", "key": "card-next-validation", "parentZoneId": "zone-risks-decisions", "role": "question", "title": "下一轮必须验证",
+      "body": "访谈 5 名玩家 + 5 名创作者；用 20 分钟可玩章节验证行动理解、结局解释和创作耗时，再决定实时视觉生成边界。", "w": 320, "h": 150, "color": "violet"
+    },
+    { "type": "create_relation", "key": "rel-evidence-value", "from": "card-user-evidence", "to": "card-value-prop", "kind": "grounds", "label": "定义案例边界", "color": "grey", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-value-loop", "from": "card-value-prop", "to": "card-player-input", "kind": "shapes", "label": "转为玩家体验", "color": "blue", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-creator-compiler", "from": "card-creator-constraints", "to": "card-narrative-compiler", "kind": "constrains", "label": "编译约束", "color": "violet", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-world-compiler", "from": "card-world-bible", "to": "card-narrative-compiler", "kind": "compiles", "label": "结构化", "color": "green", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-player-director", "from": "card-player-input", "to": "card-ai-director", "kind": "triggers", "label": "玩家行动", "color": "blue", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-compiler-director", "from": "card-narrative-compiler", "to": "card-ai-director", "kind": "constrains", "label": "叙事包", "color": "green", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-gate-director", "from": "card-safety-gate", "to": "card-ai-director", "kind": "guards", "label": "放行或回退", "color": "red", "dash": "dashed" },
+    { "type": "create_relation", "key": "rel-director-ledger", "from": "card-ai-director", "to": "card-state-ledger", "kind": "updates", "label": "写入变化", "color": "orange", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-ledger-shot", "from": "card-state-ledger", "to": "card-shot-assembler", "kind": "drives", "label": "驱动镜头", "color": "blue", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-ledger-ending", "from": "card-state-ledger", "to": "card-ending-graph", "kind": "explains", "label": "决定结局", "color": "violet", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-prd-prototype", "from": "card-prd-workspace", "to": "card-prototype-play", "kind": "reviews", "label": "需求到交互", "color": "grey", "dash": "draw" },
+    { "type": "create_relation", "key": "rel-target-validation", "from": "card-target-users", "to": "card-next-validation", "kind": "tests", "label": "先验证再扩展", "color": "orange", "dash": "dashed" }
+  ],
+  "preview": {
+    "ok": true,
+    "applied": true,
+    "dryRunResultRevision": "b31c9eb2bcebc1c5591a",
+    "resultRevision": "e1b6c2fe715c9007f7af",
+    "operationId": "20260824135138444-862c669b",
+    "existingShapeCount": 0,
+    "changeCount": 45,
+    "counts": {
+      "zones": 6,
+      "cards": 27,
+      "relations": 12
+    },
+    "preservesExistingShapes": true,
+    "generatedAt": "2026-08-24T21:48:02.8001677+08:00",
+    "appliedAt": "2026-08-24T21:51:55.5469783+08:00"
+  }
+}

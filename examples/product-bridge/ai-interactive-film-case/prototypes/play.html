@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>分岔回声｜雾港失忆录</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07090c;--panel:#11151b;--panel2:#171c23;--line:#2b323b;--text:#f5f1ea;--muted:#9da6b1;--orange:#ff7048;--cyan:#70d4dc;--green:#72d1a0;--red:#ff7676;--amber:#f2c16d}
+    *{box-sizing:border-box}body{margin:0;min-width:320px;background:radial-gradient(circle at 15% -10%,#1a2530 0,transparent 35%),var(--bg);color:var(--text);font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.5}button,input,a{font:inherit}button{color:inherit}a{text-decoration:none;color:inherit}.shell{max-width:1440px;margin:auto;padding:0 26px}
+    header{height:64px;border-bottom:1px solid rgba(255,255,255,.09);background:rgba(7,9,12,.9);position:sticky;top:0;z-index:30;backdrop-filter:blur(14px)}.top{height:100%;display:flex;align-items:center;gap:18px}.back{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}.back:hover{color:var(--text)}.divider{height:22px;border-left:1px solid var(--line)}.title{font-size:14px;font-weight:700}.chapter{font-size:12px;color:var(--muted)}.sim-tag{margin-left:auto;border:1px solid #3a4650;border-radius:999px;padding:5px 9px;color:#bdc7d0;font-size:11px}.iconbtn{border:1px solid var(--line);background:#12171d;border-radius:10px;width:35px;height:35px;cursor:pointer}.iconbtn:hover{border-color:#5a6570}
+    main{display:grid;grid-template-columns:minmax(0,1fr) 352px;gap:18px;padding-top:18px;padding-bottom:34px}.stage-col{min-width:0}.stage{border:1px solid var(--line);border-radius:19px;overflow:hidden;background:#0d1116;position:relative;aspect-ratio:16/8.25;min-height:370px;max-height:600px} .stage:before,.stage:after{content:"";position:absolute;z-index:10;left:0;right:0;height:22px;background:#050609}.stage:before{top:0}.stage:after{bottom:0}
+    .shot{position:absolute;inset:0;overflow:hidden;background:linear-gradient(180deg,#324652 0 45%,#172128 46% 62%,#090d11 63%);transition:filter .35s,opacity .35s}.shot:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 63% 31%,rgba(244,228,189,.68) 0 4.8%,rgba(244,228,189,.13) 5% 8%,transparent 9%),linear-gradient(115deg,transparent 0 64%,rgba(190,229,235,.14) 64.3% 65%,transparent 65.3%),repeating-linear-gradient(98deg,transparent 0 92px,rgba(255,255,255,.032) 93px 94px)}
+    .harbor{position:absolute;left:0;right:0;bottom:10%;height:38%;background:linear-gradient(174deg,transparent 0 8%,#151b20 8.5% 35%,#090c10 35.5%)}.harbor:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,#11161b 0 34px,#1a2228 35px 55px,#0e1217 56px 91px);clip-path:polygon(0 74%,7% 46%,14% 69%,23% 21%,31% 62%,40% 36%,48% 71%,59% 17%,66% 54%,77% 32%,86% 68%,94% 42%,100% 60%,100% 100%,0 100%)}.water{position:absolute;inset:70% 0 0;background:repeating-linear-gradient(91deg,transparent 0 48px,rgba(255,133,77,.18) 49px 52px,transparent 53px 82px),#0a1116;filter:blur(.4px)}
+    .silhouette{position:absolute;left:62%;bottom:23%;width:30px;height:128px;background:#06080a;border-radius:20px 20px 2px 2px;filter:drop-shadow(0 0 8px rgba(130,212,221,.2))}.silhouette:before{content:"";position:absolute;left:3px;top:-23px;width:24px;height:27px;border-radius:50%;background:#07090b}.scene2 .shot{background:linear-gradient(180deg,#171f27,#0a0d12)}.scene2 .harbor{inset:14% 8% 8%;height:auto;border:1px solid #3a4650;background:repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 1px,transparent 1px 38px),linear-gradient(90deg,#111820,#202932 49%,#0c1117 50%);clip-path:none}.scene2 .harbor:before{clip-path:none;background:linear-gradient(90deg,transparent 48.8%,#75808a 49% 50%,transparent 50.2%),repeating-linear-gradient(90deg,transparent 0 82px,rgba(113,212,220,.09) 83px 84px)}.scene2 .water{display:none}.scene2 .silhouette{left:23%;bottom:18%;height:151px}.scene3 .shot{background:linear-gradient(160deg,#2d1d1e,#0b0d11 68%)}.scene3 .harbor{height:50%;background:linear-gradient(178deg,transparent 24%,#171016 24.5% 45%,#08090d 45.5%)}
+    .frame-info{position:absolute;z-index:12;left:25px;top:38px;display:flex;gap:8px;align-items:center}.frame-info span{border:1px solid rgba(255,255,255,.2);background:rgba(6,8,11,.5);border-radius:999px;padding:5px 8px;font-size:11px}.subtitle{position:absolute;z-index:15;left:12%;right:12%;bottom:45px;text-align:center;text-shadow:0 2px 8px #000}.speaker{display:block;color:var(--cyan);font-size:12px;font-weight:720;margin-bottom:6px}.line{display:inline;padding:5px 11px;background:rgba(5,7,9,.78);font-size:clamp(15px,1.6vw,20px);line-height:1.75;box-decoration-break:clone;-webkit-box-decoration-break:clone}.loader{display:none;position:absolute;z-index:18;inset:0;background:rgba(4,6,8,.74);place-items:center;text-align:center}.loader.on{display:grid}.spinner{width:30px;height:30px;border:2px solid #4a5159;border-top-color:var(--orange);border-radius:50%;animation:spin .7s linear infinite;margin:auto auto 10px}.loader small{color:var(--muted)}@keyframes spin{to{transform:rotate(360deg)}}
+    .decision{margin-top:14px;border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:17px}.decision-head{display:flex;align-items:center;margin-bottom:12px}.decision-head h1{font-size:17px;margin:0}.turn{margin-left:auto;color:var(--muted);font-size:12px}.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.choice{border:1px solid #323a44;background:#151a21;border-radius:13px;padding:13px;text-align:left;cursor:pointer;display:grid;grid-template-columns:28px 1fr;gap:10px}.choice:hover{border-color:#64717e;background:#1b2129}.choice:focus-visible,.free input:focus-visible,.free button:focus-visible,.choice:focus-visible{outline:3px solid rgba(112,212,220,.3);outline-offset:2px}.choice .key{width:27px;height:27px;border:1px solid #4c5662;border-radius:8px;display:grid;place-items:center;font-size:11px;color:var(--muted)}.choice strong{display:block;font-size:14px}.choice small{display:block;color:var(--muted);margin-top:2px}.choice[disabled]{opacity:.55;cursor:not-allowed}
+    .or{display:flex;align-items:center;gap:10px;margin:13px 0;color:#707986;font-size:11px}.or:before,.or:after{content:"";flex:1;border-top:1px solid var(--line)}.free{display:flex;gap:8px}.free input{min-width:0;flex:1;border:1px solid #363e48;background:#0d1116;color:var(--text);padding:11px 12px;border-radius:11px;outline:0}.free button{border:0;background:#e8e2d9;color:#17130f;border-radius:11px;padding:0 16px;font-weight:740;cursor:pointer}.free button[disabled]{opacity:.5;cursor:wait}.help{display:flex;justify-content:space-between;gap:16px;margin-top:7px;font-size:11px;color:var(--muted)}.field-status.error{color:var(--red)}.field-status.ok{color:var(--green)}
+    aside{border:1px solid var(--line);border-radius:18px;background:var(--panel);overflow:hidden;align-self:start;position:sticky;top:82px}.aside-head{padding:18px;border-bottom:1px solid var(--line)}.aside-head h2{font-size:16px;margin:0 0 4px}.aside-head p{margin:0;font-size:12px;color:var(--muted)}.meters{padding:16px 18px;border-bottom:1px solid var(--line)}.meter{margin-bottom:13px}.meter:last-child{margin:0}.meter-top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px}.meter-top span:last-child{font-variant-numeric:tabular-nums;color:#cbd2d9}.bar{height:5px;border-radius:5px;background:#292f37;overflow:hidden}.bar i{display:block;width:var(--v);height:100%;background:var(--c);transition:width .4s}.clues{padding:16px 18px}.clues h3{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#8e98a5;margin:0 0 12px}.clue-list{list-style:none;padding:0;margin:0}.clue{display:grid;grid-template-columns:23px 1fr;gap:9px;padding:9px 0;border-bottom:1px solid #232a31}.clue:last-child{border:0}.clue b{font-size:13px}.clue small{display:block;color:var(--muted);margin-top:2px}.dot{width:21px;height:21px;border-radius:50%;background:#1d252d;color:var(--cyan);display:grid;place-items:center;font-size:11px}.clue.locked{opacity:.46}.log{border-top:1px solid var(--line);padding:14px 18px;max-height:180px;overflow:auto}.log div{font-size:11px;color:var(--muted);margin-bottom:7px;padding-left:10px;border-left:1px solid #3c4550}.continue{display:block;margin:0 18px 18px;border-radius:11px;padding:11px;text-align:center;background:var(--orange);color:#1a0d07;font-weight:760}.continue.disabled{pointer-events:none;opacity:.36}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .line{word-break:break-word;overflow-wrap:anywhere}
+    @media(max-width:980px){main{grid-template-columns:1fr}aside{position:static}.meters{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.clue-list{display:grid;grid-template-columns:repeat(2,1fr);gap:0 16px}.log{max-height:120px}}
+    @media(max-width:640px){.shell{padding:0 14px}.chapter,.sim-tag{display:none}main{padding-top:10px}.stage{min-height:310px;aspect-ratio:4/3}.subtitle{left:7%;right:7%}.line{font-size:14px;line-height:1.6}.choices{grid-template-columns:1fr}.free{flex-direction:column}.free button{padding:10px}.meters{grid-template-columns:1fr}.clue-list{grid-template-columns:1fr}.decision{padding:14px}.title{font-size:12px}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <header><div class="shell top"><a class="back" href="discover.html">← <span>退出放映</span></a><span class="divider"></span><span class="title">雾港失忆录</span><span class="chapter" id="chapterLabel">第一幕 · 消失的潮汐</span><span class="sim-tag">确定性叙事模拟 · 未调用真实 AI</span><button class="iconbtn" id="soundBtn" type="button" aria-label="静音">♪</button></div></header>
+  <main class="shell">
+    <div class="stage-col">
+      <section class="stage scene1" id="stage" data-prd-anchor="F-play-02" data-annotation-anchor="play.scene" aria-label="互动电影画面">
+        <div class="shot"><div class="harbor"></div><div class="water"></div><div class="silhouette"></div></div>
+        <div class="frame-info"><span id="sceneId">SCENE 06</span><span>预生成电影镜头占位</span></div>
+        <div class="subtitle"><span class="speaker" id="speaker">林夏 · 记忆录音</span><span class="line" id="dialogue">“如果你听见潮汐倒流，别相信灯塔里的人。”</span></div>
+        <div class="loader" id="loader" role="status" aria-live="polite"><div><div class="spinner"></div><strong>正在编排下一段叙事</strong><br><small>本原型用确定性规则模拟生成</small></div></div>
+      </section>
+
+      <section class="decision" aria-labelledby="decisionTitle">
+        <div class="decision-head"><h1 id="decisionTitle">你如何回应这段记忆？</h1><span class="turn" id="turn">选择 1 / 2</span></div>
+        <div class="choices" data-prd-anchor="F-play-03" data-annotation-anchor="play.choice">
+          <button class="choice" type="button" data-action="trust"><span class="key">A</span><span><strong id="choiceATitle">相信录音里的警告</strong><small id="choiceADesc">把林夏视为可靠叙述者</small></span></button>
+          <button class="choice" type="button" data-action="inspect"><span class="key">B</span><span><strong id="choiceBTitle">检查画面里的倒影</strong><small id="choiceBDesc">优先验证可观测的细节</small></span></button>
+        </div>
+        <div class="or">或者自由行动</div>
+        <form class="free" id="freeForm" data-prd-anchor="F-play-04" data-annotation-anchor="play.free-action" novalidate><label class="sr-only" for="freeInput">输入你的行动</label><input id="freeInput" maxlength="80" autocomplete="off" placeholder="例如：回放 02:17，辨认背景里的广播"><button id="freeSubmit" type="submit">执行行动</button></form>
+        <div class="help"><span id="fieldStatus" class="field-status" role="status" aria-live="polite">输入 4–80 个字；系统会映射到预设的叙事状态</span><span><span id="count">0</span>/80</span></div>
+      </section>
+    </div>
+
+    <aside data-prd-anchor="F-play-04" data-annotation-anchor="play.state-ledger" aria-labelledby="ledgerTitle">
+      <div class="aside-head"><h2 id="ledgerTitle">调查状态账本</h2><p>所有变化来自你做过的选择，可追溯、可回看。</p></div>
+      <div class="meters">
+        <div class="meter"><div class="meter-top"><span>信任林夏</span><span id="trustValue">42</span></div><div class="bar"><i id="trustBar" style="--v:42%;--c:var(--cyan)"></i></div></div>
+        <div class="meter"><div class="meter-top"><span>真相完整度</span><span id="truthValue">28</span></div><div class="bar"><i id="truthBar" style="--v:28%;--c:var(--orange)"></i></div></div>
+        <div class="meter"><div class="meter-top"><span>雾港警觉</span><span id="riskValue">16</span></div><div class="bar"><i id="riskBar" style="--v:16%;--c:var(--amber)"></i></div></div>
+      </div>
+      <div class="clues"><h3>已确认线索</h3><ul class="clue-list" id="clueList"><li class="clue"><span class="dot">1</span><span><b>潮汐时刻表</b><small>港务局 · 2047/06/19</small></span></li><li class="clue locked" id="clue2"><span class="dot">?</span><span><b>待验证的录音</b><small>完成一次选择后解锁</small></span></li><li class="clue locked" id="clue3"><span class="dot">?</span><span><b>档案室照片</b><small>进入下一场景后解锁</small></span></li></ul></div>
+      <div class="log" id="log" aria-label="选择记录"><div>你接受了记忆调查委托。</div></div>
+      <a id="endingLink" class="continue disabled" href="ending.html" aria-disabled="true">完成两次选择后查看结局</a>
+    </aside>
+  </main>
+  <script>
+    const state={turn:0,trust:42,truth:28,risk:16,choices:[]};
+    const scenes=[
+      {cls:'scene1',id:'SCENE 06',chapter:'第一幕 · 消失的潮汐',speaker:'林夏 · 记忆录音',line:'“如果你听见潮汐倒流，别相信灯塔里的人。”',title:'你如何回应这段记忆？',a:['相信录音里的警告','把林夏视为可靠叙述者'],b:['检查画面里的倒影','优先验证可观测的细节']},
+      {cls:'scene2',id:'SCENE 11',chapter:'第二幕 · 空白档案',speaker:'档案管理员 · 证词',line:'“林夏从没来过这里。但这张照片，为什么有她的签名？”',title:'矛盾证据出现了。你先追哪一条？',a:['追问管理员的迟疑','施压可能获得人物动机'],b:['比对照片与潮汐表','拼合可验证的时间线']},
+      {cls:'scene3',id:'SCENE 17',chapter:'终幕 · 灯塔回声',speaker:'调查终端',line:'证据链已收束。你相信的故事，将成为雾港被记住的方式。',title:'调查已完成',a:['回看状态账本','确认所有变化的来源'],b:['进入结局判定','查看当前证据导向']}
+    ];
+    const $=s=>document.querySelector(s), choices=[...document.querySelectorAll('.choice')],input=$('#freeInput'),form=$('#freeForm'),loader=$('#loader');
+    function clamp(n){return Math.max(0,Math.min(100,n))}
+    function sync(persist=true){[['trust',state.trust],['truth',state.truth],['risk',state.risk]].forEach(([k,v])=>{$('#'+k+'Value').textContent=v;$('#'+k+'Bar').style.setProperty('--v',v+'%')});$('#turn').textContent=state.turn<2?`选择 ${state.turn+1} / 2`:'调查已收束';if(persist)localStorage.setItem('echo_film_state',JSON.stringify(state))}
+    function setBusy(on){loader.classList.toggle('on',on);choices.forEach(b=>b.disabled=on);input.disabled=on;$('#freeSubmit').disabled=on}
+    function log(text){const row=document.createElement('div');row.textContent=text;$('#log').append(row);row.scrollIntoView({block:'nearest'})}
+    function apply(action,label){if(state.turn>=2){location.href='ending.html';return}setBusy(true);$('#fieldStatus').className='field-status';$('#fieldStatus').textContent='正在把行动映射到故事状态…';setTimeout(()=>{
+      if(action==='trust'){state.trust=clamp(state.trust+12);state.truth=clamp(state.truth+4);log(`选择：${label} · 信任 +12，真相 +4`)}
+      else if(action==='inspect'){state.truth=clamp(state.truth+14);state.risk=clamp(state.risk+6);log(`选择：${label} · 真相 +14，警觉 +6`)}
+      else if(action==='archive'){state.truth=clamp(state.truth+11);state.risk=clamp(state.risk+3);log(`自由行动：${label} · 发现档案关联`)}
+      else{state.trust=clamp(state.trust+5);state.risk=clamp(state.risk+8);log(`自由行动：${label} · 触发人物回应`)}
+      state.choices.push({turn:state.turn+1,action,label});state.turn++;sync();renderScene();setBusy(false);$('#fieldStatus').className='field-status ok';$('#fieldStatus').textContent='行动已记录，叙事状态已更新';
+    },760)}
+    function renderScene(){const s=scenes[state.turn];$('#stage').className='stage '+s.cls;$('#sceneId').textContent=s.id;$('#chapterLabel').textContent=s.chapter;$('#speaker').textContent=s.speaker;$('#dialogue').textContent=s.line;$('#decisionTitle').textContent=s.title;$('#choiceATitle').textContent=s.a[0];$('#choiceADesc').textContent=s.a[1];$('#choiceBTitle').textContent=s.b[0];$('#choiceBDesc').textContent=s.b[1];
+      if(state.turn>=1){const c=$('#clue2');c.classList.remove('locked');c.innerHTML='<span class="dot">2</span><span><b>02:17 港口录音</b><small>与灯塔广播同源</small></span>'}
+      if(state.turn>=2){const c=$('#clue3');c.classList.remove('locked');c.innerHTML='<span class="dot">3</span><span><b>被改写的档案照</b><small>签名时间晚于失踪</small></span>';choices[0].dataset.action='ledger';choices[1].dataset.action='ending';input.disabled=true;$('#freeSubmit').disabled=true;input.placeholder='调查已完成';const link=$('#endingLink');link.classList.remove('disabled');link.removeAttribute('aria-disabled');link.textContent='查看我的分支结局 →'}
+    }
+    choices.forEach(btn=>btn.addEventListener('click',()=>{if(btn.dataset.action==='ledger'){$('#log').scrollIntoView({behavior:'smooth'});return}if(btn.dataset.action==='ending'){location.href='ending.html';return}apply(btn.dataset.action,btn.querySelector('strong').textContent)}));
+    input.addEventListener('input',()=>{$('#count').textContent=input.value.length;if($('#fieldStatus').classList.contains('error')){$('#fieldStatus').className='field-status';$('#fieldStatus').textContent='输入 4–80 个字；系统会映射到预设的叙事状态'}});
+    form.addEventListener('submit',e=>{e.preventDefault();const value=input.value.trim();if(value.length<4){$('#fieldStatus').className='field-status error';$('#fieldStatus').textContent='行动描述至少需要 4 个字';input.focus();return}const kind=/档案|照片|时间|回放|广播/.test(value)?'archive':'free';apply(kind,value);input.value='';$('#count').textContent='0'});
+    $('#soundBtn').addEventListener('click',e=>{const muted=e.currentTarget.textContent==='×';e.currentTarget.textContent=muted?'♪':'×';e.currentTarget.setAttribute('aria-label',muted?'静音':'恢复声音')});sync(false);renderScene();
+  </script>
+</body>
+</html>

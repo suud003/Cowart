@@ -107,7 +107,7 @@ AI 根据世界规则、角色关系和历史状态续写下一幕；创作者�
 
 ### 案例：分岔回声｜AI 互动影游
 
-以下是本次本地端到端验证结果；案例文件暂未随仓库发布。本次验证只从一句用户目标出发，没有读取 TAPD，因此故事设定、目标用户、指标和商业判断都被明确标记为 AI 假设，而不是产品事实。案例最终生成：
+[完整案例、PRD、可交互原型、语义图、Bridge 映射与运行说明](examples/product-bridge/ai-interactive-film-case/)已发布在仓库中。案例只从一句用户目标出发，没有读取 TAPD，因此故事设定、目标用户、指标和商业判断都被明确标记为 AI 假设，而不是产品事实。案例最终生成：
 
 | 产物 | 结果 |
 | --- | --- |
@@ -117,6 +117,10 @@ AI 根据世界规则、角色关系和历史状态续写下一幕；创作者�
 | 全局画布 | 1 张可访问、响应式的 AI 互动影游系统框线图 |
 | 评审定位 | 6 个评审页面、14 个稳定标注锚点，浏览器实测最大漂移 0.01px |
 | Yogurt 回流 | 6 个分区、27 张分区内卡片、12 条关系；通过 45 个 typed operations 原子写入 |
+
+![分岔回声 Product Bridge 全局画布](examples/product-bridge/ai-interactive-film-case/docs/images/product-bridge-global-canvas.png)
+
+![分岔回声评审结果回流 Yogurt 后的六个产品分区](examples/product-bridge/ai-interactive-film-case/docs/images/yogurt-return-zones.png)
 
 这个案例验证的是闭环，而不是某一版故事创意：Yogurt 中的模糊想法可以被整理成可评审产品文档，评审结论也可以沿同一条 trace map 返回原始思考画布。
 

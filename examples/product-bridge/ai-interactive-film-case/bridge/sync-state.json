@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "workspaceId": "ai-interactive-film-case",
+  "returnFlow": {
+    "mode": "dry-run-required",
+    "status": "applied",
+    "sourceRevision": "713f675638706e19fa1b",
+    "previewBaseRevision": "713f675638706e19fa1b",
+    "operationDigest": "d2c944bdda45eb28f3fe35ad99bf9f813d0969a57ec84afae80d9bba5fac17d7",
+    "confirmation": {
+      "required": true,
+      "confirmed": true,
+      "confirmedAt": "2026-08-24T21:51:55.5469783+08:00"
+    },
+    "appliedRevision": "e1b6c2fe715c9007f7af",
+    "operationId": "20260824135138444-862c669b",
+    "pendingMappingUpdates": [],
+    "conflicts": []
+  }
+}

@@ -93,7 +93,11 @@ Choose `生成语义框线图` when a full PRD is unnecessary. Direct submission
 
 ### Case: Branching Echoes, An AI Interactive Film/Game
 
-The following numbers are from a local end-to-end validation; the case files are not currently published with this repository. The test started from one short user goal and no readable TAPD source, so its story, audience, metrics, and commercial decisions were explicitly labeled as AI assumptions. It produced four shaping documents, three module PRDs, five interactive prototype pages, one accessible semantic system diagram, six review pages with 14 stable annotation anchors, and a confirmed Yogurt return containing six zones, 27 child cards, and 12 relations applied through 45 typed operations.
+The repository now includes the [complete case, PRDs, interactive prototypes, semantic diagram, Bridge mappings, and run instructions](examples/product-bridge/ai-interactive-film-case/). The case started from one short user goal and no readable TAPD source, so its story, audience, metrics, and commercial decisions were explicitly labeled as AI assumptions. It produced four shaping documents, three module PRDs, five interactive prototype pages, one accessible semantic system diagram, six review pages with 14 stable annotation anchors, and a confirmed Yogurt return containing six zones, 27 child cards, and 12 relations applied through 45 typed operations.
+
+![The Branching Echoes Product Bridge global canvas](examples/product-bridge/ai-interactive-film-case/docs/images/product-bridge-global-canvas.png)
+
+![Six product zones after returning the reviewed Branching Echoes structure to Yogurt](examples/product-bridge/ai-interactive-film-case/docs/images/yogurt-return-zones.png)
 
 The case validates the loop rather than a particular story pitch: ambiguous product thinking can become reviewable artifacts, and reviewed structure can follow the same trace map back into the original Yogurt canvas.
 

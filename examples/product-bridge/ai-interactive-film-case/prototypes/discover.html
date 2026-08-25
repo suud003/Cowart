@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>分岔回声｜发现故事</title>
+  <style>
+    :root{color-scheme:dark;--bg:#080a0d;--panel:#11151b;--panel-2:#171c23;--line:#2a3039;--text:#f4f0e8;--muted:#a7adb8;--orange:#ff7048;--orange-2:#ff9a6f;--cyan:#71d6df;--danger:#ff6c6c;--ok:#77d5a3;--radius:18px;--max:1180px}
+    *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-width:320px;color:var(--text);background:radial-gradient(circle at 76% -12%,rgba(88,106,126,.23),transparent 42%),var(--bg);font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.5}
+    button,input,a{font:inherit}button,a{touch-action:manipulation}button{color:inherit}a{color:inherit;text-decoration:none}.shell{max-width:var(--max);margin:auto;padding:0 28px}
+    header{height:72px;border-bottom:1px solid rgba(255,255,255,.09);background:rgba(8,10,13,.88);backdrop-filter:blur(14px);position:sticky;top:0;z-index:20}.topbar{height:100%;display:flex;align-items:center;gap:28px}.brand{display:flex;align-items:center;gap:11px;font-weight:720;letter-spacing:.08em;white-space:nowrap}.mark{width:25px;height:25px;border:1px solid #f7c6a8;border-radius:50%;position:relative}.mark:before,.mark:after{content:"";position:absolute;inset:5px;border:1px solid var(--orange);border-radius:50%}.mark:after{inset:10px;background:var(--orange);border:0}
+    nav{display:flex;align-items:center;gap:4px;margin-left:auto}.navlink{padding:9px 12px;border-radius:10px;color:var(--muted);font-size:14px}.navlink:hover,.navlink.active{color:var(--text);background:#1b2027}.profile{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#e8d8c8;color:#211914;font-weight:800;margin-left:8px}
+    main{padding:34px 0 64px}.eyebrow{display:flex;gap:8px;align-items:center;color:var(--orange-2);font-size:12px;letter-spacing:.16em;text-transform:uppercase}.eyebrow:before{content:"";width:22px;border-top:1px solid var(--orange)}h1,h2,p{margin-top:0}.hero{display:grid;grid-template-columns:minmax(0,1.36fr) minmax(300px,.64fr);min-height:422px;border:1px solid var(--line);border-radius:26px;overflow:hidden;background:var(--panel);position:relative}.cinema{min-height:422px;position:relative;overflow:hidden;background:linear-gradient(180deg,#344450 0 44%,#18232c 45%,#0c1016 100%)}
+    .cinema:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 62% 35%,rgba(255,193,141,.24),transparent 7%),linear-gradient(116deg,transparent 51%,rgba(218,235,239,.11) 51.4% 52%,transparent 52.4%),repeating-linear-gradient(100deg,transparent 0 78px,rgba(255,255,255,.035) 79px 80px)}
+    .moon{position:absolute;right:14%;top:54px;width:62px;height:62px;background:#f1e4ce;border-radius:50%;box-shadow:0 0 42px rgba(249,221,178,.3)}.city{position:absolute;left:0;right:0;bottom:0;height:58%;background:linear-gradient(170deg,transparent 8%,#141a20 8.4% 12%,transparent 12.4%),linear-gradient(188deg,transparent 28%,#1a2128 28.4% 45%,#0a0e13 45.4%)}.city:before{content:"";position:absolute;inset:12% 0 0;background:repeating-linear-gradient(90deg,#11171c 0 26px,#1d252b 27px 43px,#0e1318 44px 74px);clip-path:polygon(0 65%,7% 48%,14% 59%,22% 27%,29% 61%,36% 42%,47% 56%,58% 18%,65% 51%,73% 36%,81% 62%,90% 29%,100% 58%,100% 100%,0 100%)}
+    .reflection{position:absolute;left:8%;right:8%;bottom:0;height:24%;background:repeating-linear-gradient(90deg,transparent 0 33px,rgba(255,127,76,.18) 34px 36px,transparent 37px 62px);filter:blur(3px);transform:skewX(-12deg)}.figure{position:absolute;left:57%;bottom:13%;width:24px;height:114px;background:#06080b;border-radius:30px 30px 3px 3px;filter:drop-shadow(0 0 5px rgba(255,255,255,.16))}.figure:before{content:"";position:absolute;left:1px;top:-20px;width:21px;height:24px;border-radius:50%;background:#080a0d}
+    .frame-note{position:absolute;left:24px;top:22px;padding:7px 10px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(8,10,13,.42);font-size:12px;color:#e8eef0}.frame-meta{position:absolute;left:24px;bottom:24px;font-size:12px;letter-spacing:.12em;color:#c4cbd0}.hero-copy{padding:42px 38px;display:flex;flex-direction:column;justify-content:center;position:relative}.hero-copy h1{font-size:clamp(35px,4vw,54px);line-height:1.02;letter-spacing:-.04em;margin:14px 0 16px}.hero-copy p{color:var(--muted);font-size:15px;max-width:36ch}.pills{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 24px}.pill{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:5px 9px;color:#cbd0d8;background:#151a20}.actions{display:flex;align-items:center;gap:10px}.primary,.secondary,.iconbtn{border:1px solid transparent;border-radius:12px;cursor:pointer;transition:.18s ease}.primary{background:var(--orange);color:#1a0d08;padding:12px 17px;font-weight:760;display:inline-flex;align-items:center;justify-content:center;gap:8px}.primary:hover{background:#ff8866;transform:translateY(-1px)}.primary:focus-visible,.secondary:focus-visible,input:focus-visible,.filter:focus-visible{outline:3px solid rgba(113,214,223,.32);outline-offset:2px}.secondary{padding:11px 14px;border-color:var(--line);background:#171b21;color:#e5e1dc}.secondary:hover{border-color:#555e69}.primary[disabled]{opacity:.58;cursor:wait;transform:none}.playtri{width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid currentColor}
+    .story-meta{display:flex;gap:22px;border-top:1px solid var(--line);padding-top:20px;margin-top:25px}.metric strong{display:block;font-size:15px}.metric span{font-size:11px;color:var(--muted)}
+    .section-head{display:flex;align-items:end;gap:18px;margin:40px 0 18px}.section-head h2{margin:0;font-size:24px;letter-spacing:-.02em}.search{margin-left:auto;position:relative}.search input{width:232px;border:1px solid var(--line);background:#10141a;color:var(--text);border-radius:12px;padding:10px 13px 10px 36px;outline:0}.search:before{content:"⌕";position:absolute;left:13px;top:7px;font-size:21px;color:var(--muted)}
+    .filters{display:flex;gap:8px;margin-bottom:18px;overflow:auto;padding-bottom:2px}.filter{white-space:nowrap;border:1px solid var(--line);background:transparent;color:var(--muted);padding:8px 13px;border-radius:999px;cursor:pointer}.filter.active{background:#eee7dc;color:#18130e;border-color:#eee7dc}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{border:1px solid var(--line);border-radius:17px;background:var(--panel);overflow:hidden;transition:.2s ease}.card:hover{transform:translateY(-2px);border-color:#4a525e}.thumb{height:136px;position:relative;overflow:hidden;background:linear-gradient(140deg,#293844,#0b1118 62%)}.thumb:before{content:"";position:absolute;inset:0;background:var(--art,linear-gradient(145deg,transparent 40%,rgba(255,112,72,.34) 40.5% 43%,transparent 43.5%)),repeating-linear-gradient(90deg,transparent 0 52px,rgba(255,255,255,.04) 53px 54px)}.thumb .tag{position:absolute;top:12px;left:12px;background:rgba(5,7,10,.72);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:4px 8px;font-size:11px}.cardbody{padding:16px}.cardbody h3{margin:0 0 5px;font-size:16px}.cardbody p{font-size:13px;color:var(--muted);margin-bottom:14px;min-height:39px}.cardfoot{display:flex;justify-content:space-between;align-items:center;color:#d2d5d9;font-size:12px}.progress{height:3px;background:#292f36;margin-top:12px;border-radius:3px;overflow:hidden}.progress i{display:block;height:100%;width:var(--progress);background:var(--orange)}
+    .empty{display:none;border:1px dashed #363e48;border-radius:18px;padding:50px 20px;text-align:center;color:var(--muted);background:#0e1217}.empty strong{display:block;color:var(--text);font-size:18px;margin-bottom:5px}.empty button{margin-top:14px}.status{min-height:22px;font-size:12px;color:var(--muted);margin-top:11px}.status.success{color:var(--ok)}
+    @media(max-width:900px){.hero{grid-template-columns:1fr}.cinema{min-height:310px}.hero-copy{padding:30px}.grid{grid-template-columns:repeat(2,1fr)}nav .navlink:not(.active){display:none}}
+    @media(max-width:620px){.shell{padding:0 16px}.topbar{gap:10px}.brand{font-size:14px}.hero{border-radius:20px}.cinema{min-height:250px}.hero-copy{padding:25px 21px}.hero-copy h1{font-size:38px}.section-head{align-items:stretch;flex-direction:column;margin-top:30px}.search{margin:0}.search input{width:100%}.grid{grid-template-columns:1fr}.actions{align-items:stretch;flex-direction:column}.actions>*{width:100%}.story-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.metric strong,.metric span{overflow-wrap:anywhere}.profile{display:none}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell topbar">
+      <a class="brand" href="discover.html" aria-label="分岔回声首页"><span class="mark" aria-hidden="true"></span>分岔回声</a>
+      <nav aria-label="主导航"><a class="navlink active" href="discover.html">探索</a><a class="navlink" href="play.html">继续游玩</a><a class="navlink" href="studio.html">创作台</a><a class="navlink" href="review.html">发布审核</a><span class="profile" aria-label="用户：乔">乔</span></nav>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="hero" data-prd-anchor="F-play-01" data-annotation-anchor="discover.case-card" aria-labelledby="featured-title">
+      <div class="cinema" role="img" aria-label="雾夜港口，一名调查员面对远处城市灯光的预生成镜头占位图">
+        <span class="frame-note">预生成镜头 · 序章</span><span class="moon"></span><span class="city"></span><span class="reflection"></span><span class="figure"></span><span class="frame-meta">FOG HARBOR / 2047</span>
+      </div>
+      <div class="hero-copy">
+        <span class="eyebrow">本周首映 · 近未来悬疑</span>
+        <h1 id="featured-title">雾港失忆录</h1>
+        <p>失踪者林夏留下三段互相矛盾的记忆。你相信谁，就会让雾港成为不同的真相。</p>
+        <div class="pills" aria-label="作品标签"><span class="pill">45 分钟</span><span class="pill">5 个结局</span><span class="pill">AI 叙事状态模拟</span></div>
+        <div class="actions">
+          <button id="startBtn" class="primary" type="button" data-annotation-anchor="discover.start"><span class="playtri" aria-hidden="true"></span><span>进入雾港</span></button>
+          <button id="previewBtn" class="secondary" type="button">查看故事边界</button>
+        </div>
+        <div id="startStatus" class="status" role="status" aria-live="polite"></div>
+        <div class="story-meta">
+          <div class="metric"><strong>87%</strong><span>玩家完成率</span></div><div class="metric"><strong>剧情级</strong><span>内容分级：16+</span></div><div class="metric"><strong>离线模拟</strong><span>本原型运行方式</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="catalog-title">
+      <div class="section-head"><div><span class="eyebrow">你的放映单</span><h2 id="catalog-title">继续一段未完成的选择</h2></div><label class="search"><span class="sr-only"></span><input id="search" type="search" placeholder="搜索故事或题材" aria-label="搜索故事或题材"></label></div>
+      <div class="filters" role="group" aria-label="作品分类">
+        <button class="filter active" data-filter="all" type="button">全部</button><button class="filter" data-filter="suspense" type="button">悬疑</button><button class="filter" data-filter="emotion" type="button">情感</button><button class="filter" data-filter="sci-fi" type="button">科幻</button><button class="filter" data-filter="finished" type="button">已完结</button>
+      </div>
+      <div id="catalog" class="grid">
+        <a class="card" data-tags="悬疑 科幻 雾港失忆录 suspense sci-fi" href="play.html"><div class="thumb"><span class="tag">上次游玩：第 2 幕</span></div><div class="cardbody"><h3>雾港失忆录</h3><p>记忆调查员追踪林夏留下的矛盾证词。</p><div class="cardfoot"><span>还剩约 28 分钟</span><span>2 / 5 线索</span></div><div class="progress" style="--progress:38%"><i></i></div></div></a>
+        <article class="card" data-tags="情感 月台的第十三封信 emotion"><div class="thumb" style="--art:linear-gradient(35deg,transparent 42%,rgba(113,214,223,.26) 42.5% 53%,transparent 53.5%)"><span class="tag">新作</span></div><div class="cardbody"><h3>月台的第十三封信</h3><p>每次错过同一班车，都会收到未来的回信。</p><div class="cardfoot"><span>约 32 分钟</span><span>4 个结局</span></div><div class="progress" style="--progress:0%"><i></i></div></div></article>
+        <article class="card" data-tags="科幻 已完结 天穹尽头 sci-fi finished"><div class="thumb" style="--art:radial-gradient(circle at 65% 38%,rgba(238,230,198,.4),transparent 9%),linear-gradient(155deg,transparent 47%,rgba(255,112,72,.23) 47.5% 52%,transparent 52.5%)"><span class="tag">已完结</span></div><div class="cardbody"><h3>天穹尽头</h3><p>最后一艘观测艇在太阳风暴中接到求救。</p><div class="cardfoot"><span>结局：守望者</span><span>100%</span></div><div class="progress" style="--progress:100%"><i></i></div></div></article>
+      </div>
+      <div id="empty" class="empty" role="status"><strong>没有找到匹配的故事</strong><span>换个关键词，或返回全部题材。</span><br><button id="resetSearch" class="secondary" type="button">清除筛选</button></div>
+    </section>
+  </main>
+  <dialog id="boundaryDialog" style="border:1px solid #303741;border-radius:18px;background:#11151b;color:#f4f0e8;padding:0;max-width:520px;width:calc(100% - 32px)">
+    <div style="padding:24px"><div class="eyebrow">故事边界</div><h2 style="margin:12px 0 8px">AI 不会改写哪些部分？</h2><p style="color:#a7adb8">人物身份、雾港世界观与关键结局由创作者锁定；本原型只用确定性脚本模拟对白、叙事语气和状态变化，不会调用真实 AI。</p><div class="pills"><span class="pill">不生成真实人物</span><span class="pill">不跳出世界设定</span><span class="pill">选择可回看</span></div><form method="dialog" style="text-align:right"><button class="primary">明白了</button></form></div>
+  </dialog>
+  <script>
+    const startBtn=document.querySelector('#startBtn'), status=document.querySelector('#startStatus');
+    startBtn.addEventListener('click',()=>{startBtn.disabled=true;startBtn.querySelector('span:last-child').textContent='正在准备片段…';status.textContent='读取你的上次进度（离线模拟）';setTimeout(()=>{localStorage.setItem('echo_case_started','1');status.className='status success';status.textContent='片段已就绪，正在进入雾港';setTimeout(()=>location.href='play.html',450)},750)});
+    const dialog=document.querySelector('#boundaryDialog');document.querySelector('#previewBtn').addEventListener('click',()=>dialog.showModal());
+    const cards=[...document.querySelectorAll('.card')],filters=[...document.querySelectorAll('.filter')],search=document.querySelector('#search'),catalog=document.querySelector('#catalog'),empty=document.querySelector('#empty');let filter='all';
+    function render(){const q=search.value.trim().toLowerCase();let shown=0;cards.forEach(card=>{const okFilter=filter==='all'||card.dataset.tags.includes(filter);const okQuery=!q||card.textContent.toLowerCase().includes(q)||card.dataset.tags.toLowerCase().includes(q);card.hidden=!(okFilter&&okQuery);if(!card.hidden)shown++});catalog.style.display=shown?'grid':'none';empty.style.display=shown?'none':'block'}
+    filters.forEach(btn=>btn.addEventListener('click',()=>{filter=btn.dataset.filter;filters.forEach(x=>x.classList.toggle('active',x===btn));render()}));search.addEventListener('input',render);document.querySelector('#resetSearch').addEventListener('click',()=>{search.value='';filter='all';filters.forEach((x,i)=>x.classList.toggle('active',i===0));render();search.focus()});
+  </script>
+</body>
+</html>

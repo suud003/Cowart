@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "workspaceId": "ai-interactive-film-case",
+  "mappings": [
+    {
+      "id": "map-case-input",
+      "sourceIds": ["src-user-case-brief"],
+      "yogurtShapeIds": [],
+      "zoneId": "zone-case-input",
+      "requirementIds": [],
+      "pageIds": [],
+      "annotationRefs": [],
+      "returnedShapeIds": [
+        "shape:cowart-zone-zone-case-input",
+        "shape:card-user-evidence-9d27e972",
+        "shape:card-ai-assumptions-9a9f1103",
+        "shape:card-open-decisions-288e2ab9",
+        "shape:rel-evidence-value-e14ed1e0"
+      ],
+      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+    },
+    {
+      "id": "map-product-shaping",
+      "sourceIds": ["src-user-case-brief"],
+      "yogurtShapeIds": [],
+      "zoneId": "zone-product-shaping",
+      "requirementIds": ["F-story-01", "F-play-01", "F-studio-01"],
+      "pageIds": ["system-overview", "discover", "studio"],
+      "annotationRefs": ["discover#1", "discover#2", "studio#1"],
+      "returnedShapeIds": [
+        "shape:cowart-zone-zone-product-shaping",
+        "shape:card-value-prop-84416f55",
+        "shape:card-target-users-b8c95f1a",
+        "shape:card-mvp-scope-3a63fbf2",
+        "shape:card-success-metrics-24ed1914",
+        "shape:rel-evidence-value-e14ed1e0",
+        "shape:rel-value-loop-97a39039",
+        "shape:rel-target-validation-d9e14cc3"
+      ],
+      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+    },
+    {
+      "id": "map-player-loop",
+      "sourceIds": ["src-user-case-brief"],
+      "yogurtShapeIds": [],
+      "zoneId": "zone-core-loop",
+      "requirementIds": ["F-play-01", "F-play-02", "F-play-03", "F-play-04", "F-play-05", "F-play-06"],
+      "pageIds": ["discover", "play", "ending"],
+      "annotationRefs": ["discover#1", "discover#2", "play#1", "play#2", "play#3", "play#4", "ending#1", "ending#2"],
+      "returnedShapeIds": [
+        "shape:cowart-zone-zone-core-loop",
+        "shape:card-creator-constraints-cbb24ae1",
+        "shape:card-player-input-4cc2d958",
+        "shape:card-ai-director-f48bfaa7",
+        "shape:card-state-ledger-75a441b8",
+        "shape:card-ending-graph-4644f374",
+        "shape:rel-value-loop-97a39039",
+        "shape:rel-creator-compiler-5c77b3cc",
+        "shape:rel-player-director-fa6b25f6",
+        "shape:rel-compiler-director-e36844dc",
+        "shape:rel-director-ledger-09a572e3",
+        "shape:rel-ledger-shot-819e5260",
+        "shape:rel-ledger-ending-86b0c7c1"
+      ],
+      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+    },
+    {
+      "id": "map-story-system",
+      "sourceIds": ["src-user-case-brief"],
+      "yogurtShapeIds": [],
+      "zoneId": "zone-ai-system",
+      "requirementIds": ["F-story-01", "F-story-02", "F-story-03", "F-story-04", "F-story-05"],
+      "pageIds": ["system-overview", "play", "review"],
+      "annotationRefs": ["review#1"],
+      "returnedShapeIds": [
+        "shape:cowart-zone-zone-ai-system",
+        "shape:card-world-bible-97c3fa96",
+        "shape:card-narrative-compiler-66f765d4",
+        "shape:card-safety-gate-586965a8",
+        "shape:card-shot-assembler-a118307e",
+        "shape:card-fallback-policy-ea95150a",
+        "shape:rel-creator-compiler-5c77b3cc",
+        "shape:rel-world-compiler-e0661d67",
+        "shape:rel-player-director-fa6b25f6",
+        "shape:rel-compiler-director-e36844dc",
+        "shape:rel-gate-director-62cd97e7",
+        "shape:rel-ledger-shot-819e5260"
+      ],
+      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+    },
+    {
+      "id": "map-studio-review",
+      "sourceIds": ["src-user-case-brief"],
+      "yogurtShapeIds": [],
+      "zoneId": "zone-prototype-review",
+      "requirementIds": ["F-studio-01", "F-studio-02", "F-studio-03", "F-studio-04", "F-studio-05"],
+      "pageIds": ["studio", "review"],
+      "annotationRefs": ["studio#1", "studio#2", "studio#3", "studio#4", "review#2"],
+      "returnedShapeIds": [
+        "shape:cowart-zone-zone-prototype-review",
+        "shape:card-prd-workspace-10108a2c",
+        "shape:card-prototype-discover-eb3c61eb",
+        "shape:card-prototype-play-9583415a",
+        "shape:card-prototype-ending-087aa284",
+        "shape:card-prototype-studio-bb45101f",
+        "shape:card-system-diagram-de9b3d5c",
+        "shape:rel-prd-prototype-2c597746"
+      ],
+      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+    },
+    {
+      "id": "map-risks-decisions",
+      "sourceIds": ["src-user-case-brief"],
+      "yogurtShapeIds": [],
+      "zoneId": "zone-risks-decisions",
+      "requirementIds": ["NFR-story-01", "NFR-story-02", "NFR-story-03", "NFR-play-01", "NFR-play-02", "NFR-play-03", "NFR-studio-01", "NFR-studio-02", "NFR-studio-03"],
+      "pageIds": [],
+      "annotationRefs": [],
+      "returnedShapeIds": [
+        "shape:cowart-zone-zone-risks-decisions",
+        "shape:card-risk-consistency-c04fd729",
+        "shape:card-risk-safety-ed4c7152",
+        "shape:card-risk-latency-f5ea82a3",
+        "shape:card-next-validation-b13f4a19",
+        "shape:rel-target-validation-d9e14cc3"
+      ],
+      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+    }
+  ]
+}

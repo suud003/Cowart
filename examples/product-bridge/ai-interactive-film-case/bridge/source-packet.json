@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "workspaceId": "ai-interactive-film-case",
+  "productName": "分岔回声｜AI互动影游",
+  "capture": {
+    "canvasId": "canvas:example-ai-interactive-film-case",
+    "pageId": "page:cowart-thinking",
+    "scope": "page",
+    "sourceRevision": "713f675638706e19fa1b",
+    "selectionShapeIds": []
+  },
+  "sources": [
+    {
+      "id": "src-user-case-brief",
+      "kind": "user-note",
+      "title": "AI 互动影游案例请求",
+      "summary": "用户希望把 PRD 生成、画图与布局能力一起推送到 Yogurt AI，并以 AI 互动影游作为一个完整案例。",
+      "excerpt": "以一个特定的 case，如做一个 AI 互动影游来作为 case",
+      "yogurtShapeIds": [],
+      "provenance": {
+        "origin": "user-authored",
+        "uri": null
+      },
+      "accessStatus": "available"
+    }
+  ],
+  "ideas": [
+    {
+      "id": "idea-constrained-ai-director",
+      "statement": "让创作者先定义世界观、角色、红线与关键节拍，再由 AI 导演在约束内续写玩家的电影化体验。",
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "classification": "ai-generated-product-idea"
+    },
+    {
+      "id": "idea-stateful-branching",
+      "statement": "玩家既可选择预设行动，也可自由输入；系统将关系、线索与叙事承诺写入状态账本，使分支与结局可解释。",
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "classification": "ai-generated-product-idea"
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-case-fiction",
+      "statement": "示例故事采用近未来记忆调查题材：玩家在雾港调查失踪者林夏留下的矛盾记忆。",
+      "basis": "为使案例可演示而生成，尚未经用户确认。"
+    },
+    {
+      "id": "assumption-mvp-hybrid-generation",
+      "statement": "MVP 使用混合生成：运行时生成叙事计划、对白和状态；视觉优先装配预生成镜头与短过渡，以控制一致性、延迟与成本。",
+      "basis": "产品与工程假设，尚无 TAPD 或技术评估支持。"
+    },
+    {
+      "id": "assumption-desktop-first",
+      "statement": "首版以桌面 Web 体验和创作者工作台为主，后续再评估移动端与实时生成视频。",
+      "basis": "MVP 范围假设。"
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "question-audience",
+      "question": "首发用户更偏互动影游玩家、独立叙事创作者，还是已有影视 IP 团队？",
+      "impact": "影响内容供给、编辑器复杂度和商业模式。"
+    },
+    {
+      "id": "question-generation-boundary",
+      "question": "运行时允许 AI 改写到什么粒度：对白、镜头说明、静帧，还是完整视频片段？",
+      "impact": "影响等待时长、审核策略、成本与体验承诺。"
+    },
+    {
+      "id": "question-monetization",
+      "question": "优先验证按作品付费、订阅，还是创作者分成？",
+      "impact": "影响指标体系与发布流程。"
+    }
+  ]
+}

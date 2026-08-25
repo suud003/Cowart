@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 互动影游系统语义框线图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #ffffff;
+      --ink: #0a0a0a;
+      --body: #171717;
+      --muted: #737373;
+      --hairline: #e5e5e5;
+      --link: #0348ed;
+      --warning: #fe7e0f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-width: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      padding: clamp(0.75rem, 2.2vw, 2rem);
+    }
+
+    .diagram-shell {
+      width: min(100%, 96rem);
+      min-width: 0;
+      margin: 0 auto;
+    }
+
+    .diagram-header {
+      display: grid;
+      gap: 0.5rem;
+      margin: 0 0 1rem;
+    }
+
+    .diagram-header h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2.3vw, 2rem);
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+
+    .diagram-header p {
+      max-width: 72rem;
+      margin: 0;
+      color: var(--body);
+      font-size: clamp(0.84rem, 1.3vw, 1rem);
+      line-height: 1.65;
+    }
+
+    .diagram-header .source-note {
+      color: var(--muted);
+      font-size: clamp(0.76rem, 1.15vw, 0.9rem);
+    }
+
+    .cowart-diagram {
+      width: 100%;
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--hairline);
+      background: var(--canvas);
+    }
+
+    .cowart-diagram svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: hidden;
+    }
+
+    [data-cowart-stroke] {
+      vector-effect: non-scaling-stroke;
+    }
+
+    .node-frame {
+      fill: var(--canvas);
+      stroke: var(--ink);
+      stroke-width: 1.6;
+    }
+
+    .node-warning {
+      fill: var(--canvas);
+      stroke: var(--warning);
+      stroke-width: 2;
+    }
+
+    .node-rule {
+      fill: none;
+      stroke: var(--hairline);
+      stroke-width: 1.2;
+    }
+
+    .edge {
+      fill: none;
+      stroke: var(--link);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .edge-arrow {
+      fill: var(--link);
+      stroke: none;
+    }
+
+    .object-label {
+      fill: var(--ink);
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+
+    .object-detail {
+      fill: var(--muted);
+      font-size: 14px;
+      font-weight: 450;
+    }
+
+    .edge-label {
+      fill: var(--muted);
+      font-size: 12px;
+      font-weight: 560;
+      letter-spacing: 0.02em;
+    }
+
+    .layer-label {
+      fill: var(--body);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .trace-label {
+      fill: var(--muted);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    .assumption-badge {
+      fill: var(--canvas);
+      stroke: var(--warning);
+      stroke-width: 1.4;
+    }
+
+    .assumption-text {
+      fill: var(--warning);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 0.55rem;
+      }
+
+      .diagram-header {
+        margin-bottom: 0.7rem;
+      }
+
+      .cowart-diagram {
+        overflow-x: auto;
+      }
+
+      .cowart-diagram svg {
+        min-width: 46rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="diagram-shell">
+    <header class="diagram-header">
+      <h1>AI 互动影游：从创作约束到可解释结局</h1>
+      <p>创作者约束先于 AI 生成；玩家输入与 AI 导演共同更新叙事状态；状态账本同时决定后续镜头与可解释结局。</p>
+      <p class="source-note">输入仅有用户提出的“AI 互动影游”Case。下列系统对象、关系与职责均为 assumption，待用户判断与 TAPD 事实验证。</p>
+    </header>
+
+    <section class="cowart-diagram" aria-label="AI 互动影游系统图">
+      <svg
+        viewBox="0 0 1440 820"
+        role="img"
+        aria-labelledby="ai-interactive-film-system-title ai-interactive-film-system-desc"
+        data-cowart-diagram-id="ai-interactive-film-system"
+        data-cowart-layout="flow"
+        data-reading-order="top-to-bottom"
+      >
+        <title id="ai-interactive-film-system-title">AI 互动影游从创作约束到可解释结局的系统流程</title>
+        <desc id="ai-interactive-film-system-desc">创作者先把主题、世界规则和红线写入世界圣经，经叙事编译器和安全成本闸门后交给 AI 导演。AI 导演与玩家选择分别更新叙事状态账本，状态账本再决定镜头装配与可解释结局图谱。所有系统细节均为基于用户 Case 简述的待验证假设。</desc>
+
+        <defs>
+          <marker
+            id="ai-interactive-film-system-arrow"
+            viewBox="0 0 10 10"
+            refX="10"
+            refY="5"
+            markerWidth="8"
+            markerHeight="8"
+            orient="auto"
+            markerUnits="strokeWidth"
+          >
+            <path class="edge-arrow" data-cowart-stroke d="M 0 0 L 10 5 L 0 10 Z"></path>
+          </marker>
+        </defs>
+
+        <g data-assumption="true" aria-hidden="true">
+          <text class="trace-label" x="48" y="44">source: src-user-case-brief</text>
+          <rect class="assumption-badge" data-cowart-stroke x="1152" y="24" width="216" height="34" rx="4"></rect>
+          <text class="assumption-text" x="1260" y="46" text-anchor="middle">ASSUMPTION · 待验证</text>
+        </g>
+
+        <g data-assumption="true" aria-hidden="true">
+          <text class="layer-label" x="48" y="96">01 · 约束编译层</text>
+          <text class="object-detail" x="1392" y="96" text-anchor="end">约束必须在生成调用之前完成</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-creator"
+          data-node-id="creator"
+          data-reading-order="1"
+          data-cowart-object-id="creator"
+          data-cowart-role="agent"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="constraint-layer"
+          data-boundary="creator"
+        >
+          <rect class="node-frame" data-cowart-stroke x="48" y="120" width="170" height="100" rx="6"></rect>
+          <text class="object-label" x="133" y="162" text-anchor="middle">创作者</text>
+          <text class="object-detail" x="133" y="190" text-anchor="middle">设定主题与禁区</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-world-bible"
+          data-node-id="world-bible"
+          data-reading-order="2"
+          data-cowart-object-id="world-bible"
+          data-cowart-role="document"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="constraint-layer"
+          data-boundary="world-bible"
+        >
+          <rect class="node-frame" data-cowart-stroke x="278" y="120" width="220" height="100" rx="6"></rect>
+          <text class="object-label" x="388" y="162" text-anchor="middle">世界圣经 / 红线</text>
+          <text class="object-detail" x="388" y="190" text-anchor="middle">角色 · 规则 · 事实 · 禁区</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-narrative-compiler"
+          data-node-id="narrative-compiler"
+          data-reading-order="3"
+          data-cowart-object-id="narrative-compiler"
+          data-cowart-role="system"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="constraint-layer"
+          data-boundary="narrative-compiler"
+        >
+          <rect class="node-frame" data-cowart-stroke x="558" y="120" width="220" height="100" rx="6"></rect>
+          <text class="object-label" x="668" y="162" text-anchor="middle">叙事编译器</text>
+          <text class="object-detail" x="668" y="190" text-anchor="middle">把意图编译为可执行约束</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-safety-cost-gate"
+          data-node-id="safety-cost-gate"
+          data-reading-order="4"
+          data-cowart-object-id="safety-cost-gate"
+          data-cowart-role="system"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="constraint-layer"
+          data-boundary="safety-cost-gate"
+        >
+          <rect class="node-warning" data-cowart-stroke x="838" y="120" width="220" height="100" rx="6"></rect>
+          <text class="object-label" x="948" y="162" text-anchor="middle">安全 / 成本闸门</text>
+          <text class="object-detail" x="948" y="190" text-anchor="middle">合规 · 预算 · 时延</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-ai-director"
+          data-node-id="ai-director"
+          data-reading-order="5"
+          data-cowart-object-id="ai-director"
+          data-cowart-role="agent"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="constraint-layer"
+          data-boundary="ai-director"
+        >
+          <rect class="node-frame" data-cowart-stroke x="1118" y="120" width="250" height="100" rx="6"></rect>
+          <text class="object-label" x="1243" y="162" text-anchor="middle">AI 导演</text>
+          <text class="object-detail" x="1243" y="190" text-anchor="middle">在约束内提议下一步</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-creator-to-world-bible"
+          data-edge-id="creator-to-world-bible"
+          data-reading-order="1.1"
+          data-cowart-relation-id="creator-to-world-bible"
+          data-from="creator"
+          data-to="world-bible"
+          data-relation="flow"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 218 170 H 278" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="248" y="150" text-anchor="middle">定义边界</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-world-bible-to-compiler"
+          data-edge-id="world-bible-to-compiler"
+          data-reading-order="2.1"
+          data-cowart-relation-id="world-bible-to-compiler"
+          data-from="world-bible"
+          data-to="narrative-compiler"
+          data-relation="flow"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 498 170 H 558" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="528" y="150" text-anchor="middle">编译约束</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-compiler-to-gate"
+          data-edge-id="compiler-to-gate"
+          data-reading-order="3.1"
+          data-cowart-relation-id="compiler-to-gate"
+          data-from="narrative-compiler"
+          data-to="safety-cost-gate"
+          data-relation="flow"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 778 170 H 838" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="808" y="150" text-anchor="middle">预算审查</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-gate-to-director"
+          data-edge-id="gate-to-director"
+          data-reading-order="4.1"
+          data-cowart-relation-id="gate-to-director"
+          data-from="safety-cost-gate"
+          data-to="ai-director"
+          data-relation="dispatch"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 1058 170 H 1118" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="1088" y="150" text-anchor="middle">放行指令</text>
+        </g>
+
+        <g data-assumption="true" aria-hidden="true">
+          <text class="layer-label" x="48" y="346">02 · 实时叙事循环</text>
+          <text class="object-detail" x="1392" y="346" text-anchor="end">玩家意图与 AI 提案写入同一状态源</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-player-input"
+          data-node-id="player-input"
+          data-reading-order="6"
+          data-cowart-object-id="player-input"
+          data-cowart-role="interface"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="runtime-layer"
+          data-boundary="player-input"
+        >
+          <rect class="node-frame" data-cowart-stroke x="48" y="400" width="270" height="112" rx="6"></rect>
+          <text class="object-label" x="183" y="444" text-anchor="middle">玩家选择 / 自由行动</text>
+          <text class="object-detail" x="183" y="474" text-anchor="middle">选择项、自然语言、动作意图</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-narrative-state-ledger"
+          data-node-id="narrative-state-ledger"
+          data-reading-order="7"
+          data-cowart-object-id="narrative-state-ledger"
+          data-cowart-role="state"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="runtime-layer"
+          data-boundary="narrative-state-ledger"
+        >
+          <rect class="node-frame" data-cowart-stroke x="535" y="370" width="340" height="170" rx="6"></rect>
+          <text class="object-label" x="705" y="414" text-anchor="middle">叙事状态账本</text>
+          <line class="node-rule" data-cowart-stroke x1="565" y1="438" x2="845" y2="438"></line>
+          <text class="object-detail" x="565" y="468">事实：已发生事件</text>
+          <text class="object-detail" x="565" y="496">关系：角色信任与冲突</text>
+          <text class="object-detail" x="565" y="524">债务：伏笔、承诺、未决目标</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-shot-assembler"
+          data-node-id="shot-assembler"
+          data-reading-order="8"
+          data-cowart-object-id="shot-assembler"
+          data-cowart-role="system"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-align-group="runtime-layer"
+          data-boundary="shot-assembler"
+        >
+          <rect class="node-frame" data-cowart-stroke x="1118" y="400" width="250" height="112" rx="6"></rect>
+          <text class="object-label" x="1243" y="444" text-anchor="middle">镜头装配器</text>
+          <text class="object-detail" x="1243" y="474" text-anchor="middle">台词 · 画面 · 音效 · 交互点</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-director-to-state"
+          data-edge-id="director-to-state"
+          data-reading-order="5.1"
+          data-cowart-relation-id="director-to-state"
+          data-from="ai-director"
+          data-to="narrative-state-ledger"
+          data-relation="transition"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 1243 220 V 290 H 790 V 370" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="1016" y="278" text-anchor="middle">提议状态变更</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-player-to-state"
+          data-edge-id="player-to-state"
+          data-reading-order="6.1"
+          data-cowart-relation-id="player-to-state"
+          data-from="player-input"
+          data-to="narrative-state-ledger"
+          data-relation="transition"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 318 456 H 535" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="426" y="440" text-anchor="middle">写入玩家意图</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-state-to-shot"
+          data-edge-id="state-to-shot"
+          data-reading-order="7.1"
+          data-cowart-relation-id="state-to-shot"
+          data-from="narrative-state-ledger"
+          data-to="shot-assembler"
+          data-relation="dependency"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 875 456 H 1118" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="996" y="440" text-anchor="middle">读取状态装配镜头</text>
+        </g>
+
+        <g data-assumption="true" aria-hidden="true">
+          <text class="layer-label" x="48" y="626">03 · 可解释结果层</text>
+          <text class="object-detail" x="1392" y="626" text-anchor="end">结局必须能追溯到状态与玩家行动</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-node-ending-graph"
+          data-node-id="ending-graph"
+          data-reading-order="9"
+          data-cowart-object-id="ending-graph"
+          data-cowart-role="document"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+          data-boundary="ending-graph"
+        >
+          <rect class="node-frame" data-cowart-stroke x="535" y="660" width="340" height="110" rx="6"></rect>
+          <text class="object-label" x="705" y="704" text-anchor="middle">结局图谱</text>
+          <text class="object-detail" x="705" y="734" text-anchor="middle">终点条件 + 触发因果 + 玩家回顾</text>
+        </g>
+
+        <g
+          id="ai-interactive-film-system-edge-state-to-ending"
+          data-edge-id="state-to-ending"
+          data-reading-order="7.2"
+          data-cowart-relation-id="state-to-ending"
+          data-from="narrative-state-ledger"
+          data-to="ending-graph"
+          data-relation="dependency"
+          data-direction="forward"
+          data-path="primary"
+          data-cowart-origin="inference"
+          data-cowart-source-ids="src-user-case-brief"
+          data-cowart-assumption="true"
+        >
+          <path class="edge" data-cowart-stroke d="M 705 540 V 660" marker-end="url(#ai-interactive-film-system-arrow)"></path>
+          <text class="edge-label" x="724" y="606">计算并解释终局</text>
+        </g>
+      </svg>
+    </section>
+  </main>
+
+  <template data-cowart-diagram-spec type="application/json">{"schemaVersion":"1","diagramId":"ai-interactive-film-system","claim":"创作者约束先于 AI 生成；玩家输入与 AI 导演共同更新叙事状态；状态决定后续镜头与可解释结局。","mode":"html-svg","assumptionNotice":"除用户提出 AI 互动影游 Case 外，全部系统对象、关系、职责与状态均为待验证 assumption。","objects":[{"id":"creator","label":"创作者","role":"agent","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"world-bible","label":"世界圣经 / 红线","role":"document","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"narrative-compiler","label":"叙事编译器","role":"system","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"safety-cost-gate","label":"安全 / 成本闸门","role":"system","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"ai-director","label":"AI 导演","role":"agent","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"player-input","label":"玩家选择 / 自由行动","role":"interface","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"narrative-state-ledger","label":"叙事状态账本","role":"state","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"shot-assembler","label":"镜头装配器","role":"system","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"ending-graph","label":"结局图谱","role":"document","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true}],"relations":[{"id":"creator-to-world-bible","from":"creator","to":"world-bible","type":"flow","direction":"forward","path":"primary","label":"定义边界","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"world-bible-to-compiler","from":"world-bible","to":"narrative-compiler","type":"flow","direction":"forward","path":"primary","label":"编译约束","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"compiler-to-gate","from":"narrative-compiler","to":"safety-cost-gate","type":"flow","direction":"forward","path":"primary","label":"预算审查","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"gate-to-director","from":"safety-cost-gate","to":"ai-director","type":"dispatch","direction":"forward","path":"primary","label":"放行指令","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"director-to-state","from":"ai-director","to":"narrative-state-ledger","type":"transition","direction":"forward","path":"primary","label":"提议状态变更","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"player-to-state","from":"player-input","to":"narrative-state-ledger","type":"transition","direction":"forward","path":"primary","label":"写入玩家意图","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"state-to-shot","from":"narrative-state-ledger","to":"shot-assembler","type":"dependency","direction":"forward","path":"primary","label":"读取状态装配镜头","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true},{"id":"state-to-ending","from":"narrative-state-ledger","to":"ending-graph","type":"dependency","direction":"forward","path":"primary","label":"计算并解释终局","origin":"inference","sourceShapeIds":["src-user-case-brief"],"assumption":true}],"states":[{"target":"safety-cost-gate","type":"warning","label":"每轮生成前审查","origin":"inference","assumption":true}],"visibleLabels":[{"text":"01 · 约束编译层","role":"group-title"},{"text":"02 · 实时叙事循环","role":"group-title"},{"text":"03 · 可解释结果层","role":"group-title"},{"text":"创作者","role":"object-label"},{"text":"世界圣经 / 红线","role":"object-label"},{"text":"叙事编译器","role":"object-label"},{"text":"安全 / 成本闸门","role":"object-label"},{"text":"AI 导演","role":"object-label"},{"text":"玩家选择 / 自由行动","role":"object-label"},{"text":"叙事状态账本","role":"object-label"},{"text":"镜头装配器","role":"object-label"},{"text":"结局图谱","role":"object-label"},{"text":"定义边界","role":"relation-label"},{"text":"编译约束","role":"relation-label"},{"text":"预算审查","role":"relation-label"},{"text":"放行指令","role":"relation-label"},{"text":"提议状态变更","role":"relation-label"},{"text":"写入玩家意图","role":"relation-label"},{"text":"读取状态装配镜头","role":"relation-label"},{"text":"计算并解释终局","role":"relation-label"},{"text":"ASSUMPTION · 待验证","role":"caption"}],"layout":{"kind":"flow","readingOrder":"top-to-bottom","rowReadingOrder":"left-to-right","peerAlignment":"visual-center-y","alignmentTolerance":"0.5% of viewBox height","minimumSafeGap":"2% of viewBox width","containmentLabelZone":"none","viewport":"responsive","viewBox":"0 0 1440 820","relationLanes":"每条边使用独立连续路径；不共享长线段；端点均落在对象边界。"},"trace":{"canvasId":"canvas:example-ai-interactive-film-case","pageId":"page:cowart-thinking","sourceRevision":"713f675638706e19fa1b","scope":"page","sourceShapeIds":["src-user-case-brief"],"mappings":[{"semanticId":"creator","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"world-bible","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"narrative-compiler","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"safety-cost-gate","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"ai-director","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"player-input","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"narrative-state-ledger","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"shot-assembler","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]},{"semanticId":"ending-graph","sourceShapeIds":["src-user-case-brief"],"returnedShapeIds":[]}],"draftShapeId":null,"operationIds":[],"lastAppliedRevision":null}}</template>
+  <template data-cowart-diagram-prompt type="application/json">{"schemaVersion":"1","diagramId":"ai-interactive-film-system","prompt":"生成一张中文、可访问、响应式、可编辑的 AI 互动影游 HTML 语义框线 SVG。唯一结论：创作者约束先于 AI 生成；玩家输入与 AI 导演共同更新叙事状态；状态决定后续镜头与可解释结局。把创作者、世界圣经或红线、叙事编译器、安全或成本闸门、AI 导演排成第一层从左到右的约束链；第二层让玩家选择或自由行动与 AI 导演用两条独立实线蓝色箭头写入叙事状态账本，再由账本读取状态装配镜头；第三层由账本向下计算并解释结局图谱。安全或成本闸门用橙色边框表达 warning，其余对象用黑色实线框；全部扩展内容标记 assumption 并追溯到 src-user-case-brief。所有箭头从源对象边界出发并把箭头尖端落在目标边界，不穿越对象、文字或其他关系。使用白底、黑灰文字、蓝色方向线、轻微圆角、无阴影、无渐变、无外链、无脚本。SVG 必须有 viewBox、role img、aria-labelledby、title、desc、唯一稳定 ID、data-node-id、data-edge-id、Cowart 语义属性、non-scaling-stroke，并与完整 JSON 规格及提示词 template 一起输出。"}</template>
+</body>
+</html>
