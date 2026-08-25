@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { Store } from "@tldraw/store";
 import { createTLSchema } from "@tldraw/tlschema";
 
-import { applyThinkingOperationsToSnapshot } from "../mcp/lib/thinking-canvas.mjs";
-import { estimateThinkingCardSize, layoutThinkingGraph } from "../mcp/lib/thinking-layout.mjs";
+import {
+  applyThinkingOperationsToSnapshot,
+  summarizeThinkingContext,
+} from "../mcp/lib/thinking-canvas.mjs";
+import {
+  estimateThinkingCardSize,
+  estimateThinkingRelationGap,
+  layoutThinkingGraph,
+} from "../mcp/lib/thinking-layout.mjs";
 
 function emptySnapshot() {
   return {
@@ -18,6 +26,32 @@ function emptySnapshot() {
         meta: {},
       },
     },
+  };
+}
+
+function relationBindings(snapshot, relationId) {
+  return Object.values(snapshot.store).filter(
+    (record) => record?.typeName === "binding" && record.type === "arrow" && record.fromId === relationId,
+  );
+}
+
+function boundsOverlap(first, second) {
+  return !(
+    first.x + first.props.w <= second.x ||
+    second.x + second.props.w <= first.x ||
+    first.y + first.props.h <= second.y ||
+    second.y + second.props.h <= first.y
+  );
+}
+
+function semanticDiagram(overrides = {}) {
+  return {
+    version: "1",
+    diagramId: "native:layout-regression",
+    teachingClaim: "Relations stay readable and attached while the diagram changes.",
+    readingOrder: "left-to-right",
+    diagramType: "flow",
+    ...overrides,
   };
 }
 
@@ -53,6 +87,687 @@ test("lays a connected graph out from top to bottom", () => {
   assert.equal(positions.get("left").y, positions.get("right").y);
   assert.notEqual(positions.get("left").x, positions.get("right").x);
   assert.ok(positions.get("left").y < positions.get("detail").y);
+});
+
+test("lays cycles deterministically and mirrors horizontal reading order", () => {
+  const nodes = [
+    { id: "a", w: 200, h: 96 },
+    { id: "b", w: 220, h: 96 },
+    { id: "c", w: 240, h: 96 },
+  ];
+  const edges = [
+    { from: "a", to: "b" },
+    { from: "b", to: "a" },
+    { from: "b", to: "c" },
+  ];
+  const leftToRight = layoutThinkingGraph({ nodes, edges, readingOrder: "left-to-right" });
+  const rightToLeft = layoutThinkingGraph({ nodes, edges, readingOrder: "right-to-left" });
+
+  assert.equal(
+    leftToRight.get("a").x + nodes[0].w / 2,
+    leftToRight.get("b").x + nodes[1].w / 2,
+  );
+  assert.ok(leftToRight.get("b").x < leftToRight.get("c").x);
+  assert.ok(rightToLeft.get("b").x > rightToLeft.get("c").x);
+  assert.notEqual(leftToRight.get("a").y, leftToRight.get("b").y);
+});
+
+test("lays a hub-and-spoke graph out deterministically from the center", () => {
+  const nodes = [
+    { id: "hub", w: 220, h: 96 },
+    { id: "a", w: 180, h: 96 },
+    { id: "b", w: 180, h: 96 },
+    { id: "c", w: 180, h: 96 },
+    { id: "d", w: 180, h: 96 },
+  ];
+  const edges = ["a", "b", "c", "d"].map((to) => ({ from: "hub", to }));
+  const centerOut = layoutThinkingGraph({ nodes, edges, readingOrder: "center-out" });
+  const repeated = layoutThinkingGraph({ nodes, edges, readingOrder: "center-out" });
+  const topToBottom = layoutThinkingGraph({ nodes, edges, readingOrder: "top-to-bottom" });
+  const center = (id) => ({
+    x: centerOut.get(id).x + nodes.find((node) => node.id === id).w / 2,
+    y: centerOut.get(id).y + nodes.find((node) => node.id === id).h / 2,
+  });
+  const hub = center("hub");
+
+  assert.deepEqual(centerOut, repeated);
+  assert.ok(center("a").x > hub.x);
+  assert.ok(center("b").y > hub.y);
+  assert.ok(center("c").x < hub.x);
+  assert.ok(center("d").y < hub.y);
+  assert.ok(topToBottom.get("hub").y < topToBottom.get("d").y);
+  assert.ok(centerOut.get("hub").y > centerOut.get("d").y);
+  for (let first = 0; first < nodes.length; first += 1) {
+    for (let second = first + 1; second < nodes.length; second += 1) {
+      const firstNode = { ...nodes[first], ...centerOut.get(nodes[first].id), props: nodes[first] };
+      const secondNode = { ...nodes[second], ...centerOut.get(nodes[second].id), props: nodes[second] };
+      assert.equal(boundsOverlap(firstNode, secondNode), false);
+    }
+  }
+});
+
+test("keeps a strongly connected component aligned at the center-out focus", () => {
+  const nodes = [
+    { id: "upstream", w: 180, h: 96 },
+    { id: "cycle-a", w: 200, h: 96 },
+    { id: "cycle-b", w: 240, h: 112 },
+    { id: "downstream", w: 180, h: 96 },
+  ];
+  const edges = [
+    { from: "upstream", to: "cycle-a" },
+    { from: "cycle-a", to: "cycle-b" },
+    { from: "cycle-b", to: "cycle-a" },
+    { from: "cycle-b", to: "downstream" },
+  ];
+  const positions = layoutThinkingGraph({ nodes, edges, readingOrder: "center-out" });
+  const centerX = (id) => positions.get(id).x + nodes.find((node) => node.id === id).w / 2;
+
+  assert.equal(centerX("cycle-a"), centerX("cycle-b"));
+  assert.notEqual(positions.get("cycle-a").y, positions.get("cycle-b").y);
+  assert.ok(centerX("upstream") > centerX("cycle-a"));
+  assert.ok(centerX("downstream") < centerX("cycle-a"));
+});
+
+test("creates a native semantic diagram with editable zones, relation grammar, and trace metadata", () => {
+  const semanticDiagram = {
+    version: "1",
+    diagramId: "native:film-loop",
+    teachingClaim: "Player choices update world state before the next scene is generated.",
+    readingOrder: "left-to-right",
+    diagramType: "flow",
+    sourceShapeIds: ["shape:brief"],
+  };
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram,
+    operations: [
+      {
+        type: "create_zone",
+        key: "film-loop",
+        title: "AI 互动影游循环",
+        purpose: "semantic",
+        semantic: { id: "object:loop", type: "group", origin: "synthesis" },
+      },
+      {
+        type: "create_card",
+        key: "choice",
+        title: "玩家选择",
+        parentZoneId: "film-loop",
+        semantic: { id: "object:choice", type: "actor", origin: "source", order: 1 },
+      },
+      {
+        type: "create_card",
+        key: "state",
+        title: "世界状态",
+        parentZoneId: "film-loop",
+        semantic: { id: "object:state", type: "state", origin: "synthesis", order: 2 },
+      },
+      {
+        type: "create_card",
+        key: "scene",
+        title: "生成下一幕",
+        parentZoneId: "film-loop",
+        semantic: { id: "object:scene", type: "process", origin: "inference", order: 3 },
+      },
+      {
+        type: "create_relation",
+        key: "choice-state",
+        semanticId: "relation:choice-state",
+        from: "choice",
+        to: "state",
+        kind: "flow",
+        direction: "forward",
+        path: "primary",
+      },
+      {
+        type: "create_relation",
+        key: "state-scene-alternative",
+        semanticId: "relation:state-scene-alternative",
+        from: "state",
+        to: "scene",
+        kind: "transition",
+        direction: "forward",
+        path: "alternative",
+        label: "候选分支",
+      },
+      {
+        type: "create_relation",
+        key: "scene-state-sync",
+        semanticId: "relation:scene-state-sync",
+        from: "scene",
+        to: "state",
+        kind: "sync",
+        direction: "bidirectional",
+      },
+      {
+        type: "create_relation",
+        key: "choice-scene-association",
+        semanticId: "relation:choice-scene-association",
+        from: "choice",
+        to: "scene",
+        kind: "association",
+        direction: "none",
+      },
+    ],
+  });
+
+  const zone = result.snapshot.store[result.references["film-loop"]];
+  const choice = result.snapshot.store[result.references.choice];
+  const state = result.snapshot.store[result.references.state];
+  const scene = result.snapshot.store[result.references.scene];
+  const primary = result.snapshot.store[result.references["choice-state"]];
+  const alternative = result.snapshot.store[result.references["state-scene-alternative"]];
+  const sync = result.snapshot.store[result.references["scene-state-sync"]];
+  const association = result.snapshot.store[result.references["choice-scene-association"]];
+
+  assert.equal(zone.meta.cowartSemanticZone, true);
+  assert.equal(zone.meta.cowartProductZone, false);
+  assert.equal(choice.parentId, zone.id);
+  assert.ok(choice.x < state.x && choice.x < scene.x);
+  assert.equal(state.x + state.props.w / 2, scene.x + scene.props.w / 2);
+  assert.notEqual(state.y, scene.y);
+  assert.equal(choice.meta.cowartSemanticObject.semanticId, "object:choice");
+  assert.equal(choice.meta.cowartSemanticDiagram.diagramId, "native:film-loop");
+  assert.equal(primary.props.color, "blue");
+  assert.equal(primary.props.dash, "solid");
+  assert.equal(primary.props.arrowheadStart, "none");
+  assert.equal(primary.props.arrowheadEnd, "arrow");
+  assert.equal(alternative.props.dash, "dashed");
+  assert.equal(sync.props.arrowheadStart, "arrow");
+  assert.equal(sync.props.arrowheadEnd, "arrow");
+  assert.equal(association.props.color, "black");
+  assert.equal(association.props.arrowheadEnd, "none");
+  assert.equal(
+    Object.values(result.snapshot.store).some((record) => record?.meta?.cowartHtmlDraft === true),
+    false,
+  );
+  assert.doesNotThrow(() => {
+    const validationStore = new Store({ schema: createTLSchema(), props: { defaultName: "Test" } });
+    validationStore.loadStoreSnapshot(result.snapshot);
+  });
+});
+
+test("recomputes binding anchors after vertical layout and reserves label space", () => {
+  const label = "写入状态变化并生成下一幕";
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ readingOrder: "top-to-bottom" }),
+    operations: [
+      { type: "create_card", key: "source", title: "AI 导演", semantic: { id: "object:source" } },
+      { type: "create_card", key: "target", title: "状态账本", semantic: { id: "object:target" } },
+      {
+        type: "create_relation",
+        key: "source-target",
+        semanticId: "relation:source-target",
+        from: "source",
+        to: "target",
+        label,
+      },
+    ],
+  });
+  const source = result.snapshot.store[result.references.source];
+  const target = result.snapshot.store[result.references.target];
+  const relationId = result.references["source-target"];
+  const bindings = relationBindings(result.snapshot, relationId);
+  const start = bindings.find((binding) => binding.props.terminal === "start");
+  const end = bindings.find((binding) => binding.props.terminal === "end");
+
+  assert.ok(source.y < target.y);
+  assert.ok(target.y - (source.y + source.props.h) >= estimateThinkingRelationGap(label));
+  assert.deepEqual(start.props.normalizedAnchor, { x: 0.5, y: 1 });
+  assert.deepEqual(end.props.normalizedAnchor, { x: 0.5, y: 0 });
+});
+
+test("keeps association and bidirectional peers in one readable semantic layer", () => {
+  for (const direction of ["none", "bidirectional"]) {
+    const label = direction === "none" ? "共享长期上下文关联" : "双向同步创作状态";
+    const result = applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({ diagramId: `native:${direction}` }),
+      operations: [
+        { type: "create_card", key: "first", title: "First", semantic: { id: "object:first" } },
+        { type: "create_card", key: "second", title: "Second", semantic: { id: "object:second" } },
+        {
+          type: "create_relation",
+          key: "peer-relation",
+          semanticId: "relation:peer",
+          from: "first",
+          to: "second",
+          direction,
+          label,
+        },
+      ],
+    });
+    const first = result.snapshot.store[result.references.first];
+    const second = result.snapshot.store[result.references.second];
+    assert.equal(first.x + first.props.w / 2, second.x + second.props.w / 2);
+    assert.ok(Math.abs(second.y - first.y) >= Math.min(first.props.h, second.props.h) + estimateThinkingRelationGap(label));
+  }
+});
+
+test("keeps fixed and incremental semantic cards out of existing sibling bounds", () => {
+  const first = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram(),
+    operations: [
+      { type: "create_zone", key: "zone", title: "Semantic zone", purpose: "semantic", semantic: { id: "object:zone" } },
+      {
+        type: "create_card",
+        key: "fixed",
+        title: "Fixed",
+        parentZoneId: "zone",
+        x: 40,
+        y: 72,
+        semantic: { id: "object:fixed" },
+      },
+      { type: "create_card", key: "a", title: "A", parentZoneId: "zone", semantic: { id: "object:a" } },
+      { type: "create_card", key: "b", title: "B", parentZoneId: "zone", semantic: { id: "object:b" } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+    ],
+  });
+  const zoneId = first.references.zone;
+  const firstCards = ["fixed", "a", "b"].map((key) => first.snapshot.store[first.references[key]]);
+  for (let left = 0; left < firstCards.length; left += 1) {
+    for (let right = left + 1; right < firstCards.length; right += 1) {
+      assert.equal(boundsOverlap(firstCards[left], firstCards[right]), false);
+    }
+  }
+
+  const second = applyThinkingOperationsToSnapshot({
+    snapshot: first.snapshot,
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram(),
+    operations: [
+      { type: "create_card", key: "c", title: "C", parentZoneId: zoneId, semantic: { id: "object:c" } },
+      { type: "create_card", key: "d", title: "D", parentZoneId: zoneId, semantic: { id: "object:d" } },
+      { type: "create_relation", key: "c-d", semanticId: "relation:c-d", from: "c", to: "d" },
+    ],
+  });
+  const oldCards = ["fixed", "a", "b"].map((key) => second.snapshot.store[first.references[key]]);
+  const newCards = ["c", "d"].map((key) => second.snapshot.store[second.references[key]]);
+  for (const oldCard of oldCards) {
+    for (const newCard of newCards) assert.equal(boundsOverlap(oldCard, newCard), false);
+  }
+
+  const relationBeforeMove = second.snapshot.store[second.references["c-d"]];
+  const moved = applyThinkingOperationsToSnapshot({
+    snapshot: second.snapshot,
+    pageId: "page:test",
+    operations: [{ type: "move_shape", id: zoneId, x: 500, y: 300 }],
+  });
+  assert.equal(moved.snapshot.store[second.references["c-d"]].x - relationBeforeMove.x, 500);
+
+  const deleted = applyThinkingOperationsToSnapshot({
+    snapshot: moved.snapshot,
+    pageId: "page:test",
+    operations: [{ type: "delete_shape", id: zoneId }],
+  });
+  assert.equal(Object.values(deleted.snapshot.store).some((record) => record?.type === "arrow"), false);
+  assert.equal(Object.values(deleted.snapshot.store).some((record) => record?.typeName === "binding"), false);
+});
+
+test("refreshes relation geometry when an endpoint crosses its target", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:move" }),
+    operations: [
+      { type: "create_card", key: "a", title: "A", x: 0, y: 0, semantic: { id: "object:a" } },
+      { type: "create_card", key: "b", title: "B", x: 500, y: 0, semantic: { id: "object:b" } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+    ],
+  });
+  const moved = applyThinkingOperationsToSnapshot({
+    snapshot: created.snapshot,
+    pageId: "page:test",
+    operations: [{ type: "move_shape", id: created.references.a, x: 900, y: 0 }],
+  });
+  const relationId = created.references["a-b"];
+  const relation = moved.snapshot.store[relationId];
+  const source = moved.snapshot.store[created.references.a];
+  const bindings = relationBindings(moved.snapshot, relationId);
+  assert.equal(relation.x, source.x + source.props.w / 2);
+  assert.ok(relation.props.end.x < 0);
+  assert.deepEqual(bindings.find((binding) => binding.props.terminal === "start").props.normalizedAnchor, { x: 0, y: 0.5 });
+  assert.deepEqual(bindings.find((binding) => binding.props.terminal === "end").props.normalizedAnchor, { x: 1, y: 0.5 });
+});
+
+test("requires semantic relation endpoints to be objects in the same diagram", () => {
+  const ordinary = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    operations: [{ type: "create_card", key: "ordinary", title: "Ordinary" }],
+  });
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: ordinary.snapshot,
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({ diagramId: "native:endpoints" }),
+      operations: [
+        { type: "create_card", key: "semantic", title: "Semantic", semantic: { id: "object:semantic" } },
+        {
+          type: "create_relation",
+          key: "invalid",
+          semanticId: "relation:invalid",
+          from: "semantic",
+          to: ordinary.references.ordinary,
+        },
+      ],
+    }),
+    /must reference a native semantic object/,
+  );
+
+  const firstDiagram = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:first" }),
+    operations: [{ type: "create_card", key: "first", title: "First", semantic: { id: "object:first" } }],
+  });
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: firstDiagram.snapshot,
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({ diagramId: "native:second" }),
+      operations: [
+        { type: "create_card", key: "second", title: "Second", semantic: { id: "object:second" } },
+        {
+          type: "create_relation",
+          key: "cross-diagram",
+          semanticId: "relation:cross-diagram",
+          from: "second",
+          to: firstDiagram.references.first,
+        },
+      ],
+    }),
+    /must reference a semantic object in diagram native:second/,
+  );
+});
+
+test("allocates unique lanes for parallel and reversed endpoint pairs", () => {
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:parallel" }),
+    operations: [
+      { type: "create_card", key: "a", title: "A", semantic: { id: "object:a" } },
+      { type: "create_card", key: "b", title: "B", semantic: { id: "object:b" } },
+      { type: "create_relation", key: "forward", semanticId: "relation:forward", from: "a", to: "b", lane: 0 },
+      { type: "create_relation", key: "reverse", semanticId: "relation:reverse", from: "b", to: "a", lane: 0 },
+      { type: "create_relation", key: "third", semanticId: "relation:third", from: "a", to: "b" },
+    ],
+  });
+  const relations = ["forward", "reverse", "third"].map((key) => result.snapshot.store[result.references[key]]);
+  const lanes = relations.map((relation) => relation.meta.cowartSemanticRelation.lane);
+  assert.equal(new Set(lanes).size, 3);
+  assert.equal(lanes[0], 0);
+  assert.ok(relations.slice(1).every((relation) => relation.props.bend !== 0));
+});
+
+test("routes a semantic skip edge outside unrelated cards", () => {
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:skip-edge" }),
+    operations: [
+      { type: "create_card", key: "a", title: "A", semantic: { id: "object:a", order: 1 } },
+      { type: "create_card", key: "b", title: "B", semantic: { id: "object:b", order: 2 } },
+      { type: "create_card", key: "c", title: "C", semantic: { id: "object:c", order: 3 } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+      { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
+      { type: "create_relation", key: "a-c", semanticId: "relation:a-c", from: "a", to: "c" },
+    ],
+  });
+  const middle = result.snapshot.store[result.references.b];
+  const skip = result.snapshot.store[result.references["a-c"]];
+  assert.notEqual(skip.meta.cowartSemanticRelation.lane, 0);
+  assert.ok(Math.abs(skip.props.bend) > middle.props.h / 2 + 18);
+  assert.deepEqual(skip.meta.cowartThinkingObstacleRoute.obstacleShapeIds, [middle.id]);
+});
+
+test("keeps parallel base lanes unique after a skip-edge obstacle is removed", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:skip-lifecycle" }),
+    operations: [
+      { type: "create_card", key: "a", title: "A", semantic: { id: "object:a", order: 1 } },
+      { type: "create_card", key: "b", title: "B", semantic: { id: "object:b", order: 2 } },
+      { type: "create_card", key: "c", title: "C", semantic: { id: "object:c", order: 3 } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+      { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
+      { type: "create_relation", key: "skip-one", semanticId: "relation:skip-one", from: "a", to: "c" },
+      { type: "create_relation", key: "skip-two", semanticId: "relation:skip-two", from: "a", to: "c" },
+    ],
+  });
+  const moved = applyThinkingOperationsToSnapshot({
+    snapshot: created.snapshot,
+    pageId: "page:test",
+    operations: [{
+      type: "move_shape",
+      id: created.references.b,
+      x: created.snapshot.store[created.references.b].x,
+      y: 1_000,
+    }],
+  });
+  const skips = ["skip-one", "skip-two"].map((key) => moved.snapshot.store[created.references[key]]);
+  assert.equal(new Set(skips.map((relation) => relation.meta.cowartThinkingRelationBaseLane)).size, 2);
+  assert.equal(new Set(skips.map((relation) => relation.meta.cowartThinkingRelationLane)).size, 2);
+  assert.equal(new Set(skips.map((relation) => relation.props.bend)).size, 2);
+  assert.ok(skips.every((relation) => relation.meta.cowartThinkingObstacleRoute === null));
+});
+
+test("reroutes existing semantic relations when an explicit card is added later", () => {
+  const diagram = semanticDiagram({ diagramId: "native:late-obstacle" });
+  const initial = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: diagram,
+    operations: [
+      { type: "create_zone", key: "zone", title: "Zone", w: 1_600, h: 500, purpose: "semantic", semantic: { id: "object:zone" } },
+      { type: "create_card", key: "a", title: "A", parentZoneId: "zone", x: 40, y: 100, semantic: { id: "object:a" } },
+      { type: "create_card", key: "c", title: "C", parentZoneId: "zone", x: 1_100, y: 100, semantic: { id: "object:c" } },
+      { type: "create_relation", key: "a-c", semanticId: "relation:a-c", from: "a", to: "c" },
+    ],
+  });
+  assert.equal(initial.snapshot.store[initial.references["a-c"]].meta.cowartThinkingObstacleRoute, null);
+
+  const withObstacle = applyThinkingOperationsToSnapshot({
+    snapshot: initial.snapshot,
+    pageId: "page:test",
+    semanticDiagram: diagram,
+    operations: [{
+      type: "create_card",
+      key: "b",
+      title: "B",
+      parentZoneId: initial.references.zone,
+      x: 570,
+      y: 100,
+      semantic: { id: "object:b" },
+    }],
+  });
+  const relation = withObstacle.snapshot.store[initial.references["a-c"]];
+  assert.notEqual(relation.meta.cowartThinkingRelationLane, 0);
+  assert.deepEqual(relation.meta.cowartThinkingObstacleRoute.obstacleShapeIds, [withObstacle.references.b]);
+});
+
+test("keeps generic relation grammar and lanes after endpoint movement", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    operations: [
+      { type: "create_card", key: "a", title: "A", x: 0, y: 0 },
+      { type: "create_card", key: "b", title: "B", x: 500, y: 0 },
+      {
+        type: "create_relation",
+        key: "association",
+        from: "a",
+        to: "b",
+        kind: "association",
+        direction: "none",
+        path: "alternative",
+        payload: "shared context",
+        lane: 0,
+      },
+      { type: "create_relation", key: "sync", from: "a", to: "b", kind: "sync", lane: 0 },
+    ],
+  });
+  const association = created.snapshot.store[created.references.association];
+  const sync = created.snapshot.store[created.references.sync];
+  assert.equal(association.props.arrowheadEnd, "none");
+  assert.equal(association.props.dash, "dashed");
+  assert.equal(sync.props.arrowheadStart, "arrow");
+  assert.notEqual(association.meta.cowartThinkingRelationLane, sync.meta.cowartThinkingRelationLane);
+
+  const moved = applyThinkingOperationsToSnapshot({
+    snapshot: created.snapshot,
+    pageId: "page:test",
+    operations: [{ type: "move_shape", id: created.references.b, x: 700, y: 150 }],
+  });
+  const movedBindings = ["association", "sync"].map((key) => {
+    const relationId = created.references[key];
+    return relationBindings(moved.snapshot, relationId)
+      .find((binding) => binding.props.terminal === "start").props.normalizedAnchor;
+  });
+  assert.notDeepEqual(movedBindings[0], movedBindings[1]);
+  const context = summarizeThinkingContext({ snapshot: moved.snapshot, pageId: "page:test" });
+  const relationContext = context.shapes.find(({ id }) => id === created.references.association).relation;
+  assert.equal(relationContext.direction, "none");
+  assert.equal(relationContext.path, "alternative");
+  assert.equal(relationContext.payload, "shared context");
+  assert.equal(relationContext.lane, association.meta.cowartThinkingRelationLane);
+});
+
+test("uses rebound arrow bindings for context, refresh, and deletion cleanup", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:rebound" }),
+    operations: [
+      { type: "create_card", key: "a", title: "A", x: 0, y: 0, semantic: { id: "object:a" } },
+      { type: "create_card", key: "b", title: "B", x: 500, y: 0, semantic: { id: "object:b" } },
+      { type: "create_card", key: "c", title: "C", x: 500, y: 300, semantic: { id: "object:c" } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+    ],
+  });
+  const rebound = structuredClone(created.snapshot);
+  const relationId = created.references["a-b"];
+  const endBinding = relationBindings(rebound, relationId)
+    .find((binding) => binding.props.terminal === "end");
+  endBinding.toId = created.references.c;
+
+  const reboundContext = summarizeThinkingContext({ snapshot: rebound, pageId: "page:test" });
+  assert.equal(reboundContext.shapes.find(({ id }) => id === relationId).relation.toId, created.references.c);
+
+  const moved = applyThinkingOperationsToSnapshot({
+    snapshot: rebound,
+    pageId: "page:test",
+    operations: [{ type: "move_shape", id: created.references.c, x: 800, y: 400 }],
+  });
+  assert.equal(moved.snapshot.store[relationId].meta.cowartThinkingToShapeId, created.references.c);
+  assert.ok(moved.snapshot.store[relationId].props.end.x > 700);
+
+  const withoutOldTarget = applyThinkingOperationsToSnapshot({
+    snapshot: moved.snapshot,
+    pageId: "page:test",
+    operations: [{ type: "delete_shape", id: created.references.b }],
+  });
+  assert.ok(withoutOldTarget.snapshot.store[relationId]);
+  assert.equal(relationBindings(withoutOldTarget.snapshot, relationId).length, 2);
+
+  const withoutBoundTarget = applyThinkingOperationsToSnapshot({
+    snapshot: withoutOldTarget.snapshot,
+    pageId: "page:test",
+    operations: [{ type: "delete_shape", id: created.references.c }],
+  });
+  assert.equal(withoutBoundTarget.snapshot.store[relationId], undefined);
+  assert.equal(relationBindings(withoutBoundTarget.snapshot, relationId).length, 0);
+});
+
+test("keeps semantic claims visible and allows stable relation replacement in one batch", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:replace", teachingClaim: "The claim stays visible." }),
+    operations: [
+      { type: "create_zone", key: "zone", title: "Original", purpose: "semantic", semantic: { id: "object:zone" } },
+      { type: "create_card", key: "a", title: "A", parentZoneId: "zone", semantic: { id: "object:a" } },
+      { type: "create_card", key: "b", title: "B", parentZoneId: "zone", semantic: { id: "object:b" } },
+      { type: "create_relation", key: "old-relation", semanticId: "relation:stable", from: "a", to: "b" },
+    ],
+  });
+  const updatedZone = applyThinkingOperationsToSnapshot({
+    snapshot: created.snapshot,
+    pageId: "page:test",
+    operations: [{ type: "update_zone", id: created.references.zone, title: "Renamed" }],
+  });
+  assert.equal(
+    updatedZone.snapshot.store[created.references.zone].props.name,
+    "Renamed｜核心判断：The claim stays visible.",
+  );
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: updatedZone.snapshot,
+      pageId: "page:test",
+      operations: [{
+        type: "update_card",
+        id: created.references.a,
+        bridge: { workspaceId: "workspace:pollution" },
+      }],
+    }),
+    /cannot include Product Bridge metadata/,
+  );
+  const replacement = applyThinkingOperationsToSnapshot({
+    snapshot: updatedZone.snapshot,
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:replace", teachingClaim: "The claim stays visible." }),
+    operations: [
+      { type: "delete_shape", id: created.references["old-relation"] },
+      {
+        type: "create_relation",
+        key: "new-relation",
+        semanticId: "relation:stable",
+        from: created.references.a,
+        to: created.references.b,
+      },
+    ],
+  });
+  const newRelation = replacement.snapshot.store[replacement.references["new-relation"]];
+  assert.notEqual(newRelation.id, created.references["old-relation"]);
+  assert.equal(newRelation.meta.cowartSemanticRelation.semanticId, "relation:stable");
+});
+
+test("places incremental semantic sources before existing targets and targets after sources", () => {
+  const initial = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:incremental-direction" }),
+    operations: [{ type: "create_card", key: "b", title: "B", semantic: { id: "object:b" } }],
+  });
+  const upstream = applyThinkingOperationsToSnapshot({
+    snapshot: initial.snapshot,
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:incremental-direction" }),
+    operations: [
+      { type: "create_card", key: "a", title: "A", semantic: { id: "object:a" } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: initial.references.b },
+    ],
+  });
+  assert.ok(upstream.snapshot.store[upstream.references.a].x < upstream.snapshot.store[initial.references.b].x);
+
+  const downstream = applyThinkingOperationsToSnapshot({
+    snapshot: upstream.snapshot,
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:incremental-direction" }),
+    operations: [
+      { type: "create_card", key: "c", title: "C", semantic: { id: "object:c" } },
+      { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: initial.references.b, to: "c" },
+    ],
+  });
+  assert.ok(downstream.snapshot.store[initial.references.b].x < downstream.snapshot.store[downstream.references.c].x);
 });
 
 test("creates a thin, transparent, connected Excalidraw-style diagram", () => {

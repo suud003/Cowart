@@ -1,0 +1,339 @@
+{
+  "version": "1",
+  "diagramId": "native:ai-interactive-film-system-v1",
+  "title": "AI 互动影游｜画布原生系统框线图",
+  "teachingClaim": "AI 互动影游不是自由生成：创作者约束与安全闸门控制 AI 导演，玩家行动只在可追踪状态内推动下一幕。",
+  "diagramType": "architecture",
+  "readingOrder": "left-to-right",
+  "sourceShapeIds": [
+    "shape:card-user-evidence-9d27e972",
+    "shape:card-creator-constraints-cbb24ae1",
+    "shape:card-player-input-4cc2d958",
+    "shape:card-world-bible-97c3fa96",
+    "shape:card-safety-gate-586965a8"
+  ],
+  "sourceIds": [
+    "src-user-case-brief"
+  ],
+  "objectCount": 8,
+  "relationCount": 6,
+  "canvas": {
+    "pageId": "page:cowart-thinking",
+    "zoneId": "shape:cowart-zone-semantic-ai-film-system",
+    "purpose": "semantic",
+    "baseRevision": "f5b7bb6c35023e84fa91",
+    "createOperationId": "20260825044517450-e10ac6a5",
+    "resultRevision": "81462df35d4029a54140"
+  },
+  "zone": {
+    "semanticId": "object:ai-film-system",
+    "shapeId": "shape:cowart-zone-semantic-ai-film-system",
+    "title": "AI 互动影游｜画布原生系统框线图｜核心判断：AI 互动影游不是自由生成：创作者约束与安全闸门控制 AI 导演，玩家行动只在可追踪状态内推动下一幕。",
+    "type": "group",
+    "state": "normal",
+    "origin": "synthesis",
+    "order": 0,
+    "bounds": {
+      "x": 3076,
+      "y": 0,
+      "w": 2680,
+      "h": 940
+    }
+  },
+  "objects": [
+    {
+      "semanticId": "object:creator-constraints",
+      "shapeId": "shape:semantic-creator-constraints-6649e694",
+      "title": "创作者约束",
+      "body": "世界圣经、角色秘密、关键节拍与内容红线。",
+      "type": "data",
+      "state": "normal",
+      "origin": "source",
+      "order": 1,
+      "sourceShapeIds": [
+        "shape:card-creator-constraints-cbb24ae1",
+        "shape:card-world-bible-97c3fa96"
+      ],
+      "bounds": {
+        "x": 41.026832508987866,
+        "y": 72,
+        "w": 353.665631459995,
+        "h": 135
+      }
+    },
+    {
+      "semanticId": "object:player-input",
+      "shapeId": "shape:semantic-player-input-a61f1e21",
+      "title": "玩家行动",
+      "body": "预设选择或自由输入；先经过可行性与安全校验。",
+      "type": "actor",
+      "state": "normal",
+      "origin": "source",
+      "order": 2,
+      "sourceShapeIds": [
+        "shape:card-player-input-4cc2d958"
+      ],
+      "bounds": {
+        "x": 40,
+        "y": 385,
+        "w": 355.7192964779707,
+        "h": 135
+      }
+    },
+    {
+      "semanticId": "object:safety-gate",
+      "shapeId": "shape:semantic-safety-gate-efd27323",
+      "title": "安全与成本闸门",
+      "body": "拦截越界、超时和成本峰值，并提供可解释回退。",
+      "type": "decision",
+      "state": "warning",
+      "origin": "source",
+      "order": 3,
+      "sourceShapeIds": [
+        "shape:card-safety-gate-586965a8"
+      ],
+      "bounds": {
+        "x": 40,
+        "y": 698,
+        "w": 355.7192964779707,
+        "h": 135
+      }
+    },
+    {
+      "semanticId": "object:narrative-compiler",
+      "shapeId": "shape:semantic-narrative-compiler-316f683e",
+      "title": "叙事编译器",
+      "body": "把自然语言约束编译为状态字段、节拍图与回退规则。",
+      "type": "process",
+      "state": "normal",
+      "origin": "synthesis",
+      "order": 4,
+      "sourceShapeIds": [],
+      "bounds": {
+        "x": 573.7192964779707,
+        "y": 385,
+        "w": 358.7877538267963,
+        "h": 135
+      }
+    },
+    {
+      "semanticId": "object:ai-director",
+      "shapeId": "shape:semantic-ai-director-0500cae1",
+      "title": "AI 导演",
+      "body": "在约束内选择下一个节拍，生成对白与镜头意图。",
+      "type": "process",
+      "state": "normal",
+      "origin": "synthesis",
+      "order": 5,
+      "sourceShapeIds": [],
+      "bounds": {
+        "x": 1110.5070503047668,
+        "y": 385,
+        "w": 355.7192964779707,
+        "h": 135
+      }
+    },
+    {
+      "semanticId": "object:state-ledger",
+      "shapeId": "shape:semantic-state-ledger-d44099c3",
+      "title": "状态账本",
+      "body": "记录关系、线索、资源、叙事承诺与触发原因。",
+      "type": "state",
+      "state": "normal",
+      "origin": "synthesis",
+      "order": 6,
+      "sourceShapeIds": [],
+      "bounds": {
+        "x": 1644.2263467827374,
+        "y": 385,
+        "w": 354.9909083394701,
+        "h": 135
+      }
+    },
+    {
+      "semanticId": "object:next-scene",
+      "shapeId": "shape:semantic-next-scene-3e369cb4",
+      "title": "下一幕与可解释结局",
+      "body": "状态驱动镜头装配、分支推进和结局解释。",
+      "type": "outcome",
+      "state": "normal",
+      "origin": "inference",
+      "order": 7,
+      "sourceShapeIds": [],
+      "bounds": {
+        "x": 2177.2172551222075,
+        "y": 385,
+        "w": 352.3067873224881,
+        "h": 135
+      }
+    }
+  ],
+  "relations": [
+    {
+      "semanticId": "relation:constraints-compiler",
+      "shapeId": "shape:semantic-rel-constraints-compiler-24ae76cf",
+      "label": "编译约束",
+      "fromShapeId": "shape:semantic-creator-constraints-6649e694",
+      "toShapeId": "shape:semantic-narrative-compiler-316f683e",
+      "kind": "flow",
+      "direction": "forward",
+      "path": "primary",
+      "payload": null,
+      "lane": 0,
+      "baseLane": 0,
+      "currentLane": 0,
+      "origin": "synthesis",
+      "sourceShapeIds": [
+        "shape:card-creator-constraints-cbb24ae1",
+        "shape:card-world-bible-97c3fa96"
+      ],
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "binding": {
+        "start": { "x": 1, "y": 0.5 },
+        "end": { "x": 0, "y": 0.5 }
+      },
+      "bend": 0,
+      "route": null
+    },
+    {
+      "semanticId": "relation:player-director",
+      "shapeId": "shape:semantic-rel-player-director-dd08a682",
+      "label": "触发",
+      "fromShapeId": "shape:semantic-player-input-a61f1e21",
+      "toShapeId": "shape:semantic-ai-director-0500cae1",
+      "kind": "flow",
+      "direction": "forward",
+      "path": "primary",
+      "payload": null,
+      "lane": 3,
+      "baseLane": 0,
+      "currentLane": 3,
+      "origin": "synthesis",
+      "sourceShapeIds": [
+        "shape:card-player-input-4cc2d958"
+      ],
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "binding": {
+        "start": { "x": 1, "y": 0.8 },
+        "end": { "x": 0, "y": 0.8 }
+      },
+      "bend": 184.07999999999998,
+      "route": {
+        "kind": "outside-arc",
+        "obstacleShapeId": "shape:semantic-narrative-compiler-316f683e",
+        "bend": 184.07999999999998
+      }
+    },
+    {
+      "semanticId": "relation:compiler-director",
+      "shapeId": "shape:semantic-rel-compiler-director-9d836cbb",
+      "label": "叙事包",
+      "fromShapeId": "shape:semantic-narrative-compiler-316f683e",
+      "toShapeId": "shape:semantic-ai-director-0500cae1",
+      "kind": "flow",
+      "direction": "forward",
+      "path": "primary",
+      "payload": null,
+      "lane": 0,
+      "baseLane": 0,
+      "currentLane": 0,
+      "origin": "synthesis",
+      "sourceShapeIds": [],
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "binding": {
+        "start": { "x": 1, "y": 0.5 },
+        "end": { "x": 0, "y": 0.5 }
+      },
+      "bend": 0,
+      "route": null
+    },
+    {
+      "semanticId": "relation:gate-director",
+      "shapeId": "shape:semantic-rel-gate-director-71b3c4ce",
+      "label": "放行或回退",
+      "fromShapeId": "shape:semantic-safety-gate-efd27323",
+      "toShapeId": "shape:semantic-ai-director-0500cae1",
+      "kind": "flow",
+      "direction": "forward",
+      "path": "alternative",
+      "payload": null,
+      "lane": 1,
+      "baseLane": 1,
+      "currentLane": 1,
+      "origin": "synthesis",
+      "sourceShapeIds": [
+        "shape:card-safety-gate-586965a8"
+      ],
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "binding": {
+        "start": { "x": 1, "y": 0.62 },
+        "end": { "x": 0, "y": 0.62 }
+      },
+      "bend": 36,
+      "route": null
+    },
+    {
+      "semanticId": "relation:director-ledger",
+      "shapeId": "shape:semantic-rel-director-ledger-3b6e62d3",
+      "label": "写入变化",
+      "fromShapeId": "shape:semantic-ai-director-0500cae1",
+      "toShapeId": "shape:semantic-state-ledger-d44099c3",
+      "kind": "flow",
+      "direction": "forward",
+      "path": "primary",
+      "payload": null,
+      "lane": 0,
+      "baseLane": 0,
+      "currentLane": 0,
+      "origin": "synthesis",
+      "sourceShapeIds": [],
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "binding": {
+        "start": { "x": 1, "y": 0.5 },
+        "end": { "x": 0, "y": 0.5 }
+      },
+      "bend": 0,
+      "route": null
+    },
+    {
+      "semanticId": "relation:ledger-scene",
+      "shapeId": "shape:semantic-rel-ledger-scene-4ea1bbca",
+      "label": "驱动",
+      "fromShapeId": "shape:semantic-state-ledger-d44099c3",
+      "toShapeId": "shape:semantic-next-scene-3e369cb4",
+      "kind": "flow",
+      "direction": "forward",
+      "path": "primary",
+      "payload": null,
+      "lane": 0,
+      "baseLane": 0,
+      "currentLane": 0,
+      "origin": "synthesis",
+      "sourceShapeIds": [],
+      "sourceIds": [
+        "src-user-case-brief"
+      ],
+      "binding": {
+        "start": { "x": 1, "y": 0.5 },
+        "end": { "x": 0, "y": 0.5 }
+      },
+      "bend": 0,
+      "route": null
+    }
+  ],
+  "productBridge": {
+    "registeredInManifest": false,
+    "registeredInTraceMap": false,
+    "prdPageId": null
+  }
+}

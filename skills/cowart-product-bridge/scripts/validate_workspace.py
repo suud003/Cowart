@@ -293,6 +293,30 @@ def validate_workspace(project_dir: Path) -> tuple[list[str], list[str], int, in
     object_value(manifest.get("product"), "Manifest product", errors)
     object_value(manifest.get("settings"), "Manifest settings", errors)
 
+    requirement_ids: set[str] = set()
+    requirement_origins: dict[str, str] = {}
+    registered_prd_paths: set[Path] = set()
+
+    def collect_requirements(prd_path: Path, prd_path_raw: Any, label: str) -> None:
+        resolved_path = prd_path.resolve()
+        if resolved_path in registered_prd_paths:
+            return
+        registered_prd_paths.add(resolved_path)
+        try:
+            prd_text = prd_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(f"{label}: cannot read PRD: {exc}")
+            return
+        for requirement_id in REQUIREMENT_HEADING.findall(prd_text):
+            if requirement_id in requirement_ids:
+                errors.append(
+                    f"{label}: duplicate requirementId '{requirement_id}' "
+                    f"also defined in {requirement_origins[requirement_id]}"
+                )
+            else:
+                requirement_ids.add(requirement_id)
+                requirement_origins[requirement_id] = str(prd_path_raw)
+
     documents = list_value(manifest.get("documents"), "Manifest documents", errors) or []
     for index, document_value in enumerate(documents):
         label = f"Manifest document {index + 1}"
@@ -300,16 +324,18 @@ def validate_workspace(project_dir: Path) -> tuple[list[str], list[str], int, in
         if document is None:
             continue
         document_path = inside(project_dir, document.get("path"), f"{label} path", errors)
-        if document_path is not None and not document_path.is_file():
-            errors.append(f"{label}: missing file {document.get('path')}")
+        if document_path is not None:
+            if not document_path.is_file():
+                errors.append(f"{label}: missing file {document.get('path')}")
+            elif document.get("kind") == "prd":
+                collect_requirements(document_path, document.get("path"), label)
 
     modules = list_value(manifest.get("modules"), "Manifest modules", errors) or []
     page_ids: set[str] = set()
-    requirement_ids: set[str] = set()
-    requirement_origins: dict[str, str] = {}
     page_records: list[tuple[str, dict[str, Any]]] = []
 
     # First pass: resolve every module PRD and collect all page/requirement IDs.
+    # Standalone PRD documents register requirements too, without inventing a prototype page.
     for module_index, module_value in enumerate(modules):
         module_label = f"Manifest module {module_index + 1}"
         module = object_value(module_value, module_label, errors)
@@ -328,20 +354,7 @@ def validate_workspace(project_dir: Path) -> tuple[list[str], list[str], int, in
             if not prd_path.is_file():
                 errors.append(f"{module_label}: missing PRD {prd_path_raw}")
             else:
-                try:
-                    prd_text = prd_path.read_text(encoding="utf-8")
-                except (OSError, UnicodeDecodeError) as exc:
-                    errors.append(f"{module_label}: cannot read PRD: {exc}")
-                else:
-                    for requirement_id in REQUIREMENT_HEADING.findall(prd_text):
-                        if requirement_id in requirement_ids:
-                            errors.append(
-                                f"{module_label}: duplicate requirementId '{requirement_id}' "
-                                f"also defined in {requirement_origins[requirement_id]}"
-                            )
-                        else:
-                            requirement_ids.add(requirement_id)
-                            requirement_origins[requirement_id] = str(prd_path_raw)
+                collect_requirements(prd_path, prd_path_raw, module_label)
 
         pages = list_value(module.get("pages"), f"{module_label} pages", errors) or []
         for page_index, page_value in enumerate(pages):

@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="README.md">中文</a> ·
+  <a href="#native-canvas-line-diagrams">Canvas diagrams</a> ·
   <a href="#product-bridge">Product Bridge</a> ·
   <a href="#installation">Installation</a> ·
   <a href="#three-minute-quick-start">Quick start</a> ·
@@ -29,7 +30,7 @@ Yogurt AI extends the open-source Cowart project and tldraw into a source-ground
 | Non-linear thinking | A topic or an unresolved idea | Expandable branches, clusters, comparisons, and reasoning paths |
 | Local lasso revision | Enclosures, arrows, strike-throughs, grouping marks, notes, and a request | A scoped edit, explanation, and operation ID |
 | Product shaping | Rough ideas, a Yogurt selection, accessible source material, and TAPD links | Traceable PRDs, interactive prototypes, review zones, and a return preview |
-| Semantic line diagrams | A selection, page, product flow, or system relationship | Editable native card graphs or accessible, traceable, safe inline SVG |
+| Canvas line diagrams | A selection, page, product flow, or system relationship | Editable native card graphs or accessible, traceable, safe inline SVG |
 | Visual generation | Prompts, reference images, and canvas context | Previewable AI images, standalone HTML, and Slides |
 | Canvas export | Every visible object on the current page | A standalone HTML panorama or editable PowerPoint |
 
@@ -49,12 +50,24 @@ flowchart LR
 
 ## Excalidraw-inspired Workspace
 
-The toolbar, colors, strokes, typography, shortcuts, and hand-drawn visual language reference Excalidraw. The `Yogurt AI` menu provides image, HTML, Slides, interactive PRD, and semantic line-diagram actions.
+The toolbar, colors, strokes, typography, shortcuts, and hand-drawn visual language reference Excalidraw. The `Yogurt AI` menu provides image, HTML, Slides, interactive PRD, and an independent `生成画布框线图` action.
 
 <p align="center">
   <img src="docs/images/yogurt-ai-workspace.png" width="100%" alt="Yogurt AI's Excalidraw-inspired canvas and AI menu">
 </p>
 <p align="center"><sub>Real product screenshot: open the Yogurt AI menu on the same editable public-demo canvas.</sub></p>
+
+## Native Canvas Line Diagrams
+
+`生成画布框线图` is a first-class Yogurt canvas capability. It runs alongside Product Bridge; neither action triggers the other. After you select source cards or use the whole page, the agent defines one teaching claim, objects, relations, states, and a reading order, then draws the result beside the source on the current Yogurt page. It does not create a PRD workspace or register the diagram in `interaction-prd.json`.
+
+The default output is native and editable: every card, semantic zone, and bound relation can be selected, moved, rewritten, and reconnected independently. The layout engine supports horizontal, vertical, reversed, center-out, and board-to-peers reading orders plus SCC-aware cycle layering. Primary paths, alternatives, bidirectional sync, undirected associations, and containment derive consistent strokes, arrowheads, lanes, and real frame parentage. Stable `diagramId`, `semanticId`, source shape IDs, origin, and state metadata support later revision and round trips.
+
+Yogurt uses a safe HTML + inline-SVG canvas block only when the user explicitly requests SVG or when exact multi-port topology, dense obstacle routing, detailed swimlanes, or GUI/LUI wireframes cannot be expressed unambiguously with native objects. That block still lives on the Yogurt canvas and never becomes a PRD page.
+
+![An AI interactive film system diagram generated directly on the Yogurt canvas](examples/semantic-diagram/ai-interactive-film-system/yogurt-semantic-diagram-on-canvas.png)
+
+[Open the independent canvas example, semantic specification, and reusable prompt](examples/semantic-diagram/ai-interactive-film-system/).
 
 ## Product Bridge
 
@@ -65,9 +78,7 @@ flowchart LR
   A["Rough ideas / Yogurt scope / TAPD references"] --> B["Source packet and evidence boundary"]
   B --> C["Shaping, module PRDs, and interactive prototypes"]
   C --> D["Document and prototype review"]
-  C --> E["Global semantic canvas"]
   D --> F["Annotations on stable anchors"]
-  E --> F
   F --> G["Yogurt return preview"]
   G -->|"Explicit confirmation"| H["Zones, cards, and relations"]
   H --> A
@@ -77,7 +88,7 @@ flowchart LR
 
 1. Select the product area to process; with no selection, Yogurt uses the current page. A single request is limited to 250 shapes and is rejected rather than silently truncated when it is larger.
 2. Open `Yogurt AI` and choose `生成交互 PRD`. The launcher freezes the exact scope at click time before sending the task to Codex. Direct submission requires the native Codex widget; the standalone Vite preview preserves the scope and copies the same instruction instead.
-3. The agent separates user statements, facts, assumptions, inference, constraints, and open questions, then creates shaping documents, module PRDs with stable requirement IDs, self-contained interactive HTML prototypes, and a global semantic canvas.
+3. The agent separates user statements, facts, assumptions, inference, constraints, and open questions, then creates shaping documents, module PRDs with stable requirement IDs, and self-contained interactive HTML prototypes.
 4. Important controls use unique `data-annotation-anchor` values, so review notes follow the real interface element instead of drifting with screenshot pixels.
 5. After strict validation, the agent returns the local review URL, source coverage, unresolved questions, and a proposed Yogurt return plan.
 
@@ -87,17 +98,11 @@ The plugin does not include a TAPD login or content-reading connector. TAPD URLs
 
 Every return follows `read current revision → dry-run → show the exact change → explicit confirmation → apply the identical batch to the same revision`. Returned product structure uses real Yogurt zones, child cards, and relations without replacing unrelated user content. A canvas change invalidates the preview and requires a new plan and confirmation. Successful batches return an operation ID for guarded undo.
 
-### Generate A Semantic Line Diagram
-
-Choose `生成语义框线图` when a full PRD is unnecessary. Direct submission also requires the native Codex widget. Simple thinking graphs prefer native cards and relations. Flows, architectures, states, GUI/LUI comparisons, and relation-dense layouts use a security-validated single-file HTML document with one inline SVG. Edges connect explicit object-boundary ports, parallel relations use separate lanes, and the artifact preserves a reusable semantic specification plus source shape IDs.
-
 ### Case: Branching Echoes, An AI Interactive Film/Game
 
-The repository now includes the [complete case, PRDs, interactive prototypes, semantic diagram, Bridge mappings, and run instructions](examples/product-bridge/ai-interactive-film-case/). The case started from one short user goal and no readable TAPD source, so its story, audience, metrics, and commercial decisions were explicitly labeled as AI assumptions. It produced four shaping documents, three module PRDs, five interactive prototype pages, one accessible semantic system diagram, six review pages with 14 stable annotation anchors, and a confirmed Yogurt return containing six zones, 27 child cards, and 12 relations applied through 45 typed operations.
+The repository now includes the [complete Product Bridge case, PRDs, interactive prototypes, mappings, and run instructions](examples/product-bridge/ai-interactive-film-case/). The case started from one short user goal and no readable TAPD source, so its story, audience, metrics, and commercial decisions were explicitly labeled as AI assumptions. Product Bridge produced four shaping documents, three module PRDs, five interactive prototype pages, 14 stable annotation anchors, and a confirmed Yogurt return with six product zones, 26 child cards, and 12 relations. The independent canvas-diagram example uses the same source without becoming part of the PRD workspace.
 
-![The Branching Echoes Product Bridge global canvas](examples/product-bridge/ai-interactive-film-case/docs/images/product-bridge-global-canvas.png)
-
-![Six product zones after returning the reviewed Branching Echoes structure to Yogurt](examples/product-bridge/ai-interactive-film-case/docs/images/yogurt-return-zones.png)
+![The Branching Echoes Product Bridge page-relation view](examples/product-bridge/ai-interactive-film-case/docs/images/product-bridge-global-canvas.png)
 
 The case validates the loop rather than a particular story pitch: ambiguous product thinking can become reviewable artifacts, and reviewed structure can follow the same trace map back into the original Yogurt canvas.
 
@@ -108,10 +113,9 @@ Run these commands from the plugin repository root. `<workspace>` is the generat
 ```powershell
 python -B -X utf8 skills/cowart-product-bridge/scripts/validate_workspace.py <workspace> --strict
 python -B -X utf8 skills/cowart-product-bridge/scripts/serve.py <workspace>
-node skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs --root <workspace> <diagram.html>
 ```
 
-The first two commands run strict structural validation and the local review server. The third checks the semantic SVG structure, security constraints, and trace templates. A passing validator does not guarantee readable geometry; inspect clipping, collisions, ports, and reading order at the real display size.
+The commands run strict structural validation and the local review server.
 
 ## Installation
 
@@ -270,7 +274,7 @@ PowerPoint adds overview, outline, and detail slides. The outline text box shown
 ## Data, Provenance, And Undo
 
 - Canvas pages live in `canvas/pages/<page-id>/cowart-canvas.json`; page-local images and HTML live in the matching `assets/` directory.
-- Product Bridge workspaces live in the user-selected project directory and contain the source packet, PRDs, prototypes, diagrams, trace map, and sync state; they do not write into the plugin source directory.
+- Product Bridge workspaces live in the user-selected project directory and contain the source packet, PRDs, prototypes, product-zone mappings, trace map, and sync state. Canvas line diagrams remain on the Yogurt canvas and in their independent example directory instead of entering the Product Bridge workspace.
 - Material cards keep source paths, verbatim excerpts, and agent summaries separate so evidence is not confused with synthesis.
 - External links such as TAPD record their real access state; an unread or unauthorized URL is never treated as a confirmed requirement.
 - Non-trivial edits follow inspect context → `dryRun` preview → revision check → atomic apply.
@@ -291,7 +295,7 @@ The example marks a risky shortcut, co-op mechanisms, a visible hidden reward, a
 ## Skills
 
 - `cowart-thinking-canvas:cowart-product-bridge`: turn rough ideas, Yogurt scope, and TAPD references into a traceable PRD/prototype workspace, then safely return an explicitly confirmed plan to Yogurt.
-- `cowart-thinking-canvas:cowart-semantic-diagram`: choose native cards or validated inline SVG based on relationship complexity and preserve stable ports, semantic specs, source trace, and round-trip mappings.
+- `cowart-thinking-canvas:cowart-semantic-diagram`: create native editable zones, cards, and bound relations directly on the current canvas by default; use validated inline SVG only when explicitly requested or when exact topology cannot be expressed natively.
 - `cowart-thinking-canvas:cowart-thinking-agent`: inspect source-aware context, preview a typed local edit, apply it atomically, explain it, and undo safely.
 - `cowart-thinking-canvas:cowart-open-canvas`: open the native Yogurt AI canvas widget.
 - `cowart-thinking-canvas:cowart-image-gen`: receive the canvas prompt and reference images, replace the selected `AI 图片` slot with a generated image, or insert a generated image into the current page when no slot is selected.

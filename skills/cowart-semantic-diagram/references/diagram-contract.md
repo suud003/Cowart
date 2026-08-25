@@ -1,6 +1,6 @@
 # Yogurt semantic diagram contract
 
-Read this contract when creating, validating, revising, or writing back an HTML inline-SVG diagram. Native-card diagrams use the same semantic IDs, origins, relation meanings, and trace model, but do not need the HTML envelope.
+Read this contract when creating, validating, revising, or writing back an HTML inline-SVG diagram. Native-card diagrams use the same stable semantic IDs, source/synthesis/inference origins, relation direction/path meanings, and source trace model, but do not need the HTML envelope. Native objects may additionally use canvas-oriented roles (`actor`, `process`, `data`, `outcome`, `group`, `custom`) and uncertainty origins (`assumption`, `question`); preserve those values during round trips instead of coercing them into Product Bridge fields.
 
 ## 1. Semantic specification
 
@@ -77,6 +77,10 @@ Store one JSON object in the template carrying data-cowart-diagram-spec and pres
 ~~~
 
 Required object roles are selected from interface, agent, task, container, document, state, claim, evidence, question, decision, zone, and system. Required origins are source, user, synthesis, inference, or unknown. Use unknown only while keeping the uncertainty visible.
+
+For the native route, put the batch trace in `semanticDiagram`, object trace in each `semantic` object, and relation trace directly on each `create_relation` operation. A native relation carries `semanticId`, `kind`, `direction`, `path`, optional `payload`, `lane`, `origin`, `sourceShapeIds`, and `sourceIds`. Real tldraw start/end bindings are the authoritative endpoints after a user reconnects an arrow; stale compatibility metadata must not revive a missing terminal or cross a diagram boundary. Do not reuse Product Bridge `bridge`, `zoneId`, requirement, page, or annotation fields. The semantic-zone title must show the teaching claim so the diagram remains understandable without inspecting metadata.
+
+Native semantic card and zone revisions may patch type, state, origin, reading order, and source mappings, but must preserve their `diagramId` and `semanticId`. A relation revision is one ordered batch containing `delete_shape` followed by `create_relation` with the same stable `semanticId`; there is no `update_relation` shortcut.
 
 The prompt template is also JSON and must remain independently usable:
 

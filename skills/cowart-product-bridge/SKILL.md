@@ -37,10 +37,10 @@ Omit unavailable Yogurt identifiers rather than inventing them. If `interaction-
 
 1. Turn the captured material into shaping documents, explicitly labeling facts, assumptions, conflicts, open decisions, and out-of-scope items.
 2. Define canvas zones and a module/page plan. Each zone should have one purpose and stable `zoneId` so the same conceptual region can be returned to Yogurt.
-3. Use `$cowart-semantic-diagram` for product overviews, module relationships, flows, state maps, GUI/LUI comparisons, and other relationship-dense views. Write the teaching claim and source-grounded semantic spec before drawing; an unread TAPD URL is not evidence for an arrow.
-4. Author module PRDs with stable requirement IDs and self-contained interactive HTML prototypes. Model the main path plus applicable empty, loading, validation, service-error, unauthorized, and completion states.
-5. Bind each important visual annotation to one unique `data-annotation-anchor`. Keep percentage coordinates only as a compatibility fallback. Semantic SVG objects and relations should expose stable data anchors as well.
-6. Maintain `bridge/trace-map.json` while authoring. Each mapping connects source IDs and Yogurt shape IDs to zones, requirements, pages, SVG objects/relations, annotations, and any shapes later returned to Yogurt.
+3. Author module PRDs with stable requirement IDs and self-contained interactive HTML prototypes. Model the main path plus applicable empty, loading, validation, service-error, unauthorized, and completion states.
+4. Bind each important visual annotation to one unique `data-annotation-anchor`. Keep percentage coordinates only as a compatibility fallback.
+5. Maintain `bridge/trace-map.json` while authoring. Each mapping connects source IDs and Yogurt shape IDs to zones, requirements, pages, annotations, and any shapes later returned to Yogurt.
+6. Do not generate a semantic line diagram or register semantic SVG as a Product Bridge document/page. If the user asks for both capabilities, finish this workspace independently; the separate canvas-diagram workflow must read the same frozen source scope and write only to the Yogurt canvas.
 7. Run:
 
 ```powershell
@@ -48,12 +48,12 @@ python "<skill-dir>/scripts/validate_workspace.py" "<project-dir>" --strict
 python "<skill-dir>/scripts/serve.py" "<project-dir>"
 ```
 
-Verify both “文档与原型” and “全局画布”. Repair missing anchors, broken paths, clipped layouts, stale mappings, and unsupported source claims before handoff.
+Verify both “文档与原型” and “页面关系”. The latter is only the prototype-page navigation view, not a Yogurt semantic line diagram. Repair missing anchors, broken paths, clipped layouts, stale mappings, and unsupported source claims before handoff.
 
 ## Return to Yogurt safely
 
 1. Re-read the current Yogurt context immediately before planning the return. Compare its revision with `bridge/sync-state.json` and the captured source revision.
-2. Build the smallest operation list that adds or updates the intended product zones. Use typed `create_zone` operations for new zones and `update_zone` for an existing shape ID or stable zone key. Give each card that belongs inside a zone the zone's stable key or shape ID as `parentZoneId`; this makes it a real frame child rather than a visually overlapping page card. Keep creation keys unique within the batch. Preserve user-authored shapes and unrelated canvas regions. Prefer cards and relations inside zones for product structure; use `insert_cowart_html_draft` when an editable prototype or structured HTML view is materially useful.
+2. Build the smallest operation list that adds or updates the intended product zones. Use typed `create_zone` operations with `purpose: "product"` for new zones and `update_zone` for an existing shape ID or stable zone key. Give each card that belongs inside a zone the zone's stable key or shape ID as `parentZoneId`; this makes it a real frame child rather than a visually overlapping page card. Keep creation keys unique within the batch. Preserve user-authored shapes and unrelated canvas regions. Prefer cards and relations inside zones for product structure; use `insert_cowart_html_draft` when an editable prototype or structured HTML view is materially useful.
 3. Put only the supported trace subset in each zone operation's `bridge` field: `mappingId`, `workspaceId`, `sourceIds`, `yogurtShapeIds`, `zoneId`, `requirementIds`, `pageIds`, `annotationRefs`, `returnedShapeIds`, and `lastSyncedRevision`. Do not send arbitrary workspace JSON as canvas metadata.
 4. Call `apply_cowart_thinking_operations` with `dryRun: true` and the current revision. Store the preview's `baseRevision`, a stable digest of the exact operation list, and the proposed mapping updates in `bridge/sync-state.json`.
 5. Show the user what will be created, changed, or linked. Do not apply until the user explicitly confirms that preview.

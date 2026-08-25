@@ -94,8 +94,8 @@ flowchart TB
 ## 验收与输出
 
 1. 语义检查：逐条确认 9 个对象、8 条关系、关系动词和方向与上述规格一致，没有把并列或包含误画成箭头；所有扩展内容都标记 `assumption`。
-2. 结构检查：从 Cowart 仓库根目录运行 `node skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs --root examples/product-bridge/ai-interactive-film-case examples/product-bridge/ai-interactive-film-case/diagrams/ai-interactive-film-system.html`，要求 0 错误、0 警告。
-3. Product Bridge 合约检查：运行 `python -B -X utf8 skills/cowart-product-bridge/scripts/validate_workspace.py examples/product-bridge/ai-interactive-film-case --strict`，要求 0 错误、0 警告。
+2. 结构检查：从 Cowart 仓库根目录运行 `node skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs --root examples/semantic-diagram/ai-interactive-film-system/precision-svg examples/semantic-diagram/ai-interactive-film-system/precision-svg/ai-interactive-film-system.html`，要求 0 错误、0 警告。
+3. 边界检查：确认该 HTML 只作为 Yogurt 画布上的可选精确图块，不写入任何 Product Bridge `interaction-prd.json`、页面或 trace map。
 4. 几何检查：在真实桌面宽度和窄屏横向滚动容器中核对同级中心对齐、2% 安全距离、viewBox 裁切、文字碰撞和 marker 落点。
 5. 连线检查：从每个源边界连续追踪到目标边界；不得穿过节点或文字，不得共线粘连，不得出现脱节箭头。
 6. 视觉检查：确认第一眼先看到约束链，其次看到“双输入更新账本”，最后看到“账本分发到镜头与结局”；蓝、橙两种强调色只承担规定语义。

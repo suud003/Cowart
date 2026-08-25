@@ -22,6 +22,19 @@
         "uri": null
       },
       "accessStatus": "available"
+    },
+    {
+      "id": "src-user-capability-boundary",
+      "kind": "user-note",
+      "title": "画布框线图与 Product Bridge 的能力边界",
+      "summary": "用户澄清 html-line-svg 的画图与布局能力应直接整合到 Yogurt 画布，不应成为 PRD 交互工作区的一部分。",
+      "excerpt": "这个能力我想整合到我的画布上面去，不是放到这个 PRD 交互上",
+      "yogurtShapeIds": [],
+      "provenance": {
+        "origin": "user-authored",
+        "uri": null
+      },
+      "accessStatus": "available"
     }
   ],
   "ideas": [

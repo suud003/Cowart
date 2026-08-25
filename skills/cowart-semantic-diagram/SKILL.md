@@ -1,17 +1,17 @@
 ---
 name: cowart-semantic-diagram
-description: Create or revise traceable semantic diagrams in Yogurt AI, routing simple editable graphs to native cards and relations while using safe inline SVG HTML drafts for precise layouts, ports, swimlanes, containment, or interface wireframes. Use when the user asks Yogurt to draw, organize, visualize, or round-trip product and system relationships; do not use for bitmap illustration or decorative artwork.
+description: Create or revise source-traceable semantic diagrams directly on the Yogurt AI canvas. Default to native editable cards, semantic zones, and bound relations using html-line-svg's semantic and layout grammar; use safe inline-SVG canvas blocks only when exact geometry cannot be expressed natively. Never make the diagram a Product Bridge or PRD page.
 ---
 
 # Yogurt Semantic Diagram
 
-Turn source-grounded ideas into diagrams that remain understandable, editable, and traceable in Yogurt AI. Preserve the user's material and change only the intended page or selection.
+Turn source-grounded ideas into diagrams that remain understandable, editable, and traceable in Yogurt AI. Preserve the user's material and change only the intended page or selection. This is a first-class canvas capability; do not create or modify an Interaction PRD workspace.
 
 ## Choose the representation
 
-Use **native Yogurt cards and relations** when the diagram is primarily a thinking graph: a hierarchy, a small flow, a claim-evidence map, or another composition whose objects should remain individually selectable and editable on the canvas. Prefer this route when Yogurt's automatic card layout can express the reading order without manual coordinates.
+Use **native Yogurt cards, semantic zones, and relations by default**, including flows, hierarchies, state maps, architecture summaries, comparisons, claim-evidence maps, and board-to-peers compositions. Native objects remain individually selectable and editable and carry stable semantic/source metadata. Express containment through real frame parentage and comparison through peer alignment, not fake arrows.
 
-Use an **HTML draft with one inline semantic SVG** when meaning depends on precise geometry: explicit connection ports, parallel lanes, swimlanes, nested containment, same-scale comparison, GUI/LUI wireframes, or a dense relation layout that native cards cannot render unambiguously.
+Use an **HTML draft with one inline semantic SVG only as a canvas-level precision route** when the user explicitly requests SVG or when meaning depends on geometry the native canvas cannot render unambiguously: dense obstacle routing, exact multi-port topology, detailed swimlanes, or GUI/LUI wireframes. The HTML draft is one scalable object on the current Yogurt page; it is never a PRD document or prototype page.
 
 Use a **hybrid** only when both representations add distinct value. Keep a small native summary or zone as the editable index and put the detailed SVG in one anchored HTML draft; do not duplicate the entire graph in both forms.
 
@@ -29,11 +29,26 @@ Before authoring or revising an HTML diagram, read [references/diagram-contract.
 
 ## Native-card route
 
-Build one connected operation batch with typed card, zone, and relation operations. Omit coordinates when Yogurt's connected-card layout is sufficient; use coordinates only to preserve or extend an existing composition.
+Build one connected operation batch with typed card, zone, and relation operations. For a new diagram, omit coordinates so Yogurt can apply SCC-aware layers, peer alignment, label-aware safe gaps, and the requested reading order. Use explicit coordinates only when a repair requires a specific composition. User-authored or unmanaged siblings remain fixed; managed nodes in the same diagram may shift together to preserve reading order, and automatic placement must never overlap a fixed sibling. Use `purpose: "semantic"` for grouping zones.
+
+Pass a batch-level `semanticDiagram` contract with `version: "1"`, a stable `diagramId`, the teaching claim, diagram type, reading order, source shape/source IDs, full-diagram object/relation counts, and an optional spec digest. Counts are derived for an initial creation batch; provide the complete counts when repairing or extending an existing diagram. The semantic-zone title must keep the teaching claim visible on the canvas, not only in metadata. Give every new card or zone a stable `semantic.id`, object type, visible state, origin, reading order, and source-shape mappings. Give every relation a stable `semanticId`, semantic `kind`, `direction`, `path`, optional payload, lane, `origin`, `sourceShapeIds`, and `sourceIds`.
+
+Use the relation grammar directly in native operations:
+
+- primary directional flow: `direction: "forward"`, `path: "primary"`;
+- alternative flow: `direction: "forward"`, `path: "alternative"`, plus a visible label or payload;
+- synchronization: `direction: "bidirectional"`;
+- association: `direction: "none"`;
+- containment: `parentZoneId`, not a relation;
+- comparison: aligned peers, not a relation.
+
+The canvas engine derives color, dash, arrowheads, boundary anchors, and parallel lanes from those semantics. Do not override semantic relation styling with arbitrary color or dash values.
 
 Call apply_cowart_thinking_operations with dryRun true and the captured revision. Verify that every non-root card has the intended relation and that only the selected region changes. Apply the identical operation list against the preview's baseRevision. If the revision changed, discard the preview, re-read context, and recompute.
 
-Use native relation labels only when the verb carries meaning not already clear from the hierarchy. Keep source-shape IDs and semantic IDs in supported operation metadata or the surrounding zone bridge fields; never write raw tldraw records.
+Use native relation labels only when the verb carries meaning not already clear from the hierarchy. Keep source-shape IDs and semantic IDs in the native semantic metadata; do not borrow Product Bridge zone/trace fields. Never write raw tldraw records.
+
+To revise card or zone semantics, use the restricted `semantic` patch on `update_card` or `update_zone`; keep `diagramId` and `semanticId` stable and change only type, state, origin, order, or source mappings. To revise a relation's direction, path, lane, label, payload, provenance, or endpoints, put `delete_shape` before `create_relation` in the same semantic batch and reuse the stable relation `semanticId`. There is no `update_relation` operation.
 
 ## HTML inline-SVG route
 
@@ -64,7 +79,7 @@ Check the actual Yogurt viewport, not only the source markup:
 
 - every object, relation, state, label, and color has a semantic reason;
 - peer alignment and safe gaps satisfy the embedded layout contract;
-- each edge leaves the source boundary, follows one continuous route, and lands its arrow tip on the target boundary;
+- each edge leaves the source boundary, follows one continuous route, and lands its arrow tip on the target boundary; after UI reconnection, the real start/end bindings remain authoritative;
 - lines do not cross unrelated objects or text, and parallel routes do not visually merge;
 - containment labels have their own safe zone and inner objects remain within the outer boundary;
 - title, description, reading order, font size, clipping, and narrow-view behavior remain usable;

@@ -17,7 +17,7 @@
         "shape:card-open-decisions-288e2ab9",
         "shape:rel-evidence-value-e14ed1e0"
       ],
-      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+      "lastSyncedRevision": "f5b7bb6c35023e84fa91"
     },
     {
       "id": "map-product-shaping",
@@ -25,7 +25,7 @@
       "yogurtShapeIds": [],
       "zoneId": "zone-product-shaping",
       "requirementIds": ["F-story-01", "F-play-01", "F-studio-01"],
-      "pageIds": ["system-overview", "discover", "studio"],
+      "pageIds": ["discover", "studio"],
       "annotationRefs": ["discover#1", "discover#2", "studio#1"],
       "returnedShapeIds": [
         "shape:cowart-zone-zone-product-shaping",
@@ -37,7 +37,7 @@
         "shape:rel-value-loop-97a39039",
         "shape:rel-target-validation-d9e14cc3"
       ],
-      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+      "lastSyncedRevision": "f5b7bb6c35023e84fa91"
     },
     {
       "id": "map-player-loop",
@@ -62,7 +62,7 @@
         "shape:rel-ledger-shot-819e5260",
         "shape:rel-ledger-ending-86b0c7c1"
       ],
-      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+      "lastSyncedRevision": "f5b7bb6c35023e84fa91"
     },
     {
       "id": "map-story-system",
@@ -70,7 +70,7 @@
       "yogurtShapeIds": [],
       "zoneId": "zone-ai-system",
       "requirementIds": ["F-story-01", "F-story-02", "F-story-03", "F-story-04", "F-story-05"],
-      "pageIds": ["system-overview", "play", "review"],
+      "pageIds": ["play", "review"],
       "annotationRefs": ["review#1"],
       "returnedShapeIds": [
         "shape:cowart-zone-zone-ai-system",
@@ -86,7 +86,7 @@
         "shape:rel-gate-director-62cd97e7",
         "shape:rel-ledger-shot-819e5260"
       ],
-      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+      "lastSyncedRevision": "f5b7bb6c35023e84fa91"
     },
     {
       "id": "map-studio-review",
@@ -103,10 +103,9 @@
         "shape:card-prototype-play-9583415a",
         "shape:card-prototype-ending-087aa284",
         "shape:card-prototype-studio-bb45101f",
-        "shape:card-system-diagram-de9b3d5c",
         "shape:rel-prd-prototype-2c597746"
       ],
-      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+      "lastSyncedRevision": "f5b7bb6c35023e84fa91"
     },
     {
       "id": "map-risks-decisions",
@@ -124,7 +123,7 @@
         "shape:card-next-validation-b13f4a19",
         "shape:rel-target-validation-d9e14cc3"
       ],
-      "lastSyncedRevision": "e1b6c2fe715c9007f7af"
+      "lastSyncedRevision": "f5b7bb6c35023e84fa91"
     }
   ]
 }

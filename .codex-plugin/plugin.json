@@ -1,6 +1,6 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.0+codex.20260824120133",
+  "version": "0.2.1+codex.20260825",
   "description": "A source-grounded thinking canvas with reversible edits and reviewable product workspaces.",
   "author": {
     "name": "ZHONG XIN",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Yogurt AI",
     "shortDescription": "Turn sources into editable canvases, semantic diagrams, PRDs, and prototypes.",
-    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, annotation-driven editing, accessible semantic SVG diagrams, and reviewable product workspaces that keep PRDs, interactive prototypes, canvas zones, and return snapshots traceable.",
+    "longDescription": "Yogurt AI extends the tldraw-powered Cowart workspace with source-aware material cards, compact canvas context, atomic reasoning operations, guarded undo, annotation-driven editing, native editable semantic diagrams with a safe SVG precision route, and separately reviewable product workspaces for PRDs and interactive prototypes.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -34,7 +34,7 @@
       "Native Codex widget",
       "Source-grounded reasoning",
       "Atomic reversible edits",
-      "Accessible semantic SVG diagrams",
+      "Native editable semantic canvas diagrams",
       "Interactive PRD and prototype workspaces",
       "AI image generation",
       "Annotation-driven editing",
@@ -44,7 +44,7 @@
     "defaultPrompt": [
       "Open Yogurt AI for this project.",
       "Organize these documents into source-linked cards and relationships on the canvas.",
-      "Turn my selected Yogurt notes into a traceable semantic line diagram.",
+      "Turn my selected Yogurt notes into a traceable semantic line diagram directly on the current canvas.",
       "Turn my selected notes and TAPD references into an interactive PRD, then preview a snapshot to sync back."
     ]
   }

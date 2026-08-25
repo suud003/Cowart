@@ -158,7 +158,7 @@ const server = new McpServer(
   },
   {
     instructions:
-      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Reuse insert_cowart_image and insert_cowart_html_draft for visual assets instead of hand-writing tldraw records. For semantic inline-SVG diagrams, pass the constrained semanticDiagram summary so the teaching claim, reading order, source IDs, and counts remain available when the canvas is read back.",
+      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Build canvas line diagrams natively with a semanticDiagram batch plus semantic zones, cards, and relations so every object stays editable and traceable. Reuse insert_cowart_image and insert_cowart_html_draft only for visual assets or an explicitly requested precision inline-SVG fallback instead of hand-writing tldraw records.",
   },
 );
 

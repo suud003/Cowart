@@ -16,5 +16,13 @@
     "operationId": "20260824135138444-862c669b",
     "pendingMappingUpdates": [],
     "conflicts": []
+  },
+  "capabilityBoundaryCorrection": {
+    "status": "applied",
+    "operationId": "20260825043143046-31627d4c",
+    "baseRevision": "308da9ea792c28b665db",
+    "resultRevision": "f5b7bb6c35023e84fa91",
+    "updatedProductBridgeZoneId": "shape:cowart-zone-zone-prototype-review",
+    "semanticDiagramInBatch": false
   }
 }

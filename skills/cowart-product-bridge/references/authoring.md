@@ -57,11 +57,7 @@ Give every annotated visual target a unique semantic anchor such as `data-annota
 
 Store both the semantic anchor and legacy percentage coordinates in `interaction-prd.json`. The viewer follows the anchored element through iframe scrolling, resizing, and DOM reflow; coordinates remain the fallback when an anchor is unavailable. Verify every marker against its intended element after loading the review container. A dashed amber marker means the anchor is missing or the annotation only has legacy coordinates; repair it with “重新定位”. Markers stay hidden until the iframe and its fonts have reached a stable first layout, so an obsolete percentage point is never shown as the initial authoritative location.
 
-## Semantic diagrams
-
-Use `$cowart-semantic-diagram` when a product overview or prototype needs precise relationship drawing rather than a loose card graph. Keep the final semantic JSON specification and reusable prompt inside the same HTML asset using `data-cowart-diagram-spec` and `data-cowart-diagram-prompt` templates. Give SVG objects and relations stable `data-annotation-anchor`, `data-object-id`, `data-relation`, `data-from`, and `data-to` attributes so annotations and trace mappings bind to meaning instead of pixels.
-
-Every arrow must be supported by a readable source or an explicitly labeled product assumption. Route lines from source boundaries to target boundaries, keep parallel paths visually separate, and split a diagram that cannot remain traceable without crossing unrelated objects or labels. Run the semantic SVG validator, then inspect the real review viewport for alignment, clipping, text collision, and line traceability.
+The review container's page-relation view only summarizes prototype pages and working navigation. It is not an html-line-svg artifact and must not be registered as a semantic diagram. Semantic line diagrams belong to the independent Yogurt canvas workflow.
 
 ## Alignment review
 
@@ -73,8 +69,7 @@ Every arrow must be supported by a readable source or an explicitly labeled prod
 | Requirement IDs | annotations, prototype coverage, and trace map |
 | Rules and state machine | prototype behavior and messages |
 | `DESIGN.md` | shared component page and prototypes |
-| Page transitions | global canvas arrows and working navigation |
-| Semantic diagram spec | SVG objects, relations, prompts, source IDs, and annotations |
+| Page transitions | page-relation arrows and working navigation |
 | Yogurt zones | trace-map `zoneId` and proposed return operations |
 | Permissions | visible controls, blocked states, and acceptance criteria |
 

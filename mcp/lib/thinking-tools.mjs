@@ -20,6 +20,77 @@ const projectArgsSchema = {
 };
 
 const placementSchema = z.enum(["right", "left", "below", "above"]);
+const readingOrderSchema = z.enum([
+  "left-to-right",
+  "right-to-left",
+  "top-to-bottom",
+  "bottom-to-top",
+  "center-out",
+  "board-to-peers",
+]);
+const diagramTypeSchema = z.enum([
+  "flow",
+  "architecture",
+  "comparison",
+  "state",
+  "interface",
+  "swimlane",
+  "concept",
+  "hierarchy",
+  "containment",
+  "board-to-peers",
+  "custom",
+]);
+const semanticDiagramSchema = z.object({
+  version: z.literal("1"),
+  diagramId: z.string().trim().min(1).max(160),
+  teachingClaim: z.string().trim().min(1).max(500),
+  readingOrder: readingOrderSchema,
+  diagramType: diagramTypeSchema,
+  sourceShapeIds: z.array(z.string().trim().min(1).max(160)).max(250).optional(),
+  sourceIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
+  objectCount: z.number().int().min(0).max(250).optional(),
+  relationCount: z.number().int().min(0).max(500).optional(),
+  specDigest: z.string().trim().max(128).optional(),
+}).strict();
+const semanticObjectSchema = z.object({
+  id: z.string().trim().min(1).max(160),
+  type: z.enum([
+    "agent",
+    "actor",
+    "task",
+    "process",
+    "decision",
+    "data",
+    "interface",
+    "state",
+    "outcome",
+    "note",
+    "group",
+    "container",
+    "document",
+    "claim",
+    "evidence",
+    "question",
+    "zone",
+    "system",
+    "custom",
+  ]).optional(),
+  state: z.enum(["normal", "warning", "blocked", "success", "question"]).optional(),
+  origin: z.enum([
+    "source",
+    "user",
+    "synthesis",
+    "inference",
+    "unknown",
+    "assumption",
+    "question",
+  ]).optional(),
+  order: z.number().int().min(0).max(999).optional(),
+  sourceShapeIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
+  sourceIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
+}).strict();
+const semanticObjectPatchSchema = semanticObjectSchema.omit({ id: true }).strict();
 const roleSchema = z.enum([
   "material",
   "idea",
@@ -75,6 +146,7 @@ const createCardSchema = z.object({
   sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
   source: sourceMetadataSchema.optional(),
   bridge: bridgeMetadataSchema.optional(),
+  semantic: semanticObjectSchema.optional(),
   url: z.string().max(2_000).optional(),
   parentZoneId: z.string().trim().min(1).max(160).optional(),
   anchorId: z.string().trim().optional(),
@@ -96,6 +168,7 @@ const updateCardSchema = z.object({
   sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
   source: sourceMetadataSchema.nullable().optional(),
   bridge: bridgeMetadataSchema.nullable().optional(),
+  semantic: semanticObjectPatchSchema.optional(),
   url: z.string().max(2_000).optional(),
 });
 
@@ -111,6 +184,8 @@ const createZoneSchema = z.object({
   color: z.string().trim().optional(),
   sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
   bridge: bridgeMetadataSchema.optional(),
+  purpose: z.enum(["thinking", "product", "semantic"]).optional(),
+  semantic: semanticObjectSchema.optional(),
 });
 
 const updateZoneSchema = z.object({
@@ -125,6 +200,7 @@ const updateZoneSchema = z.object({
   color: z.string().trim().optional(),
   sourceRefs: z.array(z.string().trim().max(500)).max(50).optional(),
   bridge: bridgeMetadataSchema.nullable().optional(),
+  semantic: semanticObjectPatchSchema.optional(),
 });
 
 const moveShapeSchema = z.object({
@@ -147,6 +223,22 @@ const createRelationSchema = z.object({
   from: z.string().trim(),
   to: z.string().trim(),
   kind: z.string().trim().max(80).optional(),
+  semanticId: z.string().trim().min(1).max(160).optional(),
+  direction: z.enum(["forward", "bidirectional", "none"]).optional(),
+  path: z.enum(["primary", "alternative"]).optional(),
+  payload: z.string().max(300).optional(),
+  lane: z.number().int().min(-8).max(8).optional(),
+  origin: z.enum([
+    "source",
+    "user",
+    "synthesis",
+    "inference",
+    "unknown",
+    "assumption",
+    "question",
+  ]).optional(),
+  sourceShapeIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
+  sourceIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
   label: z.string().max(300).optional(),
   color: z.string().trim().optional(),
   dash: z.enum(["draw", "dashed"]).optional(),
@@ -256,12 +348,13 @@ export function registerCowartThinkingTools(server) {
     {
       title: "Apply Yogurt AI Thinking Operations",
       description:
-        "Preview or atomically apply local, typed edits to Yogurt AI cards, product zones, positions, sizes, and relations. Product zones are safe tldraw frames with stable keys and constrained source/bridge trace metadata. create_card may use parentZoneId (a stable zone key or shape ID, including a zone created earlier in the same batch) to become a real frame child; supplied x/y remain page coordinates and are safely converted to frame-local coordinates, while omitted positions are padded and arranged inside the frame. Creation keys must be unique within a batch, and zone updates cannot cross the requested page. A connected batch of unpositioned page-level cards and relations is automatically arranged as a top-down Excalidraw-style graph. Deletion is limited to agent-generated shapes and refuses zones containing user-authored descendants. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
+        "Preview or atomically apply local, typed edits to Yogurt AI cards, canvas zones, positions, sizes, and relations. Pass semanticDiagram to create a source-traceable native canvas diagram: readingOrder drives automatic layout, create_zone purpose=semantic creates a semantic canvas group, and relation direction/path derive the html-line-svg relation grammar (primary, alternative, bidirectional, or association). create_card may use parentZoneId (a stable zone key or shape ID, including a zone created earlier in the same batch) to become a real frame child. Creation keys must be unique within a batch, and zone updates cannot cross the requested page. Deletion is limited to agent-generated shapes and refuses zones containing user-authored descendants. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
       inputSchema: {
         ...projectArgsSchema,
         baseRevision: z.string().trim().optional(),
         pageId: z.string().trim().optional(),
         operations: z.array(operationSchema).min(1).max(100),
+        semanticDiagram: semanticDiagramSchema.optional(),
         reason: z.string().max(2_000).optional(),
         explanation: z.string().max(8_000).optional(),
         allowUserAuthoredEdits: z.boolean().optional(),

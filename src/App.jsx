@@ -3899,7 +3899,7 @@ async function submitCowartSemanticDiagram(editor) {
 
   const flushCanvasSnapshot = cowartCanvasSnapshotFlushers.get(editor)
   if (!flushCanvasSnapshot) {
-    throw new Error('Yogurt AI 画布保存尚未就绪，请稍后再生成语义框线图。')
+    throw new Error('Yogurt AI 画布保存尚未就绪，请稍后再生成画布框线图。')
   }
   await flushCanvasSnapshot()
   writeCowartSelectionState(semanticDiagramContext)
@@ -3925,8 +3925,8 @@ async function submitCowartSemanticDiagram(editor) {
 
     const error = new Error(
       copied
-        ? '选区/页面上下文已保存，语义框线图指令已复制。请在 Codex 原生 Yogurt AI 画布中发送。'
-        : '选区/页面上下文已保存。生成语义框线图需要在 Codex 原生 Yogurt AI 画布中使用。'
+        ? '选区/页面上下文已保存，画布框线图指令已复制。请在 Codex 原生 Yogurt AI 画布中发送。'
+        : '选区/页面上下文已保存。生成画布框线图需要在 Codex 原生 Yogurt AI 画布中使用。'
     )
     error.code = SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE
     throw error

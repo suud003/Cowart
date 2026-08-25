@@ -52,6 +52,33 @@ function thinkingToolInputSchema(toolName) {
   return z.object(definition.inputSchema).strict();
 }
 
+function semanticDiagram(diagramId = "native:test-guard") {
+  return {
+    version: "1",
+    diagramId,
+    teachingClaim: "A bound native relation stays editable without losing semantic integrity.",
+    readingOrder: "left-to-right",
+    diagramType: "flow",
+    sourceShapeIds: ["shape:source-note"],
+    sourceIds: ["source:test-note"],
+  };
+}
+
+function relationBindings(snapshot, relationId) {
+  return Object.values(snapshot.store).filter(
+    (record) => record?.typeName === "binding" && record.fromId === relationId,
+  );
+}
+
+function simpleBoundsOverlap(first, second) {
+  return !(
+    first.x + first.props.w < second.x ||
+    second.x + second.props.w < first.x ||
+    first.y + first.props.h < second.y ||
+    second.y + second.props.h < first.y
+  );
+}
+
 test("thinking operation schema rejects arbitrary raw source and bridge metadata", () => {
   const schema = thinkingToolInputSchema(THINKING_TOOL_NAMES.applyOperations);
   const validZone = {
@@ -91,6 +118,467 @@ test("thinking operation schema rejects arbitrary raw source and bridge metadata
     },
   };
   assert.equal(schema.safeParse({ operations: [rawSource] }).success, false);
+});
+
+test("thinking operation schema accepts only bounded native semantic diagram fields", () => {
+  const schema = thinkingToolInputSchema(THINKING_TOOL_NAMES.applyOperations);
+  const input = {
+    semanticDiagram: {
+      version: "1",
+      diagramId: "native:ugc-flow",
+      teachingClaim: "Ideas become a reviewable canvas flow.",
+      readingOrder: "left-to-right",
+      diagramType: "flow",
+      sourceShapeIds: ["shape:idea"],
+      objectCount: 2,
+      relationCount: 1,
+    },
+    operations: [
+      {
+        type: "create_card",
+        key: "idea",
+        title: "Idea",
+        semantic: {
+          id: "object:idea",
+          type: "note",
+          state: "normal",
+          origin: "source",
+          sourceShapeIds: ["shape:idea"],
+        },
+      },
+      {
+        type: "create_card",
+        key: "prototype",
+        title: "Prototype",
+        semantic: { id: "object:prototype", type: "interface", origin: "synthesis" },
+      },
+      {
+        type: "create_relation",
+        key: "idea-to-prototype",
+        semanticId: "relation:idea-to-prototype",
+        from: "idea",
+        to: "prototype",
+        kind: "flow",
+        direction: "forward",
+        path: "alternative",
+        label: "optional",
+        lane: 1,
+        origin: "source",
+        sourceShapeIds: ["shape:idea"],
+        sourceIds: ["source:idea"],
+      },
+    ],
+  };
+  assert.equal(schema.safeParse(input).success, true);
+  const invalid = structuredClone(input);
+  invalid.operations[0].semantic.rawTldraw = { type: "geo" };
+  assert.equal(schema.safeParse(invalid).success, false);
+});
+
+test("keeps native semantic canvas batches structurally separate from Product Bridge", () => {
+  const product = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    operations: [
+      {
+        type: "create_zone",
+        key: "product-zone",
+        title: "Product review",
+        purpose: "product",
+        bridge: { workspaceId: "workspace:product", zoneId: "zone:product" },
+      },
+      {
+        type: "create_card",
+        key: "product-card",
+        title: "Product requirement",
+        parentZoneId: "product-zone",
+        bridge: { workspaceId: "workspace:product", zoneId: "zone:product" },
+      },
+    ],
+  });
+  const semanticDiagram = {
+    version: "1",
+    diagramId: "native:separate",
+    teachingClaim: "Canvas diagrams and Product Bridge are independent outputs.",
+    readingOrder: "left-to-right",
+    diagramType: "flow",
+  };
+
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: product.snapshot,
+      operations: [{ type: "create_zone", key: "shell", title: "Shell", purpose: "semantic" }],
+    }),
+    /requires the batch-level semanticDiagram/,
+  );
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: product.snapshot,
+      semanticDiagram,
+      operations: [{ type: "create_zone", key: "mixed", title: "Mixed", purpose: "product" }],
+    }),
+    /cannot create a Product Bridge zone/,
+  );
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: product.snapshot,
+      semanticDiagram,
+      operations: [{
+        type: "create_card",
+        key: "mixed-card",
+        title: "Mixed card",
+        semantic: { id: "object:mixed" },
+        bridge: { workspaceId: "workspace:product" },
+      }],
+    }),
+    /cannot include Product Bridge metadata/,
+  );
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: product.snapshot,
+      semanticDiagram,
+      operations: [{
+        type: "create_card",
+        key: "product-child",
+        title: "Product child",
+        parentZoneId: product.references["product-zone"],
+        semantic: { id: "object:product-child" },
+      }],
+    }),
+    /cannot target Product Bridge shape/,
+  );
+
+  const beside = applyThinkingOperationsToSnapshot({
+    snapshot: product.snapshot,
+    semanticDiagram,
+    operations: [{
+      type: "create_card",
+      key: "independent-card",
+      title: "Independent canvas card",
+      anchorId: product.references["product-card"],
+      placement: "right",
+      semantic: { id: "object:independent" },
+    }],
+  });
+  const independent = beside.snapshot.store[beside.references["independent-card"]];
+  assert.equal(independent.parentId, "page:test");
+  assert.equal(independent.meta.cowartProductBridge, null);
+  assert.equal(independent.meta.cowartSemanticDiagram.diagramId, "native:separate");
+});
+
+test("round-trips semantic zone roles and relation provenance through compact context", () => {
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: {
+      version: "1",
+      diagramId: "native:trace",
+      teachingClaim: "Every source-backed relation keeps its provenance.",
+      readingOrder: "left-to-right",
+      diagramType: "flow",
+      sourceShapeIds: ["shape:source-note"],
+      sourceIds: ["source:note"],
+      objectCount: 8,
+      relationCount: 6,
+    },
+    operations: [
+      {
+        type: "create_zone",
+        key: "trace-zone",
+        title: "Trace zone",
+        purpose: "semantic",
+        semantic: { id: "object:zone", type: "zone" },
+      },
+      {
+        type: "create_card",
+        key: "a",
+        title: "A",
+        parentZoneId: "trace-zone",
+        semantic: {
+          id: "object:a",
+          type: "document",
+          origin: "source",
+          sourceShapeIds: ["shape:source-note"],
+        },
+      },
+      {
+        type: "create_card",
+        key: "b",
+        title: "B",
+        parentZoneId: "trace-zone",
+        semantic: { id: "object:b", type: "system" },
+      },
+      {
+        type: "create_relation",
+        key: "a-b",
+        semanticId: "relation:a-b",
+        from: "a",
+        to: "b",
+        origin: "source",
+        sourceShapeIds: ["shape:source-note"],
+        sourceIds: ["source:note"],
+      },
+    ],
+  });
+  const context = summarizeThinkingContext({ snapshot: result.snapshot, scope: "page" });
+  const zone = context.shapes.find(({ id }) => id === result.references["trace-zone"]);
+  const relation = context.shapes.find(({ id }) => id === result.references["a-b"]);
+  assert.equal(zone.role, "zone");
+  assert.deepEqual(relation.semantic.sourceIds, ["source:note"]);
+  assert.equal(relation.semantic.objectCount, 8);
+  assert.equal(relation.semantic.relationCount, 6);
+  assert.equal(relation.semantic.relation.origin, "source");
+  assert.deepEqual(relation.semantic.relation.sourceShapeIds, ["shape:source-note"]);
+  assert.deepEqual(relation.semantic.relation.sourceIds, ["source:note"]);
+});
+
+test("treats partial UI bindings as authoritative and keeps an unbound relation when deleting its old target", () => {
+  const diagram = semanticDiagram("native:partial-binding");
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: diagram,
+    operations: [
+      { type: "create_card", key: "a", title: "A", x: 40, y: 40, semantic: { id: "object:a" } },
+      { type: "create_card", key: "b", title: "B", x: 520, y: 40, semantic: { id: "object:b" } },
+      { type: "create_relation", key: "a-b", from: "a", to: "b", semanticId: "relation:a-b" },
+    ],
+  });
+  const relationId = created.references["a-b"];
+  const targetId = created.references.b;
+
+  const legacy = structuredClone(created.snapshot);
+  for (const binding of relationBindings(legacy, relationId)) delete legacy.store[binding.id];
+  const legacyRelation = summarizeThinkingContext({ snapshot: legacy, scope: "page" })
+    .shapes.find(({ id }) => id === relationId);
+  assert.equal(legacyRelation.relation.fromId, created.references.a);
+  assert.equal(legacyRelation.relation.toId, targetId);
+  assert.equal(legacyRelation.relation.valid, true);
+
+  const partial = structuredClone(created.snapshot);
+  const endBinding = relationBindings(partial, relationId)
+    .find((binding) => binding.props.terminal === "end");
+  delete partial.store[endBinding.id];
+  const partialRelation = summarizeThinkingContext({ snapshot: partial, scope: "page" })
+    .shapes.find(({ id }) => id === relationId);
+  assert.equal(partialRelation.relation.fromId, created.references.a);
+  assert.equal(partialRelation.relation.toId, null);
+  assert.equal(partialRelation.relation.valid, false);
+  assert.equal(partialRelation.relation.unsafe, false);
+  assert.match(partialRelation.relation.invalidReason, /incomplete/);
+
+  const deleted = applyThinkingOperationsToSnapshot({
+    snapshot: partial,
+    operations: [{ type: "delete_shape", id: targetId }],
+  });
+  assert.equal(deleted.snapshot.store[targetId], undefined);
+  assert.ok(deleted.snapshot.store[relationId], "an already-unbound arrow must not follow stale endpoint metadata");
+  assert.equal(relationBindings(deleted.snapshot, relationId).length, 1);
+  validateSnapshot(deleted.snapshot);
+});
+
+test("marks cross-diagram and non-semantic UI rebindings invalid and refuses later mutations", () => {
+  const firstDiagram = semanticDiagram("native:first");
+  const first = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: firstDiagram,
+    operations: [
+      { type: "create_card", key: "a", title: "A", x: 40, y: 40, semantic: { id: "object:a" } },
+      { type: "create_card", key: "b", title: "B", x: 520, y: 40, semantic: { id: "object:b" } },
+      { type: "create_relation", key: "a-b", from: "a", to: "b", semanticId: "relation:a-b" },
+    ],
+  });
+  const second = applyThinkingOperationsToSnapshot({
+    snapshot: first.snapshot,
+    semanticDiagram: semanticDiagram("native:second"),
+    operations: [
+      { type: "create_card", key: "c", title: "C", x: 1_000, y: 40, semantic: { id: "object:c" } },
+    ],
+  });
+  const ordinary = applyThinkingOperationsToSnapshot({
+    snapshot: second.snapshot,
+    operations: [{ type: "create_card", key: "plain", title: "Plain", x: 1_400, y: 40 }],
+  });
+  const relationId = first.references["a-b"];
+  const endBindingId = relationBindings(ordinary.snapshot, relationId)
+    .find((binding) => binding.props.terminal === "end").id;
+
+  for (const [targetId, reasonPattern] of [
+    [second.references.c, /crosses semantic diagrams/],
+    [ordinary.references.plain, /non-semantic shape/],
+  ]) {
+    const rebound = structuredClone(ordinary.snapshot);
+    rebound.store[endBindingId].toId = targetId;
+    const contextRelation = summarizeThinkingContext({ snapshot: rebound, scope: "page" })
+      .shapes.find(({ id }) => id === relationId);
+    assert.equal(contextRelation.semantic.relation.valid, false);
+    assert.equal(contextRelation.semantic.relation.unsafe, true);
+    assert.match(contextRelation.semantic.relation.invalidReason, reasonPattern);
+    assert.throws(
+      () => applyThinkingOperationsToSnapshot({
+        snapshot: rebound,
+        operations: [{ type: "move_shape", id: first.references.a, x: 80, y: 80 }],
+      }),
+      /native semantic relation bindings are invalid/,
+    );
+  }
+});
+
+test("round-trips restricted semantic patches without changing diagram or semantic identity", () => {
+  const schema = thinkingToolInputSchema(THINKING_TOOL_NAMES.applyOperations);
+  const diagram = semanticDiagram("native:semantic-patch");
+  assert.equal(schema.safeParse({
+    semanticDiagram: diagram,
+    operations: [{
+      type: "update_card",
+      id: "shape:card",
+      semantic: {
+        type: "decision",
+        state: "warning",
+        origin: "inference",
+        order: 4,
+        sourceShapeIds: ["shape:source-2"],
+        sourceIds: ["source:2"],
+      },
+    }],
+  }).success, true);
+  assert.equal(schema.safeParse({
+    semanticDiagram: diagram,
+    operations: [{ type: "update_card", id: "shape:card", semantic: { id: "object:hijack" } }],
+  }).success, false);
+  assert.equal(schema.safeParse({
+    semanticDiagram: diagram,
+    operations: [{ type: "update_zone", id: "shape:zone", semantic: { diagramId: "native:hijack" } }],
+  }).success, false);
+
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: diagram,
+    operations: [
+      {
+        type: "create_zone",
+        key: "zone",
+        title: "System",
+        purpose: "semantic",
+        semantic: { id: "object:zone", type: "zone", sourceIds: ["source:1"] },
+      },
+      {
+        type: "create_card",
+        key: "card",
+        title: "Draft",
+        parentZoneId: "zone",
+        semantic: { id: "object:card", type: "note", sourceIds: ["source:1"] },
+      },
+    ],
+  });
+  const updated = applyThinkingOperationsToSnapshot({
+    snapshot: created.snapshot,
+    semanticDiagram: diagram,
+    operations: [
+      {
+        type: "update_zone",
+        id: created.references.zone,
+        semantic: { type: "container", state: "success", origin: "user", order: 1, sourceIds: ["source:2"] },
+      },
+      {
+        type: "update_card",
+        id: created.references.card,
+        title: "Reviewed",
+        semantic: {
+          type: "decision",
+          state: "warning",
+          origin: "inference",
+          order: 4,
+          sourceShapeIds: ["shape:source-2"],
+          sourceIds: ["source:2"],
+        },
+      },
+    ],
+  });
+  const card = updated.snapshot.store[created.references.card];
+  const zone = updated.snapshot.store[created.references.zone];
+  assert.equal(card.meta.cowartSemanticObject.semanticId, "object:card");
+  assert.equal(card.meta.cowartSemanticObject.diagramId, diagram.diagramId);
+  assert.deepEqual(
+    {
+      type: card.meta.cowartSemanticObject.type,
+      state: card.meta.cowartSemanticObject.state,
+      origin: card.meta.cowartSemanticObject.origin,
+      order: card.meta.cowartSemanticObject.order,
+      sourceShapeIds: card.meta.cowartSemanticObject.sourceShapeIds,
+      sourceIds: card.meta.cowartSemanticObject.sourceIds,
+    },
+    {
+      type: "decision",
+      state: "warning",
+      origin: "inference",
+      order: 4,
+      sourceShapeIds: ["shape:source-2"],
+      sourceIds: ["source:2"],
+    },
+  );
+  assert.equal(zone.meta.cowartSemanticObject.semanticId, "object:zone");
+  assert.equal(zone.meta.cowartSemanticObject.type, "container");
+  const contextCard = summarizeThinkingContext({ snapshot: updated.snapshot, scope: "page" })
+    .shapes.find(({ id }) => id === created.references.card);
+  assert.deepEqual(contextCard.semantic.object.sourceIds, ["source:2"]);
+
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: updated.snapshot,
+      semanticDiagram: diagram,
+      operations: [{
+        type: "update_card",
+        id: created.references.card,
+        semantic: { semanticId: "object:hijack", type: "state" },
+      }],
+    }),
+    /cannot change semanticId or diagramId/,
+  );
+});
+
+test("incremental upstream layout preserves fixed user siblings and selects a safe alternate lane", () => {
+  const diagram = semanticDiagram("native:fixed-sibling");
+  const initial = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: diagram,
+    operations: [
+      { type: "create_zone", key: "zone", title: "System", purpose: "semantic", x: 0, y: 0, w: 1_200, h: 900, semantic: { id: "object:zone", type: "zone" } },
+      { type: "create_card", key: "endpoint", title: "Endpoint", parentZoneId: "zone", x: 80, y: 120, semantic: { id: "object:endpoint", order: 2 } },
+      { type: "create_card", key: "fixed", title: "User sibling", parentZoneId: "zone", x: 500, y: 120, generated: false, semantic: { id: "object:fixed", order: 3 } },
+    ],
+  });
+  const endpointBefore = structuredClone(initial.snapshot.store[initial.references.endpoint]);
+  const fixedBefore = structuredClone(initial.snapshot.store[initial.references.fixed]);
+  const extended = applyThinkingOperationsToSnapshot({
+    snapshot: initial.snapshot,
+    semanticDiagram: diagram,
+    operations: [
+      { type: "create_card", key: "upstream", title: "Upstream", parentZoneId: initial.references.zone, semantic: { id: "object:upstream", order: 1 } },
+      { type: "create_relation", key: "upstream-endpoint", from: "upstream", to: initial.references.endpoint, semanticId: "relation:upstream-endpoint" },
+    ],
+  });
+  const endpointAfter = extended.snapshot.store[initial.references.endpoint];
+  const fixedAfter = extended.snapshot.store[initial.references.fixed];
+  const upstream = extended.snapshot.store[extended.references.upstream];
+  assert.deepEqual({ x: endpointAfter.x, y: endpointAfter.y }, { x: endpointBefore.x, y: endpointBefore.y });
+  assert.deepEqual({ x: fixedAfter.x, y: fixedAfter.y }, { x: fixedBefore.x, y: fixedBefore.y });
+  assert.equal(simpleBoundsOverlap(upstream, endpointAfter), false);
+  assert.equal(simpleBoundsOverlap(upstream, fixedAfter), false);
+
+  const blocked = structuredClone(initial.snapshot);
+  blocked.store[initial.references.fixed].x = 40;
+  blocked.store[initial.references.fixed].y = 40;
+  blocked.store[initial.references.fixed].props.w = 8_000;
+  blocked.store[initial.references.fixed].props.h = 8_000;
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: blocked,
+      semanticDiagram: diagram,
+      operations: [
+        { type: "create_card", key: "blocked-upstream", title: "Blocked upstream", parentZoneId: initial.references.zone, semantic: { id: "object:blocked-upstream", order: 1 } },
+        { type: "create_relation", key: "blocked-edge", from: "blocked-upstream", to: initial.references.endpoint, semanticId: "relation:blocked-edge" },
+      ],
+    }),
+    /cannot find a safe position without overlapping fixed sibling shapes/,
+  );
 });
 
 test("thinking context schema requires a non-empty bounded frozen selection", () => {
@@ -401,7 +889,7 @@ test("creates real product zones and exposes constrained bridge trace metadata",
       snapshot: updatedResult.snapshot,
       operations: [{ type: "create_zone", key: "ugc-intake", title: "Duplicate" }],
     }),
-    /Product zone key already exists/,
+    /Canvas zone key already exists/,
   );
 });
 
@@ -465,6 +953,8 @@ test("create_card becomes a real frame child with page-coordinate placement and 
   const autoCardId = created.references["auto-requirement"];
   const card = created.snapshot.store[cardId];
   const autoCard = created.snapshot.store[autoCardId];
+  assert.equal(created.snapshot.store[zoneId].meta.cowartThinkingZonePurpose, "thinking");
+  assert.equal(created.snapshot.store[zoneId].meta.cowartProductZone, false);
   assert.equal(card.parentId, zoneId);
   assert.deepEqual({ x: card.x, y: card.y }, { x: 60, y: 80 });
   assert.equal(autoCard.parentId, zoneId);
@@ -504,7 +994,7 @@ test("create_card becomes a real frame child with page-coordinate placement and 
   assert.equal(context.shapes.find(({ id }) => id === cardId).selected, false);
   assert.deepEqual(
     context.shapes.find(({ id }) => id === cardId).parentZone,
-    { id: zoneId, key: "requirements" },
+    { id: zoneId, key: "requirements", purpose: "thinking" },
   );
 
   const moved = applyThinkingOperationsToSnapshot({

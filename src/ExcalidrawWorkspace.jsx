@@ -242,17 +242,17 @@ export function ExcalidrawCowartChrome({
     },
     {
       id: 'semantic-diagram',
-      label: '生成语义框线图',
-      description: '把选区或整页整理成可追踪的 SVG 关系图',
+      label: '生成画布框线图',
+      description: '在当前画布生成可编辑分区、节点与关系线',
       icon: <Workflow aria-hidden="true" />,
-      badge: 'SVG',
+      badge: 'CANVAS',
       onSelect: () => onCreateSemanticDiagram(editor),
-      successTitle: '已发送给语义制图 Agent',
+      successTitle: '已发送给画布制图 Agent',
       successDescription: (result) =>
         result?.scope === 'selection'
           ? `已冻结当前选区的 ${result.selectedCount} 个对象。`
           : '当前没有选中对象，已使用整页内容。',
-      errorTitle: '语义框线图生成任务发送失败'
+      errorTitle: '画布框线图生成任务发送失败'
     },
     {
       id: 'export-html',

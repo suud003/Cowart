@@ -14,7 +14,11 @@ import {
   resolveCowartPaths,
   saveCowartCanvasSnapshot,
 } from "./canvas-storage.mjs";
-import { estimateThinkingCardSize, layoutThinkingGraph } from "./thinking-layout.mjs";
+import {
+  estimateThinkingCardSize,
+  estimateThinkingRelationGap,
+  layoutThinkingGraph,
+} from "./thinking-layout.mjs";
 
 const PAGE_PREFIX = "page:";
 const SHAPE_PREFIX = "shape:";
@@ -79,6 +83,58 @@ const SOURCE_ACCESS_STATUSES = new Set([
   "not-configured",
   "denied",
   "error",
+]);
+const SEMANTIC_READING_ORDERS = new Set([
+  "left-to-right",
+  "right-to-left",
+  "top-to-bottom",
+  "bottom-to-top",
+  "center-out",
+  "board-to-peers",
+]);
+const SEMANTIC_DIAGRAM_TYPES = new Set([
+  "flow",
+  "architecture",
+  "comparison",
+  "state",
+  "interface",
+  "swimlane",
+  "concept",
+  "hierarchy",
+  "containment",
+  "board-to-peers",
+  "custom",
+]);
+const SEMANTIC_OBJECT_TYPES = new Set([
+  "agent",
+  "actor",
+  "task",
+  "process",
+  "decision",
+  "data",
+  "interface",
+  "state",
+  "outcome",
+  "note",
+  "group",
+  "container",
+  "document",
+  "claim",
+  "evidence",
+  "question",
+  "zone",
+  "system",
+  "custom",
+]);
+const SEMANTIC_OBJECT_STATES = new Set(["normal", "warning", "blocked", "success", "question"]);
+const SEMANTIC_ORIGINS = new Set([
+  "source",
+  "user",
+  "synthesis",
+  "inference",
+  "unknown",
+  "assumption",
+  "question",
 ]);
 
 function cloneJson(value) {
@@ -173,6 +229,108 @@ function normalizeBridgeMetadata(value) {
     returnedShapeIds: returnedShapeIds.length > 0 ? returnedShapeIds : null,
     lastSyncedRevision: boundedString(value.lastSyncedRevision, 200) || null,
   });
+}
+
+function normalizeSemanticDiagramMetadata(value, operations = []) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const teachingClaim = boundedString(value.teachingClaim, 500);
+  const diagramId = boundedString(value.diagramId, 160);
+  if (
+    value.version !== "1" ||
+    !diagramId ||
+    !teachingClaim ||
+    !SEMANTIC_READING_ORDERS.has(value.readingOrder) ||
+    !SEMANTIC_DIAGRAM_TYPES.has(value.diagramType)
+  ) {
+    throw new Error("semanticDiagram must include a valid version, diagramId, teachingClaim, readingOrder, and diagramType.");
+  }
+  return {
+    version: "1",
+    diagramId,
+    teachingClaim,
+    readingOrder: value.readingOrder,
+    diagramType: value.diagramType,
+    sourceShapeIds: boundedStringList(value.sourceShapeIds, 250),
+    sourceIds: boundedStringList(value.sourceIds, 100),
+    objectCount: Number.isInteger(value.objectCount)
+      ? Math.max(0, Math.min(250, value.objectCount))
+      : operations.filter((operation) => ["create_card", "create_zone"].includes(operation?.type)).length,
+    relationCount: Number.isInteger(value.relationCount)
+      ? Math.max(0, Math.min(500, value.relationCount))
+      : operations.filter((operation) => operation?.type === "create_relation").length,
+    specDigest: boundedString(value.specDigest, 128) || null,
+  };
+}
+
+function normalizeSemanticObject(value, diagram, fallbackId) {
+  if (!diagram) return null;
+  const semanticId = boundedString(value?.id, 160) || boundedString(fallbackId, 160);
+  if (!semanticId) throw new Error("Every native semantic object requires semantic.id or a stable creation key.");
+  return {
+    version: "1",
+    diagramId: diagram.diagramId,
+    semanticId,
+    type: SEMANTIC_OBJECT_TYPES.has(value?.type) ? value.type : "custom",
+    state: SEMANTIC_OBJECT_STATES.has(value?.state) ? value.state : "normal",
+    origin: SEMANTIC_ORIGINS.has(value?.origin) ? value.origin : "synthesis",
+    order: Math.max(0, Math.min(999, Math.trunc(finiteNumber(value?.order, 0)))),
+    sourceShapeIds: boundedStringList(value?.sourceShapeIds, 100),
+    sourceIds: boundedStringList(value?.sourceIds, 100),
+  };
+}
+
+const SEMANTIC_OBJECT_PATCH_FIELDS = new Set([
+  "type",
+  "state",
+  "origin",
+  "order",
+  "sourceShapeIds",
+  "sourceIds",
+]);
+
+function patchSemanticObject(current, patch, diagram, label) {
+  if (patch === undefined) return current;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error(`${label}.semantic must be an object.`);
+  }
+  const unsupported = Object.keys(patch).filter((key) => !SEMANTIC_OBJECT_PATCH_FIELDS.has(key));
+  if (unsupported.length > 0) {
+    throw new Error(
+      `${label}.semantic cannot change semanticId or diagramId; unsupported field(s): ${unsupported.join(", ")}.`,
+    );
+  }
+  if (!current || typeof current !== "object" || !current.semanticId || !current.diagramId) {
+    throw new Error(`${label}.semantic requires an existing native semantic object.`);
+  }
+  if (!diagram || current.diagramId !== diagram.diagramId) {
+    throw new Error(`${label}.semantic must stay in diagram ${current.diagramId}.`);
+  }
+  const next = { ...current };
+  if (patch.type !== undefined) {
+    if (!SEMANTIC_OBJECT_TYPES.has(patch.type)) throw new Error(`${label}.semantic.type is invalid.`);
+    next.type = patch.type;
+  }
+  if (patch.state !== undefined) {
+    if (!SEMANTIC_OBJECT_STATES.has(patch.state)) throw new Error(`${label}.semantic.state is invalid.`);
+    next.state = patch.state;
+  }
+  if (patch.origin !== undefined) {
+    if (!SEMANTIC_ORIGINS.has(patch.origin)) throw new Error(`${label}.semantic.origin is invalid.`);
+    next.origin = patch.origin;
+  }
+  if (patch.order !== undefined) {
+    if (!Number.isInteger(patch.order) || patch.order < 0 || patch.order > 999) {
+      throw new Error(`${label}.semantic.order must be an integer from 0 to 999.`);
+    }
+    next.order = patch.order;
+  }
+  if (patch.sourceShapeIds !== undefined) {
+    next.sourceShapeIds = boundedStringList(patch.sourceShapeIds, 100);
+  }
+  if (patch.sourceIds !== undefined) {
+    next.sourceIds = boundedStringList(patch.sourceIds, 100);
+  }
+  return next;
 }
 
 function safeRole(value, fallback = "idea") {
@@ -325,6 +483,168 @@ function pageShapes(store, pageId) {
   );
 }
 
+function translateLayoutPositions(positions, dx, dy) {
+  return new Map(
+    Array.from(positions, ([id, position]) => [id, { x: position.x + dx, y: position.y + dy }]),
+  );
+}
+
+function positionedNodeBounds(nodes, positions) {
+  return nodes.map((node) => ({
+    x: positions.get(node.id).x,
+    y: positions.get(node.id).y,
+    w: node.w,
+    h: node.h,
+  }));
+}
+
+function placementOverlaps(positions, nodes, obstacles, padding = 0) {
+  const paddedObstacles = obstacles.map((bounds) => expandedBounds(bounds, padding));
+  return positionedNodeBounds(nodes, positions).some((bounds) =>
+    paddedObstacles.some((obstacle) => boundsIntersect(bounds, obstacle)),
+  );
+}
+
+function safePerpendicularSemanticPlacement({
+  positions,
+  nodes,
+  obstacles,
+  horizontal,
+  spacing,
+  parentZone,
+}) {
+  if (!placementOverlaps(positions, nodes, obstacles, DEFAULT_GAP / 2)) return positions;
+  const nodeSpan = horizontal
+    ? Math.max(...nodes.map((node) => node.h), DEFAULT_CARD_HEIGHT)
+    : Math.max(...nodes.map((node) => node.w), DEFAULT_CARD_WIDTH);
+  const step = nodeSpan + spacing;
+  const minX = parentZone ? DEFAULT_ZONE_PADDING : Number.NEGATIVE_INFINITY;
+  const minY = parentZone ? DEFAULT_ZONE_PADDING + 32 : Number.NEGATIVE_INFINITY;
+  const maxX = parentZone ? 8_192 - DEFAULT_ZONE_PADDING : Number.POSITIVE_INFINITY;
+  const maxY = parentZone ? 8_192 - DEFAULT_ZONE_PADDING : Number.POSITIVE_INFINITY;
+  for (let ring = 1; ring <= 64; ring += 1) {
+    for (const sign of [1, -1]) {
+      const candidate = translateLayoutPositions(
+        positions,
+        horizontal ? 0 : sign * ring * step,
+        horizontal ? sign * ring * step : 0,
+      );
+      const bounds = positionedNodeBounds(nodes, candidate);
+      if (bounds.some((item) =>
+        item.x < minX || item.y < minY || item.x + item.w > maxX || item.y + item.h > maxY,
+      )) {
+        continue;
+      }
+      if (!placementOverlaps(candidate, nodes, obstacles, DEFAULT_GAP / 2)) return candidate;
+    }
+  }
+  throw new Error(
+    "Incremental semantic layout cannot find a safe position without overlapping fixed sibling shapes; " +
+    "provide explicit coordinates.",
+  );
+}
+
+function thinkingRelationBindings(store, relationId) {
+  return Object.values(store).filter((record) =>
+    record?.typeName === "binding" &&
+    record.type === "arrow" &&
+    record.fromId === relationId,
+  );
+}
+
+function uniqueBoundTerminalShape(store, bindings, terminal) {
+  const terminalBindings = bindings.filter((record) =>
+    record.props?.terminal === terminal && store[record.toId]?.typeName === "shape",
+  );
+  return terminalBindings.length === 1 ? store[terminalBindings[0].toId] : null;
+}
+
+function boundThinkingRelationEndpoints(store, relation, { syncMeta = false } = {}) {
+  if (relation?.typeName !== "shape" || relation.type !== "arrow") {
+    return {
+      from: null,
+      to: null,
+      fromId: null,
+      toId: null,
+      bindingMode: "none",
+      bindingCount: 0,
+      complete: false,
+    };
+  }
+  const bindings = thinkingRelationBindings(store, relation.id);
+  const usesBindings = bindings.length > 0;
+  const boundFrom = uniqueBoundTerminalShape(store, bindings, "start");
+  const boundTo = uniqueBoundTerminalShape(store, bindings, "end");
+  const metaFrom = store[relation.meta?.cowartThinkingFromShapeId];
+  const metaTo = store[relation.meta?.cowartThinkingToShapeId];
+  // Bindings are authoritative as soon as at least one exists. Falling back one
+  // terminal at a time resurrects endpoints that a user deliberately unbound in
+  // the UI. Metadata fallback is reserved for truly legacy arrows with no bindings.
+  const from = usesBindings ? boundFrom : (metaFrom?.typeName === "shape" ? metaFrom : null);
+  const to = usesBindings ? boundTo : (metaTo?.typeName === "shape" ? metaTo : null);
+  if (syncMeta && relation.meta && from && to) {
+    relation.meta.cowartThinkingFromShapeId = from.id;
+    relation.meta.cowartThinkingToShapeId = to.id;
+  }
+  return {
+    from,
+    to,
+    fromId: from?.id ?? null,
+    toId: to?.id ?? null,
+    bindingMode: usesBindings ? "bindings" : "legacy-meta",
+    bindingCount: bindings.length,
+    complete: Boolean(from && to),
+  };
+}
+
+function semanticRelationValidity(store, relation, endpoints = null) {
+  if (!relation?.meta?.cowartSemanticRelation) return { valid: true, unsafe: false, reason: null };
+  const resolved = endpoints ?? boundThinkingRelationEndpoints(store, relation);
+  if (!resolved.complete) {
+    const detail = resolved.bindingMode === "bindings"
+      ? "semantic relation has incomplete or ambiguous UI bindings"
+      : "legacy semantic relation metadata has incomplete endpoints";
+    return { valid: false, unsafe: false, reason: detail };
+  }
+  const diagramId = boundedString(relation.meta?.cowartSemanticDiagram?.diagramId, 160) ||
+    boundedString(relation.meta?.cowartSemanticRelation?.diagramId, 160);
+  if (!diagramId) return { valid: false, unsafe: true, reason: "semantic relation has no diagramId" };
+  for (const [terminal, shape] of [["start", resolved.from], ["end", resolved.to]]) {
+    const objectDiagramId = shape?.meta?.cowartSemanticObject?.diagramId;
+    const shapeDiagramId = shape?.meta?.cowartSemanticDiagram?.diagramId;
+    if (!objectDiagramId || !shapeDiagramId) {
+      return { valid: false, unsafe: true, reason: `${terminal} binding targets a non-semantic shape` };
+    }
+    if (objectDiagramId !== diagramId || shapeDiagramId !== diagramId) {
+      return { valid: false, unsafe: true, reason: `${terminal} binding crosses semantic diagrams` };
+    }
+  }
+  return { valid: true, unsafe: false, reason: null };
+}
+
+function invalidSemanticRelations(store) {
+  return Object.values(store)
+    .filter((record) =>
+      record?.typeName === "shape" &&
+      record.type === "arrow" &&
+      record.meta?.cowartSemanticRelation,
+    )
+    .map((record) => ({ record, ...semanticRelationValidity(store, record) }))
+    .filter(({ valid }) => !valid);
+}
+
+function syncThinkingRelationEndpointMetadata(store) {
+  for (const record of Object.values(store)) {
+    if (
+      record?.typeName === "shape" &&
+      record.type === "arrow" &&
+      record.meta?.cowartThinkingRelation === true
+    ) {
+      boundThinkingRelationEndpoints(store, record, { syncMeta: true });
+    }
+  }
+}
+
 function firstPageId(snapshot) {
   return Object.values(snapshot?.store ?? {})
     .filter((record) => record?.typeName === "page")
@@ -356,7 +676,7 @@ function isAnnotationShape(shape) {
 }
 
 function inferShapeRole(shape) {
-  if (shape?.meta?.cowartProductZone === true) return "zone";
+  if (shape?.meta?.cowartThinkingZone === true || shape?.meta?.cowartProductZone === true) return "zone";
   if (THINKING_ROLES.has(shape?.meta?.cowartThinkingRole)) return shape.meta.cowartThinkingRole;
   if (isAnnotationShape(shape)) return "annotation";
   if (shape?.meta?.cowartThinkingMaterial === true) return "material";
@@ -440,9 +760,63 @@ function compactVisual(shape) {
   };
 }
 
+function compactNativeSemantic(shape) {
+  const diagram = shape?.meta?.cowartSemanticDiagram;
+  if (!diagram || typeof diagram !== "object") return null;
+  const object = shape.meta?.cowartSemanticObject;
+  const relation = shape.meta?.cowartSemanticRelation;
+  return {
+    diagramId: boundedString(diagram.diagramId, 160) || null,
+    teachingClaim: boundedString(diagram.teachingClaim, 500) || null,
+    readingOrder: SEMANTIC_READING_ORDERS.has(diagram.readingOrder) ? diagram.readingOrder : null,
+    diagramType: SEMANTIC_DIAGRAM_TYPES.has(diagram.diagramType) ? diagram.diagramType : null,
+    sourceShapeIds: boundedStringList(diagram.sourceShapeIds, MAX_CONTEXT_SHAPES),
+    sourceIds: boundedStringList(diagram.sourceIds, 100),
+    objectCount: Math.max(0, Math.min(250, Math.trunc(finiteNumber(diagram.objectCount, 0)))),
+    relationCount: Math.max(0, Math.min(500, Math.trunc(finiteNumber(diagram.relationCount, 0)))),
+    specDigest: boundedString(diagram.specDigest, 128) || null,
+    object: object && typeof object === "object"
+      ? {
+          semanticId: boundedString(object.semanticId, 160) || null,
+          type: boundedString(object.type, 80) || null,
+          state: boundedString(object.state, 80) || null,
+          origin: boundedString(object.origin, 80) || null,
+          order: Math.max(0, Math.trunc(finiteNumber(object.order, 0))),
+          sourceShapeIds: boundedStringList(object.sourceShapeIds, 100),
+          sourceIds: boundedStringList(object.sourceIds, 100),
+        }
+      : null,
+    relation: relation && typeof relation === "object"
+      ? {
+          semanticId: boundedString(relation.semanticId, 160) || null,
+          type: boundedString(relation.type, 80) || null,
+          direction: boundedString(relation.direction, 40) || null,
+          path: boundedString(relation.path, 40) || null,
+          payload: boundedString(relation.payload, 300) || null,
+          lane: Math.trunc(finiteNumber(relation.lane, 0)),
+          origin: SEMANTIC_ORIGINS.has(relation.origin) ? relation.origin : null,
+          sourceShapeIds: boundedStringList(relation.sourceShapeIds, 100),
+          sourceIds: boundedStringList(relation.sourceIds, 100),
+        }
+      : null,
+  };
+}
+
 function shapeContext(store, shape, selected, maxTextLength) {
   const asset = shape?.props?.assetId ? store[shape.props.assetId] : null;
   const parent = typeof shape?.parentId === "string" ? store[shape.parentId] : null;
+  const relationEndpoints = shape.meta?.cowartThinkingRelation === true
+    ? boundThinkingRelationEndpoints(store, shape)
+    : null;
+  const relationValidity = shape.meta?.cowartSemanticRelation
+    ? semanticRelationValidity(store, shape, relationEndpoints)
+    : null;
+  const nativeSemantic = compactNativeSemantic(shape);
+  if (nativeSemantic?.relation && relationValidity) {
+    nativeSemantic.relation.valid = relationValidity.valid;
+    nativeSemantic.relation.unsafe = relationValidity.unsafe;
+    nativeSemantic.relation.invalidReason = relationValidity.reason;
+  }
   return {
     id: shape.id,
     type: shape.type,
@@ -452,26 +826,47 @@ function shapeContext(store, shape, selected, maxTextLength) {
     title: boundedString(shape.meta?.cowartThinkingTitle, 300) || null,
     text: boundedString(textForShape(shape), maxTextLength) || null,
     source: compactSource(shape.meta),
-    key: boundedString(shape.meta?.cowartThinkingKey ?? shape.meta?.cowartProductZoneKey, 80) || null,
+    key: boundedString(
+      shape.meta?.cowartThinkingKey ?? shape.meta?.cowartThinkingZoneKey ?? shape.meta?.cowartProductZoneKey,
+      80,
+    ) || null,
     sourceRefs: boundedStringList(shape.meta?.cowartThinkingSourceRefs, 50, 500),
-    zone: shape.meta?.cowartProductZone === true
+    zone: shape.meta?.cowartThinkingZone === true || shape.meta?.cowartProductZone === true
       ? {
-          key: boundedString(shape.meta?.cowartProductZoneKey, 80) || null,
+          key: boundedString(shape.meta?.cowartThinkingZoneKey ?? shape.meta?.cowartProductZoneKey, 80) || null,
+          ...(shape.meta?.cowartThinkingZonePurpose && shape.meta.cowartThinkingZonePurpose !== "product"
+            ? { purpose: boundedString(shape.meta.cowartThinkingZonePurpose, 32) }
+            : {}),
         }
       : null,
-    parentZone: parent?.meta?.cowartProductZone === true
+    parentZone: parent?.meta?.cowartThinkingZone === true || parent?.meta?.cowartProductZone === true
       ? {
           id: parent.id,
-          key: boundedString(parent.meta?.cowartProductZoneKey, 80) || null,
+          key: boundedString(parent.meta?.cowartThinkingZoneKey ?? parent.meta?.cowartProductZoneKey, 80) || null,
+          ...(parent.meta?.cowartThinkingZonePurpose && parent.meta.cowartThinkingZonePurpose !== "product"
+            ? { purpose: boundedString(parent.meta.cowartThinkingZonePurpose, 32) }
+            : {}),
         }
       : null,
     bridge: compactBridge(shape.meta),
     visual: compactVisual(shape),
+    semantic: nativeSemantic,
     relation: shape.meta?.cowartThinkingRelation === true
       ? {
-          fromId: shape.meta.cowartThinkingFromShapeId ?? null,
-          toId: shape.meta.cowartThinkingToShapeId ?? null,
+          fromId: relationEndpoints.fromId,
+          toId: relationEndpoints.toId,
           kind: shape.meta.cowartThinkingRelationKind ?? "relates-to",
+          direction: shape.meta.cowartSemanticRelation?.direction ?? shape.meta.cowartThinkingRelationDirection ?? "forward",
+          path: shape.meta.cowartSemanticRelation?.path ?? shape.meta.cowartThinkingRelationPath ?? "primary",
+          payload: shape.meta.cowartSemanticRelation?.payload ?? shape.meta.cowartThinkingRelationPayload ?? null,
+          lane: storedRelationLane(shape),
+          ...(relationValidity
+            ? {
+                valid: relationValidity.valid,
+                unsafe: relationValidity.unsafe,
+                invalidReason: relationValidity.reason,
+              }
+            : {}),
         }
       : null,
     asset: asset
@@ -535,9 +930,10 @@ export function summarizeThinkingContext({
 
   if (scope === "selection" && selectedIds.size > 0) {
     for (const shape of allShapes) {
+      const endpoints = boundThinkingRelationEndpoints(store, shape);
       if (
         shape.meta?.cowartThinkingRelation === true &&
-        (scopeShapeIds.has(shape.meta?.cowartThinkingFromShapeId) || scopeShapeIds.has(shape.meta?.cowartThinkingToShapeId))
+        (scopeShapeIds.has(endpoints.fromId) || scopeShapeIds.has(endpoints.toId))
       ) {
         selectedRelationIds.add(shape.id);
       }
@@ -685,7 +1081,7 @@ function cardPosition(store, pageId, operation, width, height, createdCount, ref
   };
 }
 
-function createCardRecord(store, pageId, operation, createdCount, references) {
+function createCardRecord(store, pageId, operation, createdCount, references, semanticDiagram = null) {
   const role = safeRole(operation.role);
   const title = boundedString(operation.title, 300, role);
   const body = boundedString(operation.body, 12_000);
@@ -712,12 +1108,21 @@ function createCardRecord(store, pageId, operation, createdCount, references) {
   const source = normalizeSourceMetadata(operation.source);
   const requestedBridge = normalizeBridgeMetadata(operation.bridge);
   const parentBridge = normalizeBridgeMetadata(parentZone?.meta?.cowartProductBridge);
-  const bridge = parentZone
+  const productParent = parentZone && (
+    parentZone.meta?.cowartThinkingZonePurpose === "product" || parentZone.meta?.cowartProductZone === true
+  );
+  const bridge = productParent
     ? {
         ...(requestedBridge ?? {}),
         zoneId: requestedBridge?.zoneId || parentBridge?.zoneId || parentZone.meta.cowartProductZoneKey,
       }
     : requestedBridge;
+  const semantic = normalizeSemanticObject(operation.semantic, semanticDiagram, operation.key);
+  const semanticColor = semantic?.state === "warning"
+    ? "orange"
+    : semantic?.state === "blocked"
+      ? "red"
+      : null;
 
   return {
     id,
@@ -732,14 +1137,14 @@ function createCardRecord(store, pageId, operation, createdCount, references) {
     opacity: 1,
     props: {
       geo: COWART_CARD_GEO,
-      dash: "draw",
+      dash: semanticDiagram ? "solid" : "draw",
       url: boundedString(operation.url, 2_000),
       w: width,
       h: height,
       growY: 0,
       scale: 1,
       labelColor: "black",
-      color: diagramColor(operation.color),
+      color: semanticColor ?? diagramColor(operation.color),
       fill: "none",
       size: "s",
       font: "draw",
@@ -758,6 +1163,9 @@ function createCardRecord(store, pageId, operation, createdCount, references) {
       cowartThinkingSource: source,
       cowartThinkingSourceRefs: boundedStringList(operation.sourceRefs, 50, 500),
       cowartProductBridge: bridge,
+      cowartSemanticDiagram: semanticDiagram,
+      cowartSemanticObject: semantic,
+      cowartThinkingParentZoneKey: parentZone ? managedZoneKey(parentZone) : null,
       cowartProductParentZoneKey: parentZone
         ? boundedString(parentZone.meta?.cowartProductZoneKey, 80)
         : null,
@@ -786,21 +1194,78 @@ function normalizeZoneBridge(value, key) {
   };
 }
 
-function createZoneRecord(store, pageId, operation) {
+function semanticZoneDisplayName(title, semanticDiagram) {
+  const teachingClaim = boundedString(semanticDiagram?.teachingClaim, 500);
+  if (!teachingClaim) return title;
+  const suffix = `｜核心判断：${teachingClaim}`;
+  return boundedString(title.endsWith(suffix) ? title : `${title}${suffix}`, 800);
+}
+
+function isManagedZone(shape) {
+  return shape?.typeName === "shape" && shape.type === "frame" && (
+    shape.meta?.cowartThinkingZone === true || shape.meta?.cowartProductZone === true
+  );
+}
+
+function managedZoneKey(shape) {
+  return boundedString(shape?.meta?.cowartThinkingZoneKey ?? shape?.meta?.cowartProductZoneKey, 80);
+}
+
+function productScopedShape(store, value) {
+  const direct = typeof value === "string" ? store[value] : value;
+  let shape = direct ?? Object.values(store).find(
+    (record) => isManagedZone(record) && managedZoneKey(record) === value,
+  );
+  const visited = new Set();
+  while (shape?.typeName === "shape" && !visited.has(shape.id)) {
+    visited.add(shape.id);
+    if (
+      shape.meta?.cowartProductZone === true ||
+      shape.meta?.cowartThinkingZonePurpose === "product" ||
+      shape.meta?.cowartProductBridge
+    ) {
+      return shape;
+    }
+    shape = typeof shape.parentId === "string" ? store[shape.parentId] : null;
+  }
+  return null;
+}
+
+function semanticScopedShape(store, value) {
+  const direct = typeof value === "string" ? store[value] : value;
+  let shape = direct ?? Object.values(store).find(
+    (record) => isManagedZone(record) && managedZoneKey(record) === value,
+  );
+  const visited = new Set();
+  while (shape?.typeName === "shape" && !visited.has(shape.id)) {
+    visited.add(shape.id);
+    if (
+      shape.meta?.cowartSemanticZone === true ||
+      shape.meta?.cowartThinkingZonePurpose === "semantic" ||
+      shape.meta?.cowartSemanticDiagram
+    ) {
+      return shape;
+    }
+    shape = typeof shape.parentId === "string" ? store[shape.parentId] : null;
+  }
+  return null;
+}
+
+function createZoneRecord(store, pageId, operation, semanticDiagram = null) {
   const key = boundedString(operation.key, 80);
   if (!key) throw new Error("create_zone requires a stable key.");
   const duplicate = Object.values(store).find(
-    (record) => record?.typeName === "shape" &&
-      record.meta?.cowartProductZone === true &&
-      record.meta?.cowartProductZoneKey === key,
+    (record) => isManagedZone(record) && managedZoneKey(record) === key,
   );
-  if (duplicate) throw new Error(`Product zone key already exists: ${key}. Use update_zone instead.`);
+  if (duplicate) throw new Error(`Canvas zone key already exists: ${key}. Use update_zone instead.`);
 
   const title = boundedString(operation.title, 300, key);
   const body = boundedString(operation.body, 12_000);
   const width = Math.max(240, Math.min(8_192, finiteNumber(operation.w, DEFAULT_ZONE_WIDTH)));
   const height = Math.max(160, Math.min(8_192, finiteNumber(operation.h, DEFAULT_ZONE_HEIGHT)));
   const position = zonePosition(store, pageId, operation);
+  const purpose = operation.purpose ?? (semanticDiagram ? "semantic" : operation.bridge ? "product" : "thinking");
+  const semantic = normalizeSemanticObject(operation.semantic, semanticDiagram, operation.key);
   const preferredId = `${SHAPE_PREFIX}cowart-zone-${safeIdPart(key, "zone")}`;
   const id = store[preferredId] ? uniqueId(store, SHAPE_PREFIX, `cowart-zone-${key}`) : preferredId;
   const timestamp = new Date().toISOString();
@@ -819,17 +1284,23 @@ function createZoneRecord(store, pageId, operation) {
     props: {
       w: width,
       h: height,
-      name: title,
+      name: semanticZoneDisplayName(title, semanticDiagram),
       color: zoneColor(operation.color),
     },
     meta: {
       cowartThinkingGenerated: true,
-      cowartProductZone: true,
-      cowartProductZoneKey: key,
+      cowartThinkingZone: true,
+      cowartThinkingZoneKey: key,
+      cowartThinkingZonePurpose: purpose,
+      cowartProductZone: purpose === "product",
+      cowartProductZoneKey: purpose === "product" ? key : null,
+      cowartSemanticZone: purpose === "semantic",
       cowartThinkingTitle: title,
       cowartThinkingBody: body,
       cowartThinkingSourceRefs: boundedStringList(operation.sourceRefs, 50, 500),
-      cowartProductBridge: normalizeZoneBridge(operation.bridge, key),
+      cowartProductBridge: purpose === "product" ? normalizeZoneBridge(operation.bridge, key) : null,
+      cowartSemanticDiagram: semanticDiagram,
+      cowartSemanticObject: semantic,
       cowartThinkingCreatedAt: timestamp,
       cowartThinkingUpdatedAt: timestamp,
     },
@@ -847,16 +1318,14 @@ function resolveZoneReference(store, references, value, label, expectedPageId = 
   const referencedId = references.get(value) ?? value;
   const direct = typeof referencedId === "string" ? store[referencedId] : null;
   const shape = direct ?? Object.values(store).find(
-    (record) => record?.typeName === "shape" &&
-      record.meta?.cowartProductZone === true &&
-      record.meta?.cowartProductZoneKey === value,
+    (record) => isManagedZone(record) && managedZoneKey(record) === value,
   );
-  if (!shape || shape.meta?.cowartProductZone !== true) {
-    throw new Error(`${label} does not reference a product zone: ${value}`);
+  if (!isManagedZone(shape)) {
+    throw new Error(`${label} does not reference a managed canvas zone: ${value}`);
   }
   const zonePageId = pageIdForShape(store, shape);
   if (expectedPageId && zonePageId !== expectedPageId) {
-    throw new Error(`${label} references product zone ${shape.id} on ${zonePageId}, not batch page ${expectedPageId}.`);
+    throw new Error(`${label} references canvas zone ${shape.id} on ${zonePageId}, not batch page ${expectedPageId}.`);
   }
   return shape;
 }
@@ -868,7 +1337,7 @@ function assertManagedOrExplicitEdit(shape, allowUserAuthoredEdits, operationTyp
   }
 }
 
-function updateThinkingCard(store, operation, allowUserAuthoredEdits) {
+function updateThinkingCard(store, operation, allowUserAuthoredEdits, semanticDiagram = null) {
   const shape = resolveShapeReference(store, new Map(), operation.id, "update_card.id");
   const isThinkingCard = shape.meta?.cowartThinkingCard === true;
   if (!isThinkingCard && !allowUserAuthoredEdits) {
@@ -892,6 +1361,12 @@ function updateThinkingCard(store, operation, allowUserAuthoredEdits) {
   const bridge = operation.bridge === undefined
     ? normalizeBridgeMetadata(shape.meta?.cowartProductBridge)
     : normalizeBridgeMetadata(operation.bridge);
+  const semanticObject = patchSemanticObject(
+    shape.meta?.cowartSemanticObject,
+    operation.semantic,
+    semanticDiagram,
+    "update_card",
+  );
   const updated = {
     ...shape,
     props: {
@@ -908,6 +1383,7 @@ function updateThinkingCard(store, operation, allowUserAuthoredEdits) {
       cowartThinkingSource: source,
       cowartThinkingSourceRefs: sourceRefs,
       cowartProductBridge: bridge,
+      cowartSemanticObject: semanticObject,
       cowartThinkingUpdatedAt: new Date().toISOString(),
     },
   };
@@ -915,10 +1391,10 @@ function updateThinkingCard(store, operation, allowUserAuthoredEdits) {
   return updated;
 }
 
-function updateProductZone(store, operation, references, pageId) {
+function updateCanvasZone(store, operation, references, pageId, requestedSemanticDiagram = null) {
   const shape = resolveZoneReference(store, references, operation.id, "update_zone.id", pageId);
-  if (shape.type !== "frame") throw new Error(`Product zone ${shape.id} is not a supported tldraw frame.`);
-  const key = boundedString(shape.meta?.cowartProductZoneKey, 80);
+  if (shape.type !== "frame") throw new Error(`Canvas zone ${shape.id} is not a supported tldraw frame.`);
+  const key = managedZoneKey(shape);
   const title = operation.title === undefined
     ? boundedString(shape.meta?.cowartThinkingTitle ?? shape.props?.name, 300, key)
     : boundedString(operation.title, 300, key);
@@ -928,9 +1404,19 @@ function updateProductZone(store, operation, references, pageId) {
   const sourceRefs = operation.sourceRefs === undefined
     ? boundedStringList(shape.meta?.cowartThinkingSourceRefs, 50, 500)
     : boundedStringList(operation.sourceRefs, 50, 500);
-  const bridge = operation.bridge === undefined
-    ? normalizeZoneBridge(shape.meta?.cowartProductBridge, key)
-    : normalizeZoneBridge(operation.bridge, key);
+  const isProductZone = shape.meta?.cowartThinkingZonePurpose === "product" || shape.meta?.cowartProductZone === true;
+  const storedSemanticDiagram = shape.meta?.cowartSemanticDiagram;
+  const semanticObject = patchSemanticObject(
+    shape.meta?.cowartSemanticObject,
+    operation.semantic,
+    requestedSemanticDiagram,
+    "update_zone",
+  );
+  const bridge = isProductZone
+    ? operation.bridge === undefined
+      ? normalizeZoneBridge(shape.meta?.cowartProductBridge, key)
+      : normalizeZoneBridge(operation.bridge, key)
+    : null;
   const updated = {
     ...shape,
     x: operation.x === undefined ? shape.x : finiteNumber(operation.x, shape.x),
@@ -943,7 +1429,7 @@ function updateProductZone(store, operation, references, pageId) {
       h: operation.h === undefined
         ? shape.props.h
         : Math.max(160, Math.min(8_192, finiteNumber(operation.h, shape.props.h))),
-      name: title,
+      name: semanticZoneDisplayName(title, storedSemanticDiagram),
       color: operation.color === undefined ? shape.props.color : zoneColor(operation.color),
     },
     meta: {
@@ -952,6 +1438,7 @@ function updateProductZone(store, operation, references, pageId) {
       cowartThinkingBody: body,
       cowartThinkingSourceRefs: sourceRefs,
       cowartProductBridge: bridge,
+      cowartSemanticObject: semanticObject,
       cowartThinkingUpdatedAt: new Date().toISOString(),
     },
   };
@@ -959,22 +1446,351 @@ function updateProductZone(store, operation, references, pageId) {
   return updated;
 }
 
-function createRelationRecords(store, operation, references) {
+function semanticRelationStyle(operation, semanticDiagram) {
+  const relationType = boundedString(operation.kind, 80, semanticDiagram ? "flow" : "relates-to");
+  const direction = ["forward", "bidirectional", "none"].includes(operation.direction)
+    ? operation.direction
+    : relationType === "sync"
+      ? "bidirectional"
+      : ["association", "compare"].includes(relationType)
+        ? "none"
+        : "forward";
+  const path = operation.path === "alternative" ? "alternative" : "primary";
+  if (!semanticDiagram) {
+    return {
+      relationType,
+      direction,
+      path,
+      color: diagramColor(operation.color),
+      dash: path === "alternative" || operation.dash === "dashed" ? "dashed" : "draw",
+      arrowheadStart: direction === "bidirectional" ? "arrow" : "none",
+      arrowheadEnd: direction === "none" ? "none" : "arrow",
+    };
+  }
+  return {
+    relationType,
+    direction,
+    path,
+    color: direction === "none" ? "black" : "blue",
+    dash: path === "alternative" ? "dashed" : "solid",
+    arrowheadStart: direction === "bidirectional" ? "arrow" : "none",
+    arrowheadEnd: direction === "none" ? "none" : "arrow",
+  };
+}
+
+function storedRelationLane(record) {
+  const semanticLane = record?.meta?.cowartSemanticRelation?.lane;
+  if (Number.isFinite(semanticLane)) return Math.max(-8, Math.min(8, Math.trunc(semanticLane)));
+  const thinkingLane = record?.meta?.cowartThinkingRelationLane;
+  if (Number.isFinite(thinkingLane)) return Math.max(-8, Math.min(8, Math.trunc(thinkingLane)));
+  return Math.max(-8, Math.min(8, Math.trunc(finiteNumber(record?.props?.bend, 0) / 36)));
+}
+
+function parallelRelationLanes(store, fromId, toId, excludeRelationId = null, { useBase = false } = {}) {
+  const lanes = new Set();
+  for (const record of Object.values(store)) {
+    if (
+      record?.typeName !== "shape" ||
+      record.type !== "arrow" ||
+      record.id === excludeRelationId ||
+      record.meta?.cowartThinkingRelation !== true
+    ) {
+      continue;
+    }
+    const endpoints = boundThinkingRelationEndpoints(store, record);
+    const samePair = (
+      (endpoints.fromId === fromId && endpoints.toId === toId) ||
+      (endpoints.fromId === toId && endpoints.toId === fromId)
+    );
+    if (samePair) {
+      const baseLane = record.meta?.cowartThinkingRelationBaseLane;
+      lanes.add(useBase && Number.isFinite(baseLane) ? Math.trunc(baseLane) : storedRelationLane(record));
+    }
+  }
+  return lanes;
+}
+
+function parallelRelationLane(store, fromId, toId, requestedLane, excludeRelationId = null) {
+  const used = parallelRelationLanes(store, fromId, toId, excludeRelationId, { useBase: true });
+  const requested = Number.isFinite(requestedLane)
+    ? Math.max(-8, Math.min(8, Math.trunc(requestedLane)))
+    : null;
+  const candidates = requested === null
+    ? [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7, -8, 8]
+    : Array.from({ length: 17 }, (_, index) => index - 8)
+      .sort((first, second) =>
+        Math.abs(first - requested) - Math.abs(second - requested) ||
+        Math.abs(first) - Math.abs(second) ||
+        first - second,
+      );
+  return candidates.find((lane) => !used.has(lane)) ?? requested ?? 0;
+}
+
+function relationBindingAnchors(fromBounds, toBounds, lane, selfLoop) {
+  if (selfLoop) {
+    return {
+      start: { x: 1, y: Math.max(0.2, Math.min(0.8, 0.36 + lane * 0.08)) },
+      end: { x: 1, y: Math.max(0.2, Math.min(0.8, 0.64 + lane * 0.08)) },
+    };
+  }
+  const fromCenter = { x: fromBounds.x + fromBounds.w / 2, y: fromBounds.y + fromBounds.h / 2 };
+  const toCenter = { x: toBounds.x + toBounds.w / 2, y: toBounds.y + toBounds.h / 2 };
+  const laneOffset = Math.max(-0.3, Math.min(0.3, lane * 0.12));
+  if (Math.abs(toCenter.x - fromCenter.x) >= Math.abs(toCenter.y - fromCenter.y)) {
+    const forward = toCenter.x >= fromCenter.x;
+    return {
+      start: { x: forward ? 1 : 0, y: 0.5 + laneOffset },
+      end: { x: forward ? 0 : 1, y: 0.5 + laneOffset },
+    };
+  }
+  const forward = toCenter.y >= fromCenter.y;
+  return {
+    start: { x: 0.5 + laneOffset, y: forward ? 1 : 0 },
+    end: { x: 0.5 + laneOffset, y: forward ? 0 : 1 },
+  };
+}
+
+function normalizedAnchorPoint(bounds, anchor) {
+  return {
+    x: bounds.x + bounds.w * anchor.x,
+    y: bounds.y + bounds.h * anchor.y,
+  };
+}
+
+function expandedRouteBounds(bounds, padding = 18) {
+  return {
+    x: bounds.x - padding,
+    y: bounds.y - padding,
+    w: bounds.w + padding * 2,
+    h: bounds.h + padding * 2,
+  };
+}
+
+function pointInBounds(point, bounds) {
+  return (
+    point.x >= bounds.x &&
+    point.x <= bounds.x + bounds.w &&
+    point.y >= bounds.y &&
+    point.y <= bounds.y + bounds.h
+  );
+}
+
+function segmentIntersectsBounds(start, end, bounds) {
+  if (pointInBounds(start, bounds) || pointInBounds(end, bounds)) return true;
+  const delta = { x: end.x - start.x, y: end.y - start.y };
+  let minimum = 0;
+  let maximum = 1;
+  for (const [origin, distance, low, high] of [
+    [start.x, delta.x, bounds.x, bounds.x + bounds.w],
+    [start.y, delta.y, bounds.y, bounds.y + bounds.h],
+  ]) {
+    if (Math.abs(distance) < 1e-9) {
+      if (origin < low || origin > high) return false;
+      continue;
+    }
+    const first = (low - origin) / distance;
+    const second = (high - origin) / distance;
+    minimum = Math.max(minimum, Math.min(first, second));
+    maximum = Math.min(maximum, Math.max(first, second));
+    if (minimum > maximum) return false;
+  }
+  return maximum >= 0 && minimum <= 1;
+}
+
+function sampledArcPoints(start, end, bend, sampleCount = 48) {
+  if (Math.abs(bend) < 1e-6) return [start, end];
+  const delta = { x: end.x - start.x, y: end.y - start.y };
+  const length = Math.hypot(delta.x, delta.y);
+  if (length < 1e-6) return [start, end];
+  const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+  const middle = {
+    x: midpoint.x + (delta.y / length) * bend,
+    y: midpoint.y - (delta.x / length) * bend,
+  };
+  const determinant = 2 * (
+    start.x * (end.y - middle.y) +
+    end.x * (middle.y - start.y) +
+    middle.x * (start.y - end.y)
+  );
+  if (Math.abs(determinant) < 1e-6) return [start, end];
+  const startSquared = start.x ** 2 + start.y ** 2;
+  const endSquared = end.x ** 2 + end.y ** 2;
+  const middleSquared = middle.x ** 2 + middle.y ** 2;
+  const center = {
+    x: (
+      startSquared * (end.y - middle.y) +
+      endSquared * (middle.y - start.y) +
+      middleSquared * (start.y - end.y)
+    ) / determinant,
+    y: (
+      startSquared * (middle.x - end.x) +
+      endSquared * (start.x - middle.x) +
+      middleSquared * (end.x - start.x)
+    ) / determinant,
+  };
+  const tau = Math.PI * 2;
+  const normalizeAngle = (value) => ((value % tau) + tau) % tau;
+  const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+  const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+  const middleAngle = Math.atan2(middle.y - center.y, middle.x - center.x);
+  const ccwSweep = normalizeAngle(endAngle - startAngle);
+  const ccwMiddle = normalizeAngle(middleAngle - startAngle);
+  const sweep = ccwMiddle <= ccwSweep + 1e-6 ? ccwSweep : ccwSweep - tau;
+  const radius = Math.hypot(start.x - center.x, start.y - center.y);
+  return Array.from({ length: sampleCount + 1 }, (_, index) => {
+    const angle = startAngle + sweep * (index / sampleCount);
+    return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+  });
+}
+
+function pathIntersectsBounds(points, bounds) {
+  for (let index = 1; index < points.length; index += 1) {
+    if (segmentIntersectsBounds(points[index - 1], points[index], bounds)) return true;
+  }
+  return false;
+}
+
+function semanticRelationCardObstacles(store, arrow, from, to) {
+  const diagramId = arrow.meta?.cowartSemanticDiagram?.diagramId;
+  const pageId = pageIdForShape(store, arrow);
+  if (!diagramId || !pageId) return [];
+  return Object.values(store).filter((record) =>
+    record?.typeName === "shape" &&
+    record.meta?.cowartThinkingCard === true &&
+    record.id !== from.id &&
+    record.id !== to.id &&
+    record.meta?.cowartSemanticObject &&
+    record.meta?.cowartSemanticDiagram?.diagramId === diagramId &&
+    pageIdForShape(store, record) === pageId,
+  );
+}
+
+function requiredOutsideBend(start, end, blockers, sign) {
+  const delta = { x: end.x - start.x, y: end.y - start.y };
+  const length = Math.max(1, Math.hypot(delta.x, delta.y));
+  const normal = { x: delta.y / length, y: -delta.x / length };
+  let required = 48;
+  for (const blocker of blockers) {
+    const bounds = pageBounds(blocker.store, blocker.shape);
+    const center = { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
+    const offset = (center.x - start.x) * normal.x + (center.y - start.y) * normal.y;
+    const extent = Math.abs(normal.x) * bounds.w / 2 + Math.abs(normal.y) * bounds.h / 2;
+    const along = Math.max(0.08, Math.min(0.92, (
+      (center.x - start.x) * delta.x + (center.y - start.y) * delta.y
+    ) / (length * length)));
+    const midpointFactor = Math.max(0.24, 4 * along * (1 - along));
+    required = Math.max(required, (sign * offset + extent + 32) / midpointFactor);
+  }
+  return required;
+}
+
+function semanticRelationRoute(store, arrow, from, to, baseLane) {
+  const selfLoop = from.id === to.id;
+  const baseBend = selfLoop ? 96 + Math.abs(baseLane) * 24 : baseLane * 36;
+  if (selfLoop || !arrow.meta?.cowartSemanticRelation) {
+    return { lane: baseLane, bend: baseBend, obstacleIds: [] };
+  }
+  const fromBounds = pageBounds(store, from);
+  const toBounds = pageBounds(store, to);
+  const baseAnchors = relationBindingAnchors(fromBounds, toBounds, baseLane, false);
+  const baseStart = normalizedAnchorPoint(fromBounds, baseAnchors.start);
+  const baseEnd = normalizedAnchorPoint(toBounds, baseAnchors.end);
+  const obstacles = semanticRelationCardObstacles(store, arrow, from, to);
+  const blockers = obstacles.filter((shape) =>
+    segmentIntersectsBounds(baseStart, baseEnd, expandedRouteBounds(pageBounds(store, shape))),
+  );
+  if (blockers.length === 0) return { lane: baseLane, bend: baseBend, obstacleIds: [] };
+
+  const usedLanes = parallelRelationLanes(store, from.id, to.id, arrow.id);
+  const candidates = [];
+  for (const sign of [1, -1]) {
+    const required = requiredOutsideBend(
+      baseStart,
+      baseEnd,
+      blockers.map((shape) => ({ store, shape })),
+      sign,
+    );
+    const minimumLane = Math.max(1, Math.min(8, Math.ceil(required / 36)));
+    const laneMagnitude = [
+      ...Array.from({ length: 9 - minimumLane }, (_, index) => minimumLane + index),
+      ...Array.from({ length: minimumLane - 1 }, (_, index) => minimumLane - 1 - index),
+    ].find((magnitude) => !usedLanes.has(sign * magnitude));
+    if (!laneMagnitude) continue;
+    const lane = sign * laneMagnitude;
+    const anchors = relationBindingAnchors(fromBounds, toBounds, lane, false);
+    const start = normalizedAnchorPoint(fromBounds, anchors.start);
+    const end = normalizedAnchorPoint(toBounds, anchors.end);
+    let bendMagnitude = Math.max(required, laneMagnitude * 36);
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const bend = sign * bendMagnitude;
+      const points = sampledArcPoints(start, end, bend);
+      const collides = obstacles.some((shape) =>
+        pathIntersectsBounds(points, expandedRouteBounds(pageBounds(store, shape))),
+      );
+      if (!collides) {
+        candidates.push({ lane, bend, obstacleIds: blockers.map((shape) => shape.id) });
+        break;
+      }
+      bendMagnitude += Math.max(24, bendMagnitude * 0.18);
+    }
+  }
+  return candidates.sort((first, second) => Math.abs(first.bend) - Math.abs(second.bend))[0] ?? {
+    lane: baseLane,
+    bend: baseBend,
+    obstacleIds: blockers.map((shape) => shape.id),
+  };
+}
+
+function assertSemanticRelationEndpoint(shape, semanticDiagram, label) {
+  const objectDiagramId = shape.meta?.cowartSemanticObject?.diagramId;
+  const shapeDiagramId = shape.meta?.cowartSemanticDiagram?.diagramId;
+  if (!objectDiagramId || !shapeDiagramId) {
+    throw new Error(`${label} must reference a native semantic object.`);
+  }
+  if (objectDiagramId !== semanticDiagram.diagramId || shapeDiagramId !== semanticDiagram.diagramId) {
+    throw new Error(`${label} must reference a semantic object in diagram ${semanticDiagram.diagramId}.`);
+  }
+}
+
+function createRelationRecords(store, operation, references, semanticDiagram = null) {
   const from = resolveShapeReference(store, references, operation.from, "create_relation.from");
   const to = resolveShapeReference(store, references, operation.to, "create_relation.to");
-  if (from.id === to.id) throw new Error("create_relation requires two different shapes.");
+  if (semanticDiagram) {
+    assertSemanticRelationEndpoint(from, semanticDiagram, "create_relation.from");
+    assertSemanticRelationEndpoint(to, semanticDiagram, "create_relation.to");
+  }
+  const selfLoop = from.id === to.id;
   const fromBounds = pageBounds(store, from);
   const toBounds = pageBounds(store, to);
   const fromCenter = { x: fromBounds.x + fromBounds.w / 2, y: fromBounds.y + fromBounds.h / 2 };
   const toCenter = { x: toBounds.x + toBounds.w / 2, y: toBounds.y + toBounds.h / 2 };
   const arrowId = uniqueId(store, SHAPE_PREFIX, operation.key || "relation");
-  const relationKind = boundedString(operation.kind, 80, "relates-to");
-  const label = boundedString(operation.label, 300);
+  const style = semanticRelationStyle(operation, semanticDiagram);
+  const relationKind = style.relationType;
+  const labelParts = [boundedString(operation.label, 300), boundedString(operation.payload, 300)].filter(Boolean);
+  const label = Array.from(new Set(labelParts)).join(" · ");
   const pageId = pageIdForShape(store, from);
   if (!pageId || pageId !== pageIdForShape(store, to)) {
     throw new Error("create_relation shapes must be on the same page.");
   }
 
+  const lane = parallelRelationLane(store, from.id, to.id, operation.lane);
+  const bindingAnchors = relationBindingAnchors(fromBounds, toBounds, lane, selfLoop);
+  const semanticRelation = semanticDiagram
+    ? {
+        version: "1",
+        diagramId: semanticDiagram.diagramId,
+        semanticId: boundedString(operation.semanticId, 160) || boundedString(operation.key, 80) || arrowId,
+        type: relationKind,
+        direction: style.direction,
+        path: style.path,
+        payload: boundedString(operation.payload, 300) || null,
+        lane,
+        origin: SEMANTIC_ORIGINS.has(operation.origin) ? operation.origin : "synthesis",
+        sourceShapeIds: boundedStringList(operation.sourceShapeIds, 100),
+        sourceIds: boundedStringList(operation.sourceIds, 100),
+      }
+    : null;
   const arrow = {
     id: arrowId,
     typeName: "shape",
@@ -989,16 +1805,18 @@ function createRelationRecords(store, operation, references) {
     props: {
       kind: "arc",
       elbowMidPoint: 0.5,
-      dash: operation.dash === "dashed" ? "dashed" : "draw",
+      dash: style.dash,
       size: "s",
       fill: "none",
-      color: diagramColor(operation.color),
+      color: style.color,
       labelColor: "black",
-      bend: 0,
+      bend: selfLoop ? 96 + Math.abs(lane) * 24 : lane * 36,
       start: { x: 0, y: 0 },
-      end: { x: toCenter.x - fromCenter.x, y: toCenter.y - fromCenter.y },
-      arrowheadStart: "none",
-      arrowheadEnd: "arrow",
+      end: selfLoop
+        ? { x: Math.max(96, fromBounds.w * 0.42), y: Math.max(72, fromBounds.h * 0.42) }
+        : { x: toCenter.x - fromCenter.x, y: toCenter.y - fromCenter.y },
+      arrowheadStart: style.arrowheadStart,
+      arrowheadEnd: style.arrowheadEnd,
       richText: toRichText(label),
       labelPosition: 0.5,
       font: "draw",
@@ -1008,8 +1826,15 @@ function createRelationRecords(store, operation, references) {
       cowartThinkingGenerated: true,
       cowartThinkingRelation: true,
       cowartThinkingRelationKind: relationKind,
+      cowartThinkingRelationDirection: style.direction,
+      cowartThinkingRelationPath: style.path,
+      cowartThinkingRelationPayload: boundedString(operation.payload, 300) || null,
       cowartThinkingFromShapeId: from.id,
       cowartThinkingToShapeId: to.id,
+      cowartThinkingRelationLane: lane,
+      cowartThinkingRelationBaseLane: lane,
+      cowartSemanticDiagram: semanticDiagram,
+      cowartSemanticRelation: semanticRelation,
       cowartThinkingCreatedAt: new Date().toISOString(),
     },
   };
@@ -1025,9 +1850,9 @@ function createRelationRecords(store, operation, references) {
       toId: target.id,
       props: {
         terminal,
-        normalizedAnchor: { x: 0.5, y: 0.5 },
+        normalizedAnchor: bindingAnchors[terminal],
         isExact: false,
-        isPrecise: false,
+        isPrecise: Boolean(semanticDiagram),
         snap: "none",
       },
       meta: { cowartThinkingGenerated: true },
@@ -1036,63 +1861,248 @@ function createRelationRecords(store, operation, references) {
   return arrow;
 }
 
-function layoutCreatedThinkingGraph(store, pageId, createdCards, createdRelations) {
-  if (createdCards.length < 2 || createdRelations.length === 0) return;
-  if (
-    createdCards.some(({ operation }) =>
-      Boolean(
-        operation.parentZoneId || operation.anchorId || Number.isFinite(operation.x) || Number.isFinite(operation.y),
-      ),
-    )
-  ) {
+function refreshRelationGeometryAndBindings(store, relationId) {
+  const arrow = store[relationId];
+  const { from, to } = boundThinkingRelationEndpoints(store, arrow, { syncMeta: true });
+  if (!arrow || arrow.typeName !== "shape" || arrow.type !== "arrow" || !from || !to) return false;
+  const fromBounds = pageBounds(store, from);
+  const toBounds = pageBounds(store, to);
+  const fromCenter = { x: fromBounds.x + fromBounds.w / 2, y: fromBounds.y + fromBounds.h / 2 };
+  const toCenter = { x: toBounds.x + toBounds.w / 2, y: toBounds.y + toBounds.h / 2 };
+  const selfLoop = from.id === to.id;
+  const baseLane = Math.max(-8, Math.min(8, Math.trunc(finiteNumber(
+    arrow.meta?.cowartThinkingRelationBaseLane,
+    storedRelationLane(arrow),
+  ))));
+  const route = semanticRelationRoute(store, arrow, from, to, baseLane);
+  const lane = route.lane;
+  const bindingAnchors = relationBindingAnchors(fromBounds, toBounds, lane, selfLoop);
+  arrow.x = fromCenter.x;
+  arrow.y = fromCenter.y;
+  arrow.props.start = { x: 0, y: 0 };
+  arrow.props.bend = route.bend;
+  arrow.props.end = selfLoop
+    ? { x: Math.max(96, fromBounds.w * 0.42), y: Math.max(72, fromBounds.h * 0.42) }
+    : { x: toCenter.x - fromCenter.x, y: toCenter.y - fromCenter.y };
+  arrow.meta.cowartThinkingRelationLane = lane;
+  arrow.meta.cowartThinkingObstacleRoute = route.obstacleIds.length > 0
+    ? { strategy: "outside-arc", obstacleShapeIds: route.obstacleIds, bend: route.bend }
+    : null;
+  if (arrow.meta?.cowartSemanticRelation) arrow.meta.cowartSemanticRelation.lane = lane;
+  for (const binding of Object.values(store)) {
+    if (binding?.typeName !== "binding" || binding.type !== "arrow" || binding.fromId !== relationId) continue;
+    const terminal = binding.props?.terminal;
+    if (terminal !== "start" && terminal !== "end") continue;
+    binding.props.normalizedAnchor = bindingAnchors[terminal];
+  }
+  return true;
+}
+
+function layoutCreatedThinkingGraph(store, pageId, createdCards, createdRelations, semanticDiagram = null) {
+  if (createdCards.length === 0) {
+    for (const relationId of createdRelations) refreshRelationGeometryAndBindings(store, relationId);
     return;
   }
-
-  const createdIds = new Set(createdCards.map(({ id }) => id));
-  const nodes = createdCards.map(({ id }) => {
-    const shape = store[id];
-    return { id, w: shape.props.w, h: shape.props.h };
-  });
-  const edges = createdRelations
-    .map((id) => store[id])
-    .filter(Boolean)
-    .map((arrow) => ({
-      from: arrow.meta?.cowartThinkingFromShapeId,
-      to: arrow.meta?.cowartThinkingToShapeId,
-    }))
-    .filter((edge) => createdIds.has(edge.from) && createdIds.has(edge.to));
-  if (edges.length === 0) return;
-
-  const existingBounds = unionBounds(
-    pageShapes(store, pageId)
-      .filter((shape) => shape.type !== "arrow" && !createdIds.has(shape.id))
-      .map((shape) => pageBounds(store, shape)),
+  const candidates = createdCards.filter(({ operation }) =>
+    !operation.anchorId && !Number.isFinite(operation.x) && !Number.isFinite(operation.y),
   );
-  const positions = layoutThinkingGraph({
-    nodes,
-    edges,
-    originX: existingBounds ? existingBounds.x + existingBounds.w + DEFAULT_GAP * 2 : 0,
-    originY: existingBounds?.y ?? 0,
-  });
-
-  for (const [id, position] of positions) {
-    store[id].x = position.x;
-    store[id].y = position.y;
+  if (candidates.length === 0) {
+    for (const relationId of createdRelations) refreshRelationGeometryAndBindings(store, relationId);
+    return;
+  }
+  const groups = new Map();
+  for (const card of candidates) {
+    const parentId = store[card.id]?.parentId ?? pageId;
+    const group = groups.get(parentId) ?? [];
+    group.push(card);
+    groups.set(parentId, group);
   }
 
-  for (const relationId of createdRelations) {
-    const arrow = store[relationId];
-    const from = store[arrow?.meta?.cowartThinkingFromShapeId];
-    const to = store[arrow?.meta?.cowartThinkingToShapeId];
-    if (!arrow || !from || !to) continue;
-    const fromBounds = pageBounds(store, from);
-    const toBounds = pageBounds(store, to);
-    const fromCenter = { x: fromBounds.x + fromBounds.w / 2, y: fromBounds.y + fromBounds.h / 2 };
-    const toCenter = { x: toBounds.x + toBounds.w / 2, y: toBounds.y + toBounds.h / 2 };
-    arrow.x = fromCenter.x;
-    arrow.y = fromCenter.y;
-    arrow.props.start = { x: 0, y: 0 };
-    arrow.props.end = { x: toCenter.x - fromCenter.x, y: toCenter.y - fromCenter.y };
+  for (const [parentId, cards] of groups) {
+    if (cards.length === 0) continue;
+    const createdIds = new Set(cards.map(({ id }) => id));
+    const allCreatedIds = new Set(createdCards.map(({ id }) => id));
+    const nodes = cards.map(({ id, operation }) => {
+      const shape = store[id];
+      return { id, w: shape.props.w, h: shape.props.h, order: operation.semantic?.order ?? 0 };
+    }).sort((first, second) => first.order - second.order);
+    const edges = createdRelations
+      .map((id) => store[id])
+      .filter(Boolean)
+      .flatMap((arrow) => {
+        const { fromId: from, toId: to } = boundThinkingRelationEndpoints(store, arrow);
+        const direction = arrow.meta?.cowartSemanticRelation?.direction ?? arrow.meta?.cowartThinkingRelationDirection ?? "forward";
+        if (direction === "none") return [];
+        if (direction === "bidirectional") return [{ from, to }, { from: to, to: from }];
+        return [{ from, to }];
+      })
+      .filter((edge) => createdIds.has(edge.from) && createdIds.has(edge.to));
+    if (edges.length === 0 && !semanticDiagram) continue;
+
+    const parentZone = parentId === pageId ? null : store[parentId];
+    const existingShapes = (parentZone ? Object.values(store) : pageShapes(store, pageId))
+      .filter((shape) =>
+        shape?.typeName === "shape" &&
+        (parentZone ? shape.parentId === parentId : pageIdForShape(store, shape) === pageId) &&
+        shape.type !== "arrow" &&
+        !createdIds.has(shape.id),
+      );
+    const existingBounds = unionBounds(
+      existingShapes.map((shape) => parentZone ? localBounds(shape) : pageBounds(store, shape)),
+    );
+    const readingOrder = semanticDiagram?.readingOrder ?? "top-to-bottom";
+    const horizontal = ["left-to-right", "right-to-left", "board-to-peers"].includes(readingOrder);
+    const baseOrigin = {
+      x: parentZone ? DEFAULT_ZONE_PADDING : 0,
+      y: parentZone ? DEFAULT_ZONE_PADDING + 32 : 0,
+    };
+    const relationGap = semanticDiagram
+      ? Math.max(
+          128,
+          ...createdRelations
+            .map((id) => store[id])
+            .filter((arrow) =>
+              arrow &&
+              (
+                createdIds.has(boundThinkingRelationEndpoints(store, arrow).fromId) ||
+                createdIds.has(boundThinkingRelationEndpoints(store, arrow).toId)
+              ),
+            )
+            .map((arrow) => estimateThinkingRelationGap(textForShape(arrow))),
+        )
+      : undefined;
+    const crossPlacements = new Set();
+    const externalEndpointIds = new Set();
+    if (semanticDiagram) {
+      for (const relationId of createdRelations) {
+        const arrow = store[relationId];
+        if (!arrow || arrow.meta?.cowartSemanticRelation?.direction !== "forward") continue;
+        const endpoints = boundThinkingRelationEndpoints(store, arrow);
+        const fromIsNew = createdIds.has(endpoints.fromId);
+        const toIsNew = createdIds.has(endpoints.toId);
+        if (fromIsNew === toIsNew) continue;
+        const externalId = fromIsNew ? endpoints.toId : endpoints.fromId;
+        const external = store[externalId];
+        if (
+          external?.parentId !== parentId ||
+          external.meta?.cowartSemanticDiagram?.diagramId !== semanticDiagram.diagramId
+        ) {
+          continue;
+        }
+        crossPlacements.add(fromIsNew ? "upstream" : "downstream");
+        externalEndpointIds.add(externalId);
+      }
+    }
+    if (crossPlacements.size > 1) {
+      throw new Error("Incremental semantic layout has conflicting upstream and downstream constraints; provide explicit coordinates.");
+    }
+    const crossPlacement = crossPlacements.values().next().value ?? null;
+    const positiveReadingDirection = ["left-to-right", "top-to-bottom", "board-to-peers", "center-out"].includes(readingOrder);
+    const placeBeforeCoordinate = crossPlacement && (
+      (crossPlacement === "upstream" && positiveReadingDirection) ||
+      (crossPlacement === "downstream" && !positiveReadingDirection)
+    );
+    const spacing = Math.max(DEFAULT_GAP * 2, relationGap ?? 0);
+    const origin = existingBounds && !placeBeforeCoordinate
+      ? horizontal
+        ? {
+            x: existingBounds.x + existingBounds.w + spacing,
+            y: Math.max(baseOrigin.y, existingBounds.y),
+          }
+        : {
+            x: Math.max(baseOrigin.x, existingBounds.x),
+            y: existingBounds.y + existingBounds.h + spacing,
+          }
+      : baseOrigin;
+    let positions = layoutThinkingGraph({
+      nodes,
+      edges,
+      originX: origin.x,
+      originY: origin.y,
+      readingOrder,
+      ...(relationGap ? { horizontalGap: relationGap, verticalGap: relationGap } : {}),
+    });
+
+    if (existingBounds && placeBeforeCoordinate) {
+      const newBounds = unionBounds(nodes.map((node) => ({
+        x: positions.get(node.id).x,
+        y: positions.get(node.id).y,
+        w: node.w,
+        h: node.h,
+      })));
+      const shift = horizontal
+        ? newBounds.x + newBounds.w + spacing - existingBounds.x
+        : newBounds.y + newBounds.h + spacing - existingBounds.y;
+      if (shift > 0) {
+        const shiftable = existingShapes.filter((shape) =>
+          shape.meta?.cowartThinkingGenerated === true &&
+          shape.meta?.cowartSemanticDiagram?.diagramId === semanticDiagram.diagramId &&
+          !allCreatedIds.has(shape.id),
+        );
+        const shiftableIds = new Set(shiftable.map((shape) => shape.id));
+        const fixedShapes = existingShapes.filter((shape) => !shiftableIds.has(shape.id));
+        const fixedBounds = fixedShapes.map((shape) =>
+          parentZone ? localBounds(shape) : pageBounds(store, shape),
+        );
+        const shiftWouldOverlapFixed = shiftable.some((shape) => {
+          const bounds = parentZone ? localBounds(shape) : pageBounds(store, shape);
+          const shifted = {
+            ...bounds,
+            x: bounds.x + (horizontal ? shift : 0),
+            y: bounds.y + (horizontal ? 0 : shift),
+          };
+          return fixedBounds.some((fixed) =>
+            boundsIntersect(shifted, expandedBounds(fixed, DEFAULT_GAP / 2)),
+          );
+        });
+        const fixedExternalEndpoint = Array.from(externalEndpointIds)
+          .some((id) => !shiftableIds.has(id));
+        if (!shiftWouldOverlapFixed && !fixedExternalEndpoint) {
+          for (const shape of shiftable) {
+            if (horizontal) shape.x += shift;
+            else shape.y += shift;
+          }
+        }
+      }
+    }
+
+    if (semanticDiagram && existingShapes.length > 0) {
+      const obstacleBounds = existingShapes.map((shape) =>
+        parentZone ? localBounds(shape) : pageBounds(store, shape),
+      );
+      positions = safePerpendicularSemanticPlacement({
+        positions,
+        nodes,
+        obstacles: obstacleBounds,
+        horizontal,
+        spacing,
+        parentZone,
+      });
+    }
+
+    for (const [id, position] of positions) {
+      store[id].x = position.x;
+      store[id].y = position.y;
+    }
+    if (parentZone) {
+      const children = Object.values(store).filter((shape) =>
+        shape?.typeName === "shape" && shape.parentId === parentId && shape.type !== "arrow",
+      );
+      const right = Math.max(...children.map((shape) => shape.x + localBounds(shape).w));
+      const bottom = Math.max(...children.map((shape) => shape.y + localBounds(shape).h));
+      parentZone.props.w = Math.max(parentZone.props.w, right + DEFAULT_ZONE_PADDING);
+      parentZone.props.h = Math.max(parentZone.props.h, bottom + DEFAULT_ZONE_PADDING);
+    }
+  }
+
+  for (const relation of pageShapes(store, pageId)) {
+    if (
+      relation.type === "arrow" &&
+      relation.meta?.cowartThinkingGenerated === true &&
+      relation.meta?.cowartThinkingRelation === true
+    ) {
+      refreshRelationGeometryAndBindings(store, relation.id);
+    }
   }
 }
 
@@ -1111,6 +2121,26 @@ function descendantShapeIds(store, rootId) {
   return result;
 }
 
+function generatedDeletionIds(store, shape) {
+  const shapeIds = descendantShapeIds(store, shape.id);
+  const relationIds = new Set(
+    Object.values(store)
+      .filter((record) => {
+        if (
+          record?.typeName !== "shape" ||
+          record.type !== "arrow" ||
+          record.meta?.cowartThinkingGenerated !== true
+        ) {
+          return false;
+        }
+        const endpoints = boundThinkingRelationEndpoints(store, record);
+        return shapeIds.has(endpoints.fromId) || shapeIds.has(endpoints.toId);
+      })
+      .map((record) => record.id),
+  );
+  return new Set([...shapeIds, ...relationIds]);
+}
+
 function deleteGeneratedShape(store, operation, references) {
   const shape = resolveShapeReference(store, references, operation.id, "delete_shape.id");
   if (shape.meta?.cowartThinkingGenerated !== true) {
@@ -1126,15 +2156,16 @@ function deleteGeneratedShape(store, operation, references) {
       `Refusing to delete ${shape.id}; it contains ${protectedDescendants.length} user-authored shape(s).`,
     );
   }
+  const deletedIds = generatedDeletionIds(store, shape);
   for (const record of Object.values(store)) {
     if (
-      shapeIds.has(record.id) ||
-      (record?.typeName === "binding" && (shapeIds.has(record.fromId) || shapeIds.has(record.toId)))
+      deletedIds.has(record.id) ||
+      (record?.typeName === "binding" && (deletedIds.has(record.fromId) || deletedIds.has(record.toId)))
     ) {
       delete store[record.id];
     }
   }
-  return Array.from(shapeIds);
+  return Array.from(deletedIds);
 }
 
 function validateOperations(operations) {
@@ -1170,27 +2201,131 @@ function validateOperations(operations) {
   }
 }
 
+function assertSemanticRelationsSafeForApply(store, operations) {
+  const invalid = invalidSemanticRelations(store).filter(({ unsafe }) => unsafe);
+  if (invalid.length === 0) return;
+
+  // A delete-only repair is deliberately permitted. Every invalid relation must
+  // be covered by one of those guarded deletions; all other mutations fail closed.
+  const deletionCoverage = new Set();
+  if (operations.every((operation) => operation.type === "delete_shape")) {
+    for (const operation of operations) {
+      const target = typeof operation.id === "string" ? store[operation.id] : null;
+      if (target?.typeName === "shape" && target.meta?.cowartThinkingGenerated === true) {
+        for (const id of generatedDeletionIds(store, target)) deletionCoverage.add(id);
+      }
+    }
+  }
+  if (invalid.every(({ record }) => deletionCoverage.has(record.id))) return;
+
+  const details = invalid
+    .slice(0, 5)
+    .map(({ record, reason }) => `${record.id}: ${reason}`)
+    .join("; ");
+  throw new Error(
+    `Refusing canvas apply because native semantic relation bindings are invalid (${details}). ` +
+    "Reconnect both endpoints inside the same semantic diagram or delete the invalid relation first.",
+  );
+}
+
 export function applyThinkingOperationsToSnapshot({
   snapshot,
   viewState = null,
   pageId: requestedPageId,
   operations,
+  semanticDiagram: requestedSemanticDiagram = null,
   allowUserAuthoredEdits = false,
 } = {}) {
   if (!snapshot?.store || !snapshot?.schema) throw new Error("Expected a valid Yogurt AI snapshot.");
   validateOperations(operations);
   const nextSnapshot = cloneJson(snapshot);
   const store = nextSnapshot.store;
+  assertSemanticRelationsSafeForApply(store, operations);
+  syncThinkingRelationEndpointMetadata(store);
   const pageId = resolvePageId(nextSnapshot, requestedPageId, viewState);
+  const semanticDiagram = normalizeSemanticDiagramMetadata(requestedSemanticDiagram, operations);
+  if (!semanticDiagram && operations.some((operation) => operation?.semantic || operation?.semanticId)) {
+    throw new Error("Semantic object and relation fields require the batch-level semanticDiagram contract.");
+  }
+  if (!semanticDiagram && operations.some((operation) => operation?.type === "create_zone" && operation.purpose === "semantic")) {
+    throw new Error("A semantic canvas zone requires the batch-level semanticDiagram contract.");
+  }
+  if (!semanticDiagram) {
+    for (const operation of operations) {
+      if (operation.type === "create_card" && semanticScopedShape(store, operation.parentZoneId)) {
+        throw new Error("Creating a card inside a semantic canvas zone requires the batch-level semanticDiagram contract.");
+      }
+      if (
+        operation.type === "create_relation" &&
+        (semanticScopedShape(store, operation.from) || semanticScopedShape(store, operation.to))
+      ) {
+        throw new Error("Creating a relation for semantic canvas objects requires the batch-level semanticDiagram contract.");
+      }
+      if (
+        operation.type === "update_card" &&
+        operation.bridge !== undefined &&
+        semanticScopedShape(store, operation.id)
+      ) {
+        throw new Error("Updating a semantic canvas card cannot include Product Bridge metadata.");
+      }
+    }
+  }
+  if (semanticDiagram) {
+    const semanticIds = new Set();
+    const deletedBefore = new Set();
+    for (const operation of operations) {
+      if (operation.bridge !== undefined) {
+        throw new Error("Semantic canvas operations cannot include Product Bridge metadata.");
+      }
+      if (operation.type === "create_zone" && operation.purpose === "product") {
+        throw new Error("A semanticDiagram batch cannot create a Product Bridge zone.");
+      }
+      const scopedReferences = [
+        operation.parentZoneId,
+        operation.from,
+        operation.to,
+        operation.id,
+      ].filter((value) => typeof value === "string" && value);
+      const productScope = scopedReferences.map((value) => productScopedShape(store, value)).find(Boolean);
+      if (productScope) {
+        throw new Error(`Semantic canvas operations cannot target Product Bridge shape ${productScope.id}.`);
+      }
+      if (operation.type === "delete_shape") {
+        const shape = typeof operation.id === "string" ? store[operation.id] : null;
+        if (shape?.typeName === "shape" && shape.meta?.cowartThinkingGenerated === true) {
+          for (const id of generatedDeletionIds(store, shape)) deletedBefore.add(id);
+        }
+        continue;
+      }
+      if (!["create_card", "create_zone", "create_relation"].includes(operation.type)) continue;
+      const semanticId = operation.type === "create_relation"
+        ? boundedString(operation.semanticId, 160) || boundedString(operation.key, 80)
+        : boundedString(operation.semantic?.id, 160) || boundedString(operation.key, 80);
+      if (!semanticId) throw new Error(`${operation.type} requires a stable semantic ID or creation key.`);
+      if (semanticIds.has(semanticId)) throw new Error(`Duplicate semantic ID '${semanticId}' in one diagram batch.`);
+      semanticIds.add(semanticId);
+      const duplicate = Object.values(store).find((record) =>
+        record?.typeName === "shape" &&
+        !deletedBefore.has(record.id) &&
+        record.meta?.cowartSemanticDiagram?.diagramId === semanticDiagram.diagramId &&
+        (
+          record.meta?.cowartSemanticObject?.semanticId === semanticId ||
+          record.meta?.cowartSemanticRelation?.semanticId === semanticId
+        ),
+      );
+      if (duplicate) throw new Error(`Semantic ID '${semanticId}' already exists in diagram ${semanticDiagram.diagramId}.`);
+    }
+  }
   const references = new Map();
   const changes = [];
   const createdCards = [];
   const createdRelations = [];
+  const geometryChangedShapeIds = new Set();
   let createdCount = 0;
 
   for (const operation of operations) {
     if (operation.type === "create_zone") {
-      const zone = createZoneRecord(store, pageId, operation);
+      const zone = createZoneRecord(store, pageId, operation, semanticDiagram);
       store[zone.id] = zone;
       const key = boundedString(operation.key, 80);
       references.set(key, zone.id);
@@ -1199,17 +2334,18 @@ export function applyThinkingOperationsToSnapshot({
     }
 
     if (operation.type === "update_zone") {
-      const updated = updateProductZone(store, operation, references, pageId);
+      const updated = updateCanvasZone(store, operation, references, pageId, semanticDiagram);
+      descendantShapeIds(store, updated.id).forEach((id) => geometryChangedShapeIds.add(id));
       changes.push({
         type: operation.type,
         id: updated.id,
-        key: updated.meta.cowartProductZoneKey,
+        key: managedZoneKey(updated),
       });
       continue;
     }
 
     if (operation.type === "create_card") {
-      const card = createCardRecord(store, pageId, operation, createdCount, references);
+      const card = createCardRecord(store, pageId, operation, createdCount, references, semanticDiagram);
       store[card.id] = card;
       const key = boundedString(operation.key, 80);
       if (key) references.set(key, card.id);
@@ -1220,7 +2356,8 @@ export function applyThinkingOperationsToSnapshot({
     }
 
     if (operation.type === "update_card") {
-      const updated = updateThinkingCard(store, operation, allowUserAuthoredEdits);
+      const updated = updateThinkingCard(store, operation, allowUserAuthoredEdits, semanticDiagram);
+      geometryChangedShapeIds.add(updated.id);
       changes.push({ type: operation.type, id: updated.id });
       continue;
     }
@@ -1230,6 +2367,7 @@ export function applyThinkingOperationsToSnapshot({
       assertManagedOrExplicitEdit(shape, allowUserAuthoredEdits, "move");
       shape.x = finiteNumber(operation.x, shape.x);
       shape.y = finiteNumber(operation.y, shape.y);
+      descendantShapeIds(store, shape.id).forEach((id) => geometryChangedShapeIds.add(id));
       changes.push({ type: operation.type, id: shape.id, x: shape.x, y: shape.y });
       continue;
     }
@@ -1242,12 +2380,13 @@ export function applyThinkingOperationsToSnapshot({
       }
       shape.props.w = Math.max(16, Math.min(8_192, finiteNumber(operation.w, shape.props.w)));
       shape.props.h = Math.max(16, Math.min(8_192, finiteNumber(operation.h, shape.props.h)));
+      descendantShapeIds(store, shape.id).forEach((id) => geometryChangedShapeIds.add(id));
       changes.push({ type: operation.type, id: shape.id, w: shape.props.w, h: shape.props.h });
       continue;
     }
 
     if (operation.type === "create_relation") {
-      const arrow = createRelationRecords(store, operation, references);
+      const arrow = createRelationRecords(store, operation, references, semanticDiagram);
       const key = boundedString(operation.key, 80);
       if (key) references.set(key, arrow.id);
       createdRelations.push(arrow.id);
@@ -1261,13 +2400,49 @@ export function applyThinkingOperationsToSnapshot({
     }
   }
 
-  layoutCreatedThinkingGraph(store, pageId, createdCards, createdRelations);
+  layoutCreatedThinkingGraph(store, pageId, createdCards, createdRelations, semanticDiagram);
+  if (semanticDiagram) {
+    for (const record of pageShapes(store, pageId)) {
+      if (
+        record.type === "arrow" &&
+        record.meta?.cowartThinkingGenerated === true &&
+        record.meta?.cowartThinkingRelation === true &&
+        record.meta?.cowartSemanticDiagram?.diagramId === semanticDiagram.diagramId
+      ) {
+        refreshRelationGeometryAndBindings(store, record.id);
+      }
+    }
+  }
+  if (geometryChangedShapeIds.size > 0) {
+    const changedSemanticDiagramIds = new Set(
+      Array.from(geometryChangedShapeIds)
+        .map((id) => store[id]?.meta?.cowartSemanticDiagram?.diagramId)
+        .filter(Boolean),
+    );
+    for (const record of Object.values(store)) {
+      const endpoints = boundThinkingRelationEndpoints(store, record, { syncMeta: true });
+      if (
+        record?.typeName !== "shape" ||
+        record.type !== "arrow" ||
+        record.meta?.cowartThinkingGenerated !== true ||
+        !(
+          geometryChangedShapeIds.has(endpoints.fromId) ||
+          geometryChangedShapeIds.has(endpoints.toId) ||
+          changedSemanticDiagramIds.has(record.meta?.cowartSemanticDiagram?.diagramId)
+        )
+      ) {
+        continue;
+      }
+      refreshRelationGeometryAndBindings(store, record.id);
+    }
+  }
 
   return {
     snapshot: nextSnapshot,
     pageId,
     changes,
     references: Object.fromEntries(references),
+    semanticDiagram,
     revision: snapshotRevision(nextSnapshot),
   };
 }
@@ -1354,6 +2529,7 @@ export async function applyThinkingOperations(args = {}, options = {}) {
     viewState: state.viewState,
     pageId: options.pageId,
     operations: options.operations,
+    semanticDiagram: options.semanticDiagram,
     allowUserAuthoredEdits: options.allowUserAuthoredEdits === true,
   });
   result.snapshot = await validateSnapshot(result.snapshot);
@@ -1368,6 +2544,7 @@ export async function applyThinkingOperations(args = {}, options = {}) {
       pageId: result.pageId,
       changes: result.changes,
       references: result.references,
+      semanticDiagram: result.semanticDiagram,
     };
   }
 
@@ -1408,6 +2585,7 @@ export async function applyThinkingOperations(args = {}, options = {}) {
     pageId: result.pageId,
     changes: result.changes,
     references: result.references,
+    semanticDiagram: result.semanticDiagram,
     explanation: history.explanation,
     storage: saveResult.storage,
   };

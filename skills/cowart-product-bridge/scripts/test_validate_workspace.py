@@ -99,6 +99,23 @@ class WorkspaceValidationTests(unittest.TestCase):
         self.save_manifest(manifest)
         self.assertEqual([], self.errors())
 
+    def test_accepts_requirements_from_a_standalone_prd_document(self) -> None:
+        manifest = self.manifest()
+        standalone_path = self.root / "prd" / "standalone-engine.md"
+        standalone_path.write_text(
+            "# Standalone engine PRD\n\n### F-engine-01 Compile constraints\n",
+            encoding="utf-8",
+        )
+        manifest["documents"].append({
+            "id": "standalone-engine",
+            "title": "Standalone engine PRD",
+            "kind": "prd",
+            "path": "prd/standalone-engine.md",
+        })
+        manifest["modules"][0]["pages"][1]["annotations"][0]["requirementId"] = "F-engine-01"
+        self.save_manifest(manifest)
+        self.assertEqual([], self.errors())
+
     def test_rejects_missing_position_and_invalid_viewport(self) -> None:
         manifest = self.manifest()
         page = manifest["modules"][0]["pages"][0]

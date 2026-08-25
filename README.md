@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="README.en.md">English</a> ·
+  <a href="#画布原生框线图">画布框线图</a> ·
   <a href="#product-bridge">Product Bridge</a> ·
   <a href="#安装">安装</a> ·
   <a href="#三分钟上手">三分钟上手</a> ·
@@ -29,7 +30,7 @@ Yogurt AI 基于开源项目 Cowart 和 tldraw，把用户提供的文档、知�
 | 非线性思考 | 一个主题或尚未理清的想法 | 可持续扩展的分支、聚类、对比和推理路径 |
 | 圈选局部修改 | 圈线、箭头、划掉、分组、文字批注与自然语言要求 | 只作用于相关区域的修改、解释和 operation ID |
 | 产品方案落地 | 零散想法、Yogurt 选区、可访问的需求材料与 TAPD 链接 | 可追溯 PRD、交互原型、评审画布分区和回流预览 |
-| 语义框线图 | 选区、整页笔记、产品流程或系统关系 | 原生可编辑卡片图，或可访问、可追踪的安全内联 SVG |
+| 画布框线图 | 选区、整页笔记、产品流程或系统关系 | 原生可编辑卡片图，或可访问、可追踪的安全内联 SVG |
 | 视觉内容生成 | Prompt、参考图和画布上下文 | 可预览的 AI 图片、单文件 HTML 和 Slides |
 | 画布整合导出 | 当前页面的全部可见对象 | 独立 HTML 全景或可继续编辑的 PowerPoint |
 
@@ -49,12 +50,35 @@ flowchart LR
 
 ## Excalidraw 风格工作区
 
-工具栏、颜色、描边、字体、快捷键和手绘视觉语言参考 Excalidraw；`Yogurt AI` 菜单提供图片、HTML、Slides、交互 PRD 和语义框线图入口。
+工具栏、颜色、描边、字体、快捷键和手绘视觉语言参考 Excalidraw；`Yogurt AI` 菜单提供图片、HTML、Slides、交互 PRD 和独立的 `生成画布框线图` 入口。
 
 <p align="center">
   <img src="docs/images/yogurt-ai-workspace.png" width="100%" alt="Yogurt AI 的 Excalidraw 风格画布与 AI 功能菜单">
 </p>
 <p align="center"><sub>真实产品截图：同一份可编辑演示画布中打开 Yogurt AI 菜单。</sub></p>
+
+## 画布原生框线图
+
+`生成画布框线图` 是 Yogurt AI 的一级画布能力，与 Product Bridge 并行，互不自动触发。选中一组材料卡或直接使用整页后，Agent 会先提炼一个 teaching claim、对象、关系、状态与阅读顺序，再把结果直接画在当前 Yogurt 页面旁边；不会创建 PRD 工作区，也不会把图塞进 `interaction-prd.json`。
+
+默认产物是真正的 Yogurt 原生对象：卡片、语义分区和绑定连线都可单独选择、移动、改字和继续连接。布局引擎支持横向、纵向、反向、center-out 与 board-to-peers 阅读顺序，循环关系会先做 SCC 分层；主路径、备选路径、双向同步、无向关联和包含关系分别映射为稳定的线型、箭头、lane 与 frame parentage。每个对象与关系都保留 `diagramId`、`semanticId`、来源 shape IDs、origin 和 state，便于后续继续整理或回读。
+
+只有用户明确要求 SVG，或精确多端口、密集避障、细粒度泳道、GUI/LUI 线框无法用原生对象无歧义表达时，才会在当前画布插入一个安全的 HTML + inline SVG 图块。它仍是 Yogurt 画布对象，不属于 PRD 交互工作区。
+
+```text
+选中这些材料，生成一个从左到右的画布框线图。
+核心判断是：创作者约束和安全闸门共同控制 AI 导演，
+玩家行动只在可追踪状态内推动下一幕。
+默认使用可编辑的原生节点、分区和关系线。
+```
+
+![AI 互动影游系统框线图直接生成在 Yogurt 画布上](examples/semantic-diagram/ai-interactive-film-system/yogurt-semantic-diagram-on-canvas.png)
+
+[查看独立画布案例、语义规格与可复用 Prompt](examples/semantic-diagram/ai-interactive-film-system/)。若使用 SVG 精确路线，可额外运行：
+
+```powershell
+node skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs --root <artifact-root> <diagram.html>
+```
 
 ## Product Bridge
 
@@ -65,9 +89,7 @@ flowchart LR
   A["零散想法 / Yogurt 选区 / TAPD 引用"] --> B["来源包与证据边界"]
   B --> C["Shaping、模块 PRD 与交互原型"]
   C --> D["文档与原型评审"]
-  C --> E["全局语义画布"]
   D --> F["稳定锚点上的批注"]
-  E --> F
   F --> G["Yogurt 回流预览"]
   G -->|"明确确认"| H["分区、卡片与关系"]
   H --> A
@@ -77,7 +99,7 @@ flowchart LR
 
 1. 在画布中选中要处理的产品区域；没有选区时会使用当前整页。单次范围最多 250 个对象，超过时会要求缩小选区，不会静默截断。
 2. 打开右上角 `Yogurt AI`，选择 `生成交互 PRD`。Yogurt 会冻结点击瞬间的对象范围并把任务发送给 Codex。直接发送需要 Codex 原生 widget；独立 Vite 预览会保存范围并复制同一份指令。
-3. Agent 会先建立来源包，区分用户原话、事实、产品假设、模型推断、约束和待确认问题，再生成 shaping 文档、带稳定 Requirement ID 的模块 PRD、自包含交互 HTML 原型和全局语义画布。
+3. Agent 会先建立来源包，区分用户原话、事实、产品假设、模型推断、约束和待确认问题，再生成 shaping 文档、带稳定 Requirement ID 的模块 PRD 和自包含交互 HTML 原型。
 4. 原型中的重点控件绑定唯一 `data-annotation-anchor`。评审时的标注会跟随真实界面元素，而不是依赖容易漂移的截图像素坐标。
 5. 工作区通过严格校验后，Agent 会交付本地评审地址、来源覆盖情况、未确认事项和可回流 Yogurt 的变更预览。
 
@@ -90,7 +112,7 @@ AI 根据世界规则、角色关系和历史状态续写下一幕；创作者�
 
 请结合当前 Yogurt AI 选区、上面的想法和我提供的 TAPD 链接：
 1. 先区分已确认信息、假设和待确认问题；
-2. 生成产品 shaping、模块 PRD、可交互原型和语义框线图；
+2. 生成产品 shaping、模块 PRD 和可交互原型；
 3. 保留来源到需求、页面、标注和画布分区的 trace map；
 4. 完成后只给出回流 Yogurt AI 的预览，等我确认后再写回。
 ```
@@ -101,26 +123,20 @@ AI 根据世界规则、角色关系和历史状态续写下一幕；创作者�
 
 回流遵循 `读取最新 revision → dryRun 预演 → 展示精确变更 → 用户明确确认 → 对同一 revision 应用同一批操作`。返回内容使用真正的 Yogurt 分区、分区内卡片和关系；已有用户内容与无关区域不会被整页覆盖。如果确认前画布发生变化，旧预览会失效，Agent 必须重新计算并再次确认。每次成功回流都会返回 operation ID，供安全撤销。
 
-### 单独生成语义框线图
-
-如果不需要完整 PRD，可以选中一个局部区域后选择 `生成语义框线图`。该操作同样需要 Codex 原生 widget 才能直接发送。简单思考树会优先使用原生卡片和关系；流程、架构、状态、GUI/LUI 或关系密集布局会使用经过安全校验的单文件 HTML 内联 SVG。连线从对象边界端口到目标边界，平行关系分离通道，并保留可复用的语义规格和来源 shape IDs。
-
 ### 案例：分岔回声｜AI 互动影游
 
-[完整案例、PRD、可交互原型、语义图、Bridge 映射与运行说明](examples/product-bridge/ai-interactive-film-case/)已发布在仓库中。案例只从一句用户目标出发，没有读取 TAPD，因此故事设定、目标用户、指标和商业判断都被明确标记为 AI 假设，而不是产品事实。案例最终生成：
+[完整案例、PRD、可交互原型、Bridge 映射与运行说明](examples/product-bridge/ai-interactive-film-case/)已发布在仓库中。案例只从一句用户目标出发，没有读取 TAPD，因此故事设定、目标用户、指标和商业判断都被明确标记为 AI 假设，而不是产品事实。Product Bridge 与上面的画布框线图案例使用同一份来源，但作为两条独立流程运行。Product Bridge 最终生成：
 
 | 产物 | 结果 |
 | --- | --- |
 | 产品 shaping | Brief、EARS 风格需求、玩家/创作者流程、模块计划 |
 | 模块 PRD | AI 叙事引擎、玩家体验、创作者工作室 |
 | 交互原型 | 作品发现、互动播放、可解释结局、故事编排、发布检查 5 个页面 |
-| 全局画布 | 1 张可访问、响应式的 AI 互动影游系统框线图 |
-| 评审定位 | 6 个评审页面、14 个稳定标注锚点，浏览器实测最大漂移 0.01px |
-| Yogurt 回流 | 6 个分区、27 张分区内卡片、12 条关系；通过 45 个 typed operations 原子写入 |
+| 页面关系 | 5 个真实原型页面及其可执行跳转，不包含语义图页面 |
+| 评审定位 | 5 个评审页面、14 个稳定标注锚点，浏览器实测最大漂移 0.01px |
+| Yogurt 回流 | 6 个产品分区、26 张分区内卡片、12 条关系；语义图不进入 Product Bridge trace map |
 
-![分岔回声 Product Bridge 全局画布](examples/product-bridge/ai-interactive-film-case/docs/images/product-bridge-global-canvas.png)
-
-![分岔回声评审结果回流 Yogurt 后的六个产品分区](examples/product-bridge/ai-interactive-film-case/docs/images/yogurt-return-zones.png)
+![分岔回声 Product Bridge 页面关系](examples/product-bridge/ai-interactive-film-case/docs/images/product-bridge-global-canvas.png)
 
 这个案例验证的是闭环，而不是某一版故事创意：Yogurt 中的模糊想法可以被整理成可评审产品文档，评审结论也可以沿同一条 trace map 返回原始思考画布。
 
@@ -131,10 +147,9 @@ AI 根据世界规则、角色关系和历史状态续写下一幕；创作者�
 ```powershell
 python -B -X utf8 skills/cowart-product-bridge/scripts/validate_workspace.py <workspace> --strict
 python -B -X utf8 skills/cowart-product-bridge/scripts/serve.py <workspace>
-node skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs --root <workspace> <diagram.html>
 ```
 
-前两条分别执行严格结构校验和本地评审预览；第三条检查语义 SVG 的结构、安全约束和 trace 模板。验证通过仍不代表连线几何一定清晰，最终需要在真实显示尺寸检查裁切、碰撞、端口和阅读顺序。
+两条命令分别执行严格结构校验和本地评审预览。
 
 ## 安装
 
@@ -305,7 +320,7 @@ PowerPoint 会生成全景、目录和详情页；下图中的目录文字框是
 ## 数据、来源与撤销
 
 - 画布页面保存在 `canvas/pages/<page-id>/cowart-canvas.json`，图片与 HTML 保存在同一页面的 `assets/` 目录。
-- Product Bridge 工作区保存在用户选择的项目目录，包含来源包、PRD、原型、语义图、trace map 和同步状态；不会写入插件源码目录。
+- Product Bridge 工作区保存在用户选择的项目目录，包含来源包、PRD、原型、产品分区映射、trace map 和同步状态；画布框线图保留在 Yogurt 画布及独立案例目录，不进入 Product Bridge 工作区。
 - 材料卡分别保存来源路径、原文摘录和 Agent 摘要，避免把事实与推断混在一起。
 - TAPD 等外部链接会记录实际访问状态；未授权或未读取的链接不会被当作已确认需求。
 - 非简单修改遵循“读取上下文 → `dryRun` 预演 → revision 校验 → 原子应用”的流程。
@@ -314,7 +329,7 @@ PowerPoint 会生成全景、目录和详情页；下图中的目录文字框是
 ## 技能
 
 - `cowart-thinking-canvas:cowart-product-bridge`：把零散想法、Yogurt 选区和 TAPD 引用整理成可追溯 PRD、交互原型与评审画布，并在明确确认后安全回流 Yogurt。
-- `cowart-thinking-canvas:cowart-semantic-diagram`：根据关系复杂度选择原生卡片或安全内联 SVG，生成带来源、稳定端口、语义规格和往返映射的框线图。
+- `cowart-thinking-canvas:cowart-semantic-diagram`：默认直接在当前画布生成原生可编辑分区、卡片和绑定关系；只有显式要求或精确拓扑无法原生表达时才使用安全内联 SVG。
 - `cowart-thinking-canvas:cowart-thinking-agent`：依据材料和批注执行“检查上下文 → 区分来源与推断 → 预演 → 局部应用 → 解释与撤销”的工作流。
 - `cowart-thinking-canvas:cowart-open-canvas`：打开 Yogurt AI 原生画布 widget。
 - `cowart-thinking-canvas:cowart-image-gen`：接收画布内 prompt 和参考图，用生成图片替换选中的 `AI 图片` 框；没有选中框时也可以把生成图插入当前页面。
