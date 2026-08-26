@@ -22,7 +22,7 @@ Yogurt AI is an installable AI product workspace, available as both a standalone
 The agent reads the active page and stable object IDs while streaming status, plans, and change summaries back into the workspace. Sensitive actions are approved in place. Results remain selectable, movable, editable, and open to follow-up questions instead of becoming a static image. The canvas is both the starting point for thought and the shared record after the agent finishes.
 
 <p align="center">
-  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop shows the native canvas and Codex Agent workbench in one window">
+  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop shows its cool lavender canvas and Codex Agent workbench in one window">
 </p>
 <p align="center"><sub>The native canvas and Codex Agent workbench share the active project, page, and object context in one window.</sub></p>
 
@@ -279,6 +279,7 @@ Useful environment variables:
 - `YOGURT_WORKSPACE_ROOT`: product project used by the desktop app.
 - `YOGURT_CODEX_JS`: explicit Codex CLI JavaScript entry when Windows discovery is unavailable.
 - `YOGURT_VITE_DEV_URL`: local Vite URL for desktop development; only loopback HTTP URLs are accepted.
+- `VITE_TLDRAW_LICENSE_KEY`: a valid tldraw SDK license key injected at build time; without one, the official tldraw watermark remains visible as required by its license.
 
 </details>
 

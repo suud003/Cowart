@@ -22,9 +22,9 @@ Yogurt AI 是一个可安装的 AI 产品工作台，同时提供独立桌面应
 Agent 会读取当前页面和稳定对象 ID，持续回传执行状态、计划与修改摘要；遇到敏感操作时，审批就在工作台内完成。结果仍然是可选择、可拖拽、可改写、可追问的画布对象，而不是一张无法继续工作的静态图。画布由此既是思考的起点，也是 Agent 工作后的统一归档。
 
 <p align="center">
-  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop 在同一窗口中展示原生画布与 Codex Agent 工作台">
+  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop 的冷紫编辑画布与 Codex Agent 工作台">
 </p>
-<p align="center"><sub>原生画布与 Codex Agent 工作台处于同一窗口，共享当前项目、页面与对象上下文。</sub></p>
+<p align="center"><sub>冷紫编辑画布与 Codex Agent 工作台处于同一窗口，共享当前项目、页面与对象上下文。</sub></p>
 
 ## Windows 桌面应用（Beta）
 
@@ -276,6 +276,7 @@ npm run desktop
 - `YOGURT_WORKSPACE_ROOT`：桌面应用当前操作的产品项目目录。
 - `YOGURT_CODEX_JS`：Windows 上需要显式指定时使用的 Codex CLI JavaScript 入口。
 - `YOGURT_VITE_DEV_URL`：桌面端开发模式加载的本机 Vite 地址，仅接受 loopback HTTP URL。
+- `VITE_TLDRAW_LICENSE_KEY`：构建时注入的合法 tldraw SDK license key；未配置时会按 tldraw 许可要求显示官方水印。
 
 </details>
 

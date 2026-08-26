@@ -1498,7 +1498,9 @@ export function CowartAgentPanel({
   beforeSend,
   bridge,
   contextProvider,
+  isModal = false,
   isOpen,
+  onAttentionChange,
   onOpenChange
 }) {
   const [bridgeState, setBridgeState] = useState(() => bridge?.getState?.() ?? EMPTY_BRIDGE_STATE)
@@ -1523,11 +1525,63 @@ export function CowartAgentPanel({
   ))
   const textAreaRef = useRef(null)
   const blockingInteractionRef = useRef(null)
+  const panelRef = useRef(null)
   const panelBodyRef = useRef(null)
   const submissionLockRef = useRef(false)
   const shouldFollowConversationRef = useRef(true)
   const isOpenRef = useRef(isOpen)
   const autoOpenedInteractionRef = useRef(null)
+
+  useEffect(() => {
+    if (!isModal || !isOpen) return undefined
+
+    const panel = panelRef.current
+    if (!panel) return undefined
+    const previouslyFocused = document.activeElement
+    const focusableSelector = [
+      'button:not([disabled])',
+      'a[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',')
+    const focusableElements = () => Array.from(panel.querySelectorAll(focusableSelector))
+
+    ;(panel.querySelector('.cowart-agent-close') || focusableElements()[0])?.focus()
+
+    function handleModalKeyDown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onOpenChange(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const elements = focusableElements()
+      if (!elements.length) {
+        event.preventDefault()
+        return
+      }
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    panel.addEventListener('keydown', handleModalKeyDown)
+    return () => {
+      panel.removeEventListener('keydown', handleModalKeyDown)
+      const appToggle = document.querySelector('.yogurt-app-agent-toggle')
+      if (appToggle instanceof HTMLElement) appToggle.focus()
+      else if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus()
+    }
+  }, [isModal, isOpen, onOpenChange])
 
   useEffect(() => {
     isOpenRef.current = isOpen
@@ -1625,6 +1679,10 @@ export function CowartAgentPanel({
     : hasPendingApproval
       ? `approval:${approvalRequestId ?? 'pending'}`
       : null
+
+  useEffect(() => {
+    onAttentionChange?.(launcherAttention)
+  }, [launcherAttention?.accessibleLabel, launcherAttention?.kind, launcherAttention?.label, onAttentionChange])
 
   useEffect(() => {
     if (!blockingInteractionKey) {
@@ -1868,7 +1926,14 @@ export function CowartAgentPanel({
   }
 
   return (
-    <aside className="cowart-agent-panel" aria-label="Codex Agent 工作台">
+    <aside
+      ref={panelRef}
+      aria-label="Codex Agent 工作台"
+      aria-modal={isModal ? 'true' : undefined}
+      className="cowart-agent-panel"
+      id="yogurt-codex-agent-panel"
+      role={isModal ? 'dialog' : undefined}
+    >
       <header className="cowart-agent-panel-header">
         <span className="cowart-agent-avatar" aria-hidden="true">
           <Bot size={19} />

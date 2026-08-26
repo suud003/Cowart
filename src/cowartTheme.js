@@ -12,7 +12,7 @@ const COWART_DRAW_FONT_FAMILY =
   '"Excalifont", "Xiaolai", "LXGW WenKai", "霞鹜文楷", "Kaiti SC", STKaiti, KaiTi, "Microsoft YaHei", cursive'
 const COWART_SANS_FONT_FAMILY =
   '"Assistant", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif'
-const COWART_CANVAS_BACKGROUND = '#fffdf8'
+const COWART_CANVAS_BACKGROUND = '#cbd0e2'
 const COWART_XIAOLAI_STYLE_ID = 'cowart-excalidraw-xiaolai-font-faces'
 const COWART_XIAOLAI_CDN_ROOT =
   `https://cdn.jsdelivr.net/npm/${xiaolaiManifest.sourcePackage}@${xiaolaiManifest.sourceVersion}` +
@@ -78,15 +78,15 @@ export const cowartTldrawThemes = {
       ...DEFAULT_THEME.colors,
       light: {
         ...DEFAULT_THEME.colors.light,
-        text: '#303030',
+        text: '#252b40',
         background: COWART_CANVAS_BACKGROUND,
         negativeSpace: COWART_CANVAS_BACKGROUND,
         solid: COWART_CANVAS_BACKGROUND,
         black: {
           ...DEFAULT_THEME.colors.light.black,
-          solid: '#343434',
-          fill: '#343434',
-          linedFill: '#454545',
+          solid: '#151d31',
+          fill: '#151d31',
+          linedFill: '#2b3651',
           frameFill: COWART_CANVAS_BACKGROUND
         }
       }

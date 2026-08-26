@@ -246,7 +246,7 @@ async function createMainWindow() {
       minWidth: 1024,
       minHeight: 720,
       show: false,
-      backgroundColor: '#f7f7f5',
+      backgroundColor: '#080a0f',
       webPreferences: {
         preload: preloadPath,
         contextIsolation: true,
@@ -294,6 +294,19 @@ async function captureDesktopIfRequested() {
   if (!requestedPath || !mainWindow) return false
 
   const capturePath = path.resolve(requestedPath)
+  const requestedWidth = Number(process.env.YOGURT_DESKTOP_CAPTURE_WIDTH)
+  const requestedHeight = Number(process.env.YOGURT_DESKTOP_CAPTURE_HEIGHT)
+  if (Number.isFinite(requestedWidth) || Number.isFinite(requestedHeight)) {
+    const [currentWidth, currentHeight] = mainWindow.getSize()
+    mainWindow.setSize(
+      Number.isFinite(requestedWidth)
+        ? Math.round(Math.min(Math.max(requestedWidth, 1_024), 1_920))
+        : currentWidth,
+      Number.isFinite(requestedHeight)
+        ? Math.round(Math.min(Math.max(requestedHeight, 720), 1_200))
+        : currentHeight
+    )
+  }
   const requestedDelay = Number(process.env.YOGURT_DESKTOP_CAPTURE_DELAY_MS)
   const delayMs = Number.isFinite(requestedDelay)
     ? Math.min(Math.max(requestedDelay, 250), 15_000)

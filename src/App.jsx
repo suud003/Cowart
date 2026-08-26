@@ -71,6 +71,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, Download, FileCode, Imag
 import 'tldraw/tldraw.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CowartAgentPanel } from './AgentPanel.jsx'
+import { YogurtAppChrome } from './YogurtAppChrome.jsx'
 import aiHtmlToolIconRaw from './assets/ai-html.svg?raw'
 import aiImageToolIconRaw from './assets/ai-image.svg?raw'
 import aiSlidesToolIconRaw from './assets/ai-slides.svg?raw'
@@ -157,6 +158,7 @@ import { getCowartHtmlDraftSandbox } from './htmlDraftSecurity.js'
 if (!isYogurtDesktopRenderer()) installCowartHandDrawnFontFaces()
 
 const SELECTION_STATE_ELEMENT_ID = 'cowart-selection-state'
+const TLDRAW_LICENSE_KEY = String(import.meta.env.VITE_TLDRAW_LICENSE_KEY || '').trim() || undefined
 const PAGE_ASSETS_ROUTE = '/page-assets/'
 const GLOBAL_ASSETS_ROUTE = '/assets/'
 const AI_IMAGE_TOOL_ID = 'ai-image'
@@ -3890,6 +3892,7 @@ async function submitCowartProductBridge(editor) {
 function CowartCanvasOverlay() {
   return (
     <>
+      <CowartCanvasEditorialEmptyState />
       <ExcalidrawCowartChrome
         htmlIcon={aiHtmlToolIcon}
         imageIcon={aiImageToolIcon}
@@ -6511,7 +6514,20 @@ export default function App() {
   const [canvasSyncConflict, setCanvasSyncConflict] = useState(null)
   const [agentBridge, setAgentBridge] = useState(null)
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(true)
+  const [agentPanelAttention, setAgentPanelAttention] = useState(null)
+  const [isCompactAgentViewport, setIsCompactAgentViewport] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(max-width: 720px)').matches
+  ))
   const canvasRevisionRef = useRef(null)
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 720px)')
+    if (!media) return undefined
+    const updateViewport = () => setIsCompactAgentViewport(media.matches)
+    updateViewport()
+    media.addEventListener?.('change', updateViewport)
+    return () => media.removeEventListener?.('change', updateViewport)
+  }, [])
 
   useEffect(() => {
     const nextBridge = getCowartAgentBridge(window)
@@ -6953,16 +6969,31 @@ export default function App() {
     )
   }
 
+  const isModalAgentPanel = isAgentPanelOpen && isCompactAgentViewport
+
   return (
     <main
       className={`cowart-workbench${isAgentPanelOpen ? '' : ' cowart-workbench--agent-closed'}`}
+      data-agent-open={isAgentPanelOpen ? 'true' : 'false'}
       aria-label="Yogurt AI workspace"
     >
-      <section className="cowart-canvas" aria-label="Yogurt AI infinite canvas">
+      <YogurtAppChrome
+        agentAttention={agentPanelAttention}
+        isAgentPanelOpen={isAgentPanelOpen}
+        onAgentPanelOpenChange={setIsAgentPanelOpen}
+        projectName={cowartProjectName()}
+      />
+      <section
+        aria-hidden={isModalAgentPanel ? 'true' : undefined}
+        aria-label="Yogurt AI infinite canvas"
+        className="cowart-canvas"
+        inert={isModalAgentPanel ? true : undefined}
+      >
         <CanvasSyncConflictNotice conflict={canvasSyncConflict} />
         <SkippedRecordsNotice records={skippedRecords} />
         <Tldraw
           snapshot={snapshot ?? undefined}
+          licenseKey={TLDRAW_LICENSE_KEY}
           assetUrls={cowartAssetUrls}
           assets={cowartTldrawAssetStore}
           inferDarkMode
@@ -6979,10 +7010,43 @@ export default function App() {
         beforeSend={prepareCowartAgentTask}
         bridge={agentBridge}
         contextProvider={getCowartAgentPanelContext}
+        isModal={isModalAgentPanel}
         isOpen={isAgentPanelOpen}
+        onAttentionChange={setAgentPanelAttention}
         onOpenChange={setIsAgentPanelOpen}
       />
     </main>
+  )
+}
+
+function CowartCanvasEditorialEmptyState() {
+  const editor = useEditor()
+  const emptyPageName = useValue(
+    'cowart editorial empty canvas page',
+    () => {
+      if (editor.getCurrentPageShapeIds().size > 0) return null
+      return String(editor.getCurrentPage()?.name || 'Page 1').trim() || 'Page 1'
+    },
+    [editor]
+  )
+
+  if (!emptyPageName) return null
+
+  return (
+    <>
+      <section aria-hidden="true" className="cowart-canvas-editorial-empty">
+        <span>{emptyPageName} / EMPTY CANVAS</span>
+        <strong>
+          THINK
+          <br />
+          <em>OUT LOUD</em>
+        </strong>
+        <p>粘贴文字、图片或链接。圈选一组材料后，直接把下一步交给 Agent。</p>
+      </section>
+      <p className="yogurt-sr-only">
+        当前页面为空。粘贴文字、图片或链接，圈选一组材料后，可以把下一步交给 Agent。
+      </p>
+    </>
   )
 }
 

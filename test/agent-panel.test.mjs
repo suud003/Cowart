@@ -187,6 +187,31 @@ test('Agent panel removes redundant diagram generation shortcuts from Agent surf
   assert.doesNotMatch(actionMenuSource, /生成画布框线图/)
 })
 
+test('compact Agent panel exposes dialog semantics and a stable controlled id', () => {
+  const state = {
+    status: 'ready',
+    capabilities: { available: true, provider: 'desktop' },
+    pendingTaskIds: [],
+    activity: { phase: 'idle' },
+    lastTask: null,
+    lastEvent: null
+  }
+  const markup = renderToStaticMarkup(React.createElement(CowartAgentPanel, {
+    bridge: {
+      getState: () => state,
+      refreshCapabilities: () => state.capabilities
+    },
+    contextProvider: () => ({ projectName: 'Test', pageShapeCount: 0 }),
+    isModal: true,
+    isOpen: true,
+    onOpenChange: () => {}
+  }))
+
+  assert.match(markup, /id="yogurt-codex-agent-panel"/)
+  assert.match(markup, /role="dialog"/)
+  assert.match(markup, /aria-modal="true"/)
+})
+
 test('Agent activity normalization preserves complete replies and line breaks', () => {
   const longReply = `${'第一段\n'.repeat(90)}最后一句 `
   const item = normalizeActivityEvent({
