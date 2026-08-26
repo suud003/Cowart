@@ -62,6 +62,13 @@ test('App Server client performs initialize/initialized and stdio JSONL requests
   assert.equal(result.thread.id, 'thr_1')
   assert.equal(child.messages[0].method, 'initialize')
   assert.equal(child.messages[0].params.capabilities.experimentalApi, false)
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      child.messages[0].params.capabilities,
+      'mcpServerOpenaiFormElicitation'
+    ),
+    false
+  )
   assert.equal(child.messages[1].method, 'initialized')
   assert.equal(child.messages[2].method, 'thread/start')
   assert.equal(client.state.transport, 'stdio')
@@ -178,6 +185,74 @@ test('App Server client streams notifications and answers only known approvals',
   await assert.rejects(
     client.respondToApproval('missing', 'accept'),
     /No pending command or file approval/
+  )
+  await client.stop()
+})
+
+test('App Server client returns the fixed MCP elicitation action/content wire result', async () => {
+  let child
+  const client = new CodexAppServerClient({
+    spawnProcess() {
+      child = fakeSidecar((message, process) => {
+        if (message.method === 'initialize') process.send({ id: message.id, result: {} })
+      })
+      return child
+    }
+  })
+  await client.start()
+
+  const requestPromise = once(client, 'serverRequest')
+  child.send({
+    id: 'elicitation-1',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'form',
+      message: 'Choose a branch.',
+      requestedSchema: {
+        type: 'object',
+        properties: {
+          branch: { type: 'string', enum: ['story', 'battle'] }
+        },
+        required: ['branch']
+      },
+      serverName: 'map-systems',
+      threadId: 'thr_1',
+      turnId: 'turn_1'
+    }
+  })
+  await requestPromise
+
+  await client.respondToElicitation('elicitation-1', {
+    action: 'accept',
+    content: { branch: 'story' }
+  })
+  assert.deepEqual(child.messages.at(-1), {
+    id: 'elicitation-1',
+    result: {
+      action: 'accept',
+      content: { branch: 'story' }
+    }
+  })
+  assert.equal(client.pendingServerRequests.length, 0)
+
+  const declinePromise = once(client, 'serverRequest')
+  child.send({
+    id: 'elicitation-2',
+    method: 'mcpServer/elicitation/request',
+    params: { mode: 'url' }
+  })
+  await declinePromise
+  await client.respondToElicitation('elicitation-2', {
+    action: 'decline',
+    content: null
+  })
+  assert.deepEqual(child.messages.at(-1), {
+    id: 'elicitation-2',
+    result: { action: 'decline', content: null }
+  })
+  await assert.rejects(
+    client.respondToElicitation('elicitation-2', { action: 'accept', content: null }),
+    /No pending MCP elicitation/
   )
   await client.stop()
 })

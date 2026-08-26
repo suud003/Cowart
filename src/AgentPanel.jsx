@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  ExternalLink,
   FileText,
   FolderOpen,
   LoaderCircle,
@@ -11,6 +12,7 @@ import {
   PanelRightClose,
   RefreshCw,
   Send,
+  ShieldAlert,
   Sparkles,
   Square,
   Terminal,
@@ -113,7 +115,7 @@ export function codexLoginButtonLabel(status, busy = false) {
 
 function taskStatusFromActivity(activity, fallbackStatus, followsActivity) {
   if (!followsActivity) return fallbackStatus
-  if (['submitting', 'running', 'waiting_approval'].includes(activity?.phase)) return 'sending'
+  if (['submitting', 'running', 'waiting_approval', 'waiting_elicitation'].includes(activity?.phase)) return 'sending'
   if (activity?.phase === 'completed') return 'completed'
   if (activity?.phase === 'failed') return 'failed'
   if (activity?.phase === 'cancelled') return 'cancelled'
@@ -160,6 +162,369 @@ function activityText(value) {
 function clipActivityText(value, maxLength = 560) {
   const compact = String(value || '').replace(/\s+/g, ' ').trim()
   return compact.length > maxLength ? `${compact.slice(0, maxLength)}…` : compact
+}
+
+const ELICITATION_STRING_FORMATS = new Set(['email', 'uri', 'date', 'date-time'])
+const ELICITATION_MAX_FIELDS = 50
+const ELICITATION_MAX_OPTIONS = 100
+
+function safeElicitationText(value, maxLength = 320) {
+  const text = typeof value === 'string' ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim() : ''
+  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text
+}
+
+function ownValue(object, key) {
+  return object && typeof object === 'object' && Object.prototype.hasOwnProperty.call(object, key)
+    ? object[key]
+    : undefined
+}
+
+function setSafeProperty(object, key, value) {
+  Object.defineProperty(object, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true
+  })
+  return object
+}
+
+function primitiveValue(value) {
+  return ['string', 'number', 'boolean'].includes(typeof value) &&
+    (typeof value !== 'number' || Number.isFinite(value))
+}
+
+function optionList(schema, { anyOf = false } = {}) {
+  const enumValues = Array.isArray(schema?.enum) ? schema.enum : null
+  const variants = Array.isArray(schema?.[anyOf ? 'anyOf' : 'oneOf'])
+    ? schema[anyOf ? 'anyOf' : 'oneOf']
+    : null
+  if (!enumValues && !variants) return { options: null, supported: true }
+
+  let values
+  if (enumValues) {
+    const titles = Array.isArray(schema.enumNames)
+      ? schema.enumNames
+      : Array.isArray(schema['x-enumNames']) ? schema['x-enumNames'] : []
+    values = enumValues.map((value, index) => ({
+      value,
+      title: safeElicitationText(titles[index], 120) || String(value)
+    }))
+  } else {
+    values = variants.map((variant) => {
+      if (!variant || typeof variant !== 'object' || !Object.prototype.hasOwnProperty.call(variant, 'const')) {
+        return null
+      }
+      return {
+        value: variant.const,
+        title: safeElicitationText(variant.title, 120) || String(variant.const)
+      }
+    })
+  }
+
+  const supported = values.length > 0 &&
+    values.length <= ELICITATION_MAX_OPTIONS &&
+    values.every((option) => option && primitiveValue(option.value)) &&
+    values.every((option, index) =>
+      values.findIndex((candidate) => candidate && Object.is(candidate.value, option.value)) === index
+    )
+  return { options: supported ? values : null, supported }
+}
+
+function finiteConstraint(value, { integer = false, minimum = -Infinity } = {}) {
+  if (value == null) return undefined
+  const number = Number(value)
+  if (!Number.isFinite(number) || number < minimum || (integer && !Number.isInteger(number))) return null
+  return number
+}
+
+function normalizeElicitationField(name, rawSchema, required, index) {
+  const schema = rawSchema && typeof rawSchema === 'object' && !Array.isArray(rawSchema)
+    ? rawSchema
+    : null
+  const fallbackTitle = safeElicitationText(name, 120) || `字段 ${index + 1}`
+  if (!schema || Array.isArray(schema.type)) {
+    return { name, title: fallbackTitle, supported: false, reason: '字段结构暂不支持' }
+  }
+
+  const type = String(schema.type || (Array.isArray(schema.enum) || Array.isArray(schema.oneOf) ? 'string' : ''))
+  const field = {
+    name,
+    title: safeElicitationText(schema.title, 120) || fallbackTitle,
+    description: safeElicitationText(schema.description),
+    required,
+    type,
+    defaultValue: ownValue(schema, 'default'),
+    supported: true
+  }
+
+  if (type === 'string') {
+    const choices = optionList(schema)
+    if (
+      !choices.supported ||
+      (choices.options && choices.options.some((option) => typeof option.value !== 'string'))
+    ) return { ...field, supported: false, reason: '选项结构暂不支持' }
+    const minLength = finiteConstraint(schema.minLength, { integer: true, minimum: 0 })
+    const maxLength = finiteConstraint(schema.maxLength, { integer: true, minimum: 0 })
+    if (minLength === null || maxLength === null || (minLength != null && maxLength != null && minLength > maxLength)) {
+      return { ...field, supported: false, reason: '文本长度约束无效' }
+    }
+    const format = schema.format == null ? '' : String(schema.format)
+    if (format && !ELICITATION_STRING_FORMATS.has(format)) {
+      return { ...field, supported: false, reason: `暂不支持 ${safeElicitationText(format, 40)} 格式` }
+    }
+    return { ...field, options: choices.options, minLength, maxLength, format }
+  }
+
+  if (type === 'number' || type === 'integer') {
+    const minimum = finiteConstraint(schema.minimum)
+    const maximum = finiteConstraint(schema.maximum)
+    if (minimum === null || maximum === null || (minimum != null && maximum != null && minimum > maximum)) {
+      return { ...field, supported: false, reason: '数值范围约束无效' }
+    }
+    return { ...field, minimum, maximum }
+  }
+
+  if (type === 'boolean') return field
+
+  if (type === 'array') {
+    const items = schema.items
+    if (!items || typeof items !== 'object' || Array.isArray(items)) {
+      return { ...field, supported: false, reason: '多选项结构暂不支持' }
+    }
+    const choices = optionList(items, { anyOf: true })
+    const minItems = finiteConstraint(schema.minItems, { integer: true, minimum: 0 })
+    const maxItems = finiteConstraint(schema.maxItems, { integer: true, minimum: 0 })
+    if (
+      !choices.supported || !choices.options ||
+      choices.options.some((option) => typeof option.value !== 'string') ||
+      minItems === null || maxItems === null ||
+      (minItems != null && maxItems != null && minItems > maxItems)
+    ) {
+      return { ...field, supported: false, reason: '多选项或数量约束暂不支持' }
+    }
+    return { ...field, options: choices.options, minItems, maxItems }
+  }
+
+  return { ...field, supported: false, reason: `暂不支持 ${safeElicitationText(type || '未知', 40)} 类型` }
+}
+
+export function safeElicitationDomain(value) {
+  try {
+    const parsed = new URL(String(value || ''))
+    if (parsed.protocol !== 'https:' || !parsed.hostname) return ''
+    return parsed.hostname
+  } catch (_error) {
+    return ''
+  }
+}
+
+function safeElicitationHost(value) {
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (!text || /[\s/@?#\\]/.test(text)) return ''
+  try {
+    const parsed = new URL(`https://${text}`)
+    return parsed.hostname === text || parsed.hostname === text.toLowerCase() ? parsed.hostname : ''
+  } catch (_error) {
+    return ''
+  }
+}
+
+export function normalizeElicitationRequest(rawRequest, requestId = null) {
+  const raw = rawRequest && typeof rawRequest === 'object' ? rawRequest : {}
+  const request = raw.elicitation && typeof raw.elicitation === 'object'
+    ? raw.elicitation
+    : raw.request && typeof raw.request === 'object' ? raw.request : raw
+  const url = ownValue(request, 'url') ?? ownValue(request, 'elicitationUrl') ?? ''
+  const urlHost = ownValue(request, 'urlHost') ?? ''
+  const inferredMode = url || urlHost ? 'url' : 'form'
+  const mode = String(request.mode || inferredMode).toLowerCase()
+  const base = {
+    kind: 'elicitation-model',
+    requestId: requestId ?? request.requestId ?? request.id ?? null,
+    title: safeElicitationText(request.title, 120) || 'Codex 需要你补充信息',
+    message: safeElicitationText(request.message || request.description, 600)
+  }
+
+  if (mode === 'url') {
+    const domain = safeElicitationDomain(url) || safeElicitationHost(urlHost)
+    return {
+      ...base,
+      mode,
+      domain,
+      supported: Boolean(domain),
+      unsupportedReasons: domain ? [] : ['外部地址无效或使用了不支持的协议']
+    }
+  }
+
+  const schema = request.requestedSchema ?? request.schema
+  if (mode !== 'form' || !schema || typeof schema !== 'object' || Array.isArray(schema) || schema.type !== 'object') {
+    return {
+      ...base,
+      mode,
+      fields: [],
+      supported: false,
+      unsupportedReasons: ['请求没有提供受支持的对象表单结构']
+    }
+  }
+
+  const properties = schema.properties
+  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) {
+    return {
+      ...base,
+      mode,
+      fields: [],
+      supported: false,
+      unsupportedReasons: ['表单字段结构无效']
+    }
+  }
+  const entries = Object.entries(properties)
+  if (entries.length > ELICITATION_MAX_FIELDS) {
+    return {
+      ...base,
+      mode,
+      fields: [],
+      supported: false,
+      unsupportedReasons: [`表单字段超过 ${ELICITATION_MAX_FIELDS} 项安全上限`]
+    }
+  }
+  const requiredNames = Array.isArray(schema.required) ? schema.required.map(String) : []
+  const propertyNames = new Set(entries.map(([name]) => String(name)))
+  const invalidRequired = requiredNames.some((name, index) =>
+    !propertyNames.has(name) || requiredNames.indexOf(name) !== index
+  )
+  if (schema.required != null && (!Array.isArray(schema.required) || invalidRequired)) {
+    return {
+      ...base,
+      mode,
+      fields: [],
+      supported: false,
+      unsupportedReasons: ['必填字段声明无效']
+    }
+  }
+  const required = new Set(requiredNames)
+  const fields = entries.map(([name, fieldSchema], index) =>
+    normalizeElicitationField(String(name), fieldSchema, required.has(String(name)), index)
+  )
+  const unsupportedReasons = fields
+    .filter((field) => !field.supported)
+    .map((field) => `${field.title}：${field.reason}`)
+  return {
+    ...base,
+    mode,
+    fields,
+    supported: unsupportedReasons.length === 0,
+    unsupportedReasons
+  }
+}
+
+export function createElicitationInitialValues(requestOrModel) {
+  const model = requestOrModel?.kind === 'elicitation-model'
+    ? requestOrModel
+    : normalizeElicitationRequest(requestOrModel)
+  const values = {}
+  for (const field of model.fields || []) {
+    if (!field.supported) continue
+    let value
+    if (field.type === 'array') {
+      const defaults = Array.isArray(field.defaultValue) ? field.defaultValue : []
+      value = defaults.filter((candidate) => field.options.some((option) => Object.is(option.value, candidate)))
+    } else if (field.options) {
+      value = field.options.some((option) => Object.is(option.value, field.defaultValue))
+        ? field.defaultValue
+        : undefined
+    } else if (field.type === 'boolean') {
+      value = typeof field.defaultValue === 'boolean'
+        ? field.defaultValue
+        : field.required ? false : undefined
+    } else if (field.type === 'number' || field.type === 'integer') {
+      value = typeof field.defaultValue === 'number' && Number.isFinite(field.defaultValue)
+        ? String(field.defaultValue)
+        : ''
+    } else {
+      value = typeof field.defaultValue === 'string' ? field.defaultValue : ''
+    }
+    setSafeProperty(values, field.name, value)
+  }
+  return values
+}
+
+export function buildElicitationContent(requestOrModel, values = {}) {
+  const model = requestOrModel?.kind === 'elicitation-model'
+    ? requestOrModel
+    : normalizeElicitationRequest(requestOrModel)
+  if (model.mode !== 'form' || !model.supported) {
+    return { valid: false, content: null, errors: ['此请求无法安全提交。'] }
+  }
+
+  const content = {}
+  const errors = []
+  for (const field of model.fields) {
+    const rawValue = ownValue(values, field.name)
+    const label = field.title
+    if (field.type === 'array') {
+      const selected = Array.isArray(rawValue) ? rawValue : []
+      const shouldInclude = field.required || selected.length > 0
+      const hasInvalidSelection = selected.some((value) =>
+        !field.options.some((option) => Object.is(option.value, value))
+      ) || selected.some((value, index) => selected.findIndex((candidate) => Object.is(candidate, value)) !== index)
+      if (hasInvalidSelection) errors.push(`${label}包含无效或重复选项。`)
+      if (shouldInclude && ((field.minItems != null && selected.length < field.minItems) || (field.required && selected.length === 0))) {
+        errors.push(`${label}至少选择 ${Math.max(field.minItems ?? 0, field.required ? 1 : 0)} 项。`)
+      } else if (shouldInclude && field.maxItems != null && selected.length > field.maxItems) {
+        errors.push(`${label}最多选择 ${field.maxItems} 项。`)
+      }
+      if (shouldInclude) setSafeProperty(content, field.name, selected)
+      continue
+    }
+
+    if (field.options) {
+      const matched = field.options.some((option) => Object.is(option.value, rawValue))
+      if (field.required && !matched) errors.push(`请选择${label}。`)
+      if (matched) setSafeProperty(content, field.name, rawValue)
+      continue
+    }
+
+    if (field.type === 'boolean') {
+      if (typeof rawValue === 'boolean') {
+        setSafeProperty(content, field.name, rawValue)
+      } else if (field.required) {
+        errors.push(`请选择${label}。`)
+      }
+      continue
+    }
+
+    if (field.type === 'number' || field.type === 'integer') {
+      if (rawValue === '' || rawValue == null) {
+        if (field.required) errors.push(`请输入${label}。`)
+        continue
+      }
+      const number = Number(rawValue)
+      if (!Number.isFinite(number) || (field.type === 'integer' && !Number.isInteger(number))) {
+        errors.push(`${label}必须是${field.type === 'integer' ? '整数' : '数字'}。`)
+      } else if (field.minimum != null && number < field.minimum) {
+        errors.push(`${label}不能小于 ${field.minimum}。`)
+      } else if (field.maximum != null && number > field.maximum) {
+        errors.push(`${label}不能大于 ${field.maximum}。`)
+      } else {
+        setSafeProperty(content, field.name, number)
+      }
+      continue
+    }
+
+    const string = typeof rawValue === 'string' ? rawValue : ''
+    const shouldInclude = field.required || string.length > 0 || field.defaultValue === ''
+    if (field.required && string.length === 0) errors.push(`请输入${label}。`)
+    if (shouldInclude && field.minLength != null && string.length < field.minLength) {
+      errors.push(`${label}至少需要 ${field.minLength} 个字符。`)
+    } else if (shouldInclude && field.maxLength != null && string.length > field.maxLength) {
+      errors.push(`${label}最多允许 ${field.maxLength} 个字符。`)
+    }
+    if (shouldInclude) {
+      setSafeProperty(content, field.name, string)
+    }
+  }
+  return { valid: errors.length === 0, content, errors }
 }
 
 function normalizeActivityEvent(event) {
@@ -223,6 +588,15 @@ function approvalRequestIdFromBridgeState(state) {
     state?.activity?.approval?.id ??
     state?.lastEvent?.requestId ??
     state?.lastEvent?.approval?.requestId ??
+    null
+  )
+}
+
+function elicitationRequestIdFromBridgeState(state) {
+  return (
+    state?.activity?.elicitation?.requestId ??
+    state?.activity?.elicitation?.id ??
+    (state?.lastEvent?.type === 'elicitation.requested' ? state.lastEvent.requestId : null) ??
     null
   )
 }
@@ -309,6 +683,276 @@ function AgentTaskStatus({ task }) {
   )
 }
 
+function elicitationInputType(format) {
+  return {
+    email: 'email',
+    uri: 'url',
+    date: 'date',
+    'date-time': 'datetime-local'
+  }[format] || 'text'
+}
+
+function valueWithField(previous, name, value) {
+  const next = { ...previous }
+  return setSafeProperty(next, name, value)
+}
+
+function ElicitationField({ field, index, value, error, onChange }) {
+  const fieldId = `cowart-agent-elicitation-field-${index}`
+  const descriptionId = field.description ? `${fieldId}-description` : undefined
+  const errorId = error ? `${fieldId}-error` : undefined
+  const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined
+  const label = (
+    <>
+      {field.title}
+      {field.required && <span aria-hidden="true"> *</span>}
+    </>
+  )
+
+  if (field.type === 'array') {
+    const selected = Array.isArray(value) ? value : []
+    return (
+      <fieldset className="cowart-agent-elicitation-field" aria-describedby={describedBy}>
+        <legend>{label}</legend>
+        {field.description && <small id={descriptionId}>{field.description}</small>}
+        <div className="cowart-agent-elicitation-options">
+          {field.options.map((option, optionIndex) => {
+            const optionId = `${fieldId}-option-${optionIndex}`
+            const checked = selected.some((candidate) => Object.is(candidate, option.value))
+            return (
+              <label htmlFor={optionId} key={optionId}>
+                <input
+                  checked={checked}
+                  id={optionId}
+                  onChange={(event) => {
+                    const next = event.target.checked
+                      ? [...selected, option.value]
+                      : selected.filter((candidate) => !Object.is(candidate, option.value))
+                    onChange(next)
+                  }}
+                  type="checkbox"
+                />
+                <span>{option.title}</span>
+              </label>
+            )
+          })}
+        </div>
+        {error && <small className="cowart-agent-elicitation-error" id={errorId}>{error}</small>}
+      </fieldset>
+    )
+  }
+
+  if (field.type === 'boolean') {
+    if (!field.required) {
+      return (
+        <div className="cowart-agent-elicitation-field">
+          <label htmlFor={fieldId}>{label}</label>
+          {field.description && <small id={descriptionId}>{field.description}</small>}
+          <select
+            aria-describedby={describedBy}
+            id={fieldId}
+            onChange={(event) => {
+              onChange(event.target.value === '' ? undefined : event.target.value === 'true')
+            }}
+            value={typeof value === 'boolean' ? String(value) : ''}
+          >
+            <option value="">未设置</option>
+            <option value="true">是</option>
+            <option value="false">否</option>
+          </select>
+          {error && <small className="cowart-agent-elicitation-error" id={errorId}>{error}</small>}
+        </div>
+      )
+    }
+    return (
+      <div className="cowart-agent-elicitation-field" data-boolean="true">
+        <label htmlFor={fieldId}>
+          <input
+            aria-describedby={describedBy}
+            checked={Boolean(value)}
+            id={fieldId}
+            onChange={(event) => onChange(event.target.checked)}
+            type="checkbox"
+          />
+          <span>{label}</span>
+        </label>
+        {field.description && <small id={descriptionId}>{field.description}</small>}
+        {error && <small className="cowart-agent-elicitation-error" id={errorId}>{error}</small>}
+      </div>
+    )
+  }
+
+  if (field.options) {
+    const selectedIndex = field.options.findIndex((option) => Object.is(option.value, value))
+    return (
+      <div className="cowart-agent-elicitation-field">
+        <label htmlFor={fieldId}>{label}</label>
+        {field.description && <small id={descriptionId}>{field.description}</small>}
+        <select
+          aria-describedby={describedBy}
+          id={fieldId}
+          onChange={(event) => {
+            const nextIndex = Number(event.target.value)
+            onChange(Number.isInteger(nextIndex) ? field.options[nextIndex]?.value : undefined)
+          }}
+          required={field.required}
+          value={selectedIndex >= 0 ? String(selectedIndex) : ''}
+        >
+          <option value="">请选择</option>
+          {field.options.map((option, optionIndex) => (
+            <option key={`${fieldId}-option-${optionIndex}`} value={String(optionIndex)}>
+              {option.title}
+            </option>
+          ))}
+        </select>
+        {error && <small className="cowart-agent-elicitation-error" id={errorId}>{error}</small>}
+      </div>
+    )
+  }
+
+  const numeric = field.type === 'number' || field.type === 'integer'
+  return (
+    <div className="cowart-agent-elicitation-field">
+      <label htmlFor={fieldId}>{label}</label>
+      {field.description && <small id={descriptionId}>{field.description}</small>}
+      <input
+        aria-describedby={describedBy}
+        id={fieldId}
+        max={numeric ? field.maximum : undefined}
+        maxLength={!numeric ? field.maxLength : undefined}
+        min={numeric ? field.minimum : undefined}
+        minLength={!numeric ? field.minLength : undefined}
+        onChange={(event) => onChange(event.target.value)}
+        required={field.required}
+        step={field.type === 'integer' ? 1 : numeric ? 'any' : undefined}
+        type={numeric ? 'number' : elicitationInputType(field.format)}
+        value={value ?? ''}
+      />
+      {error && <small className="cowart-agent-elicitation-error" id={errorId}>{error}</small>}
+    </div>
+  )
+}
+
+function ElicitationCard({ request, requestId, responseStatus, onRespond }) {
+  const model = useMemo(() => normalizeElicitationRequest(request, requestId), [request, requestId])
+  const [values, setValues] = useState(() => createElicitationInitialValues(model))
+  const [errors, setErrors] = useState([])
+  const isSending = responseStatus === 'sending'
+
+  useEffect(() => {
+    setValues(createElicitationInitialValues(model))
+    setErrors([])
+  }, [model])
+
+  function errorForField(field) {
+    return errors.find((error) => error.startsWith(field.title)) || ''
+  }
+
+  async function handleFormSubmit(event) {
+    event.preventDefault()
+    if (!model.supported || isSending) return
+    const result = buildElicitationContent(model, values)
+    setErrors(result.errors)
+    if (!result.valid) return
+    await onRespond('accept', result.content)
+  }
+
+  const rejectButton = (
+    <button disabled={isSending} onClick={() => onRespond('decline', null)} type="button">
+      <X aria-hidden="true" size={13} />
+      拒绝
+    </button>
+  )
+
+  return (
+    <section
+      className="cowart-agent-elicitation"
+      aria-labelledby="cowart-agent-elicitation-title"
+      data-mode={model.mode}
+    >
+      <header>
+        <span aria-hidden="true"><ShieldAlert size={15} /></span>
+        <div>
+          <strong id="cowart-agent-elicitation-title">{model.title}</strong>
+          {model.message && <p>{model.message}</p>}
+        </div>
+      </header>
+
+      {model.mode === 'url' && model.supported && (
+        <div className="cowart-agent-elicitation-url">
+          <span>即将前往外部网站</span>
+          <strong>{model.domain}</strong>
+          <small>地址会交给桌面应用验证并打开；画布页面不会直接访问该链接。</small>
+        </div>
+      )}
+
+      {!model.supported && (
+        <div className="cowart-agent-elicitation-unsupported" role="alert">
+          <strong>此请求无法安全呈现</strong>
+          <p>为避免提交错误或不完整的信息，本次只能拒绝。</p>
+          <ul>
+            {model.unsupportedReasons.slice(0, 6).map((reason, index) => (
+              <li key={`${index}:${reason}`}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {model.mode === 'form' && model.supported ? (
+        <form onSubmit={handleFormSubmit}>
+          <div className="cowart-agent-elicitation-fields">
+            {model.fields.map((field, index) => (
+              <ElicitationField
+                error={errorForField(field)}
+                field={field}
+                index={index}
+                key={`${index}:${field.name}`}
+                onChange={(value) => {
+                  setValues((previous) => valueWithField(previous, field.name, value))
+                  setErrors([])
+                }}
+                value={ownValue(values, field.name)}
+              />
+            ))}
+          </div>
+          {errors.length > 0 && (
+            <div className="cowart-agent-elicitation-errors" role="alert">
+              {errors.map((error, index) => <p key={`${index}:${error}`}>{error}</p>)}
+            </div>
+          )}
+          <div className="cowart-agent-elicitation-actions">
+            {rejectButton}
+            <button data-primary="true" disabled={isSending} type="submit">
+              {isSending ? <LoaderCircle aria-hidden="true" className="cowart-spin" size={13} /> : <CheckCircle2 aria-hidden="true" size={13} />}
+              {isSending ? '正在提交…' : '提交并继续'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="cowart-agent-elicitation-actions">
+          {rejectButton}
+          {model.mode === 'url' && model.supported && (
+            <button
+              data-primary="true"
+              disabled={isSending}
+              onClick={() => onRespond('accept', null)}
+              type="button"
+            >
+              {isSending ? <LoaderCircle aria-hidden="true" className="cowart-spin" size={13} /> : <ExternalLink aria-hidden="true" size={13} />}
+              {isSending ? '正在打开…' : '打开并继续'}
+            </button>
+          )}
+        </div>
+      )}
+      {responseStatus === 'error' && (
+        <small className="cowart-agent-elicitation-response-error" role="alert">
+          提交失败，请检查连接后重试。
+        </small>
+      )}
+    </section>
+  )
+}
+
 export function CowartAgentPanel({
   beforeSend,
   bridge,
@@ -322,6 +966,7 @@ export function CowartAgentPanel({
   const [localTask, setLocalTask] = useState(null)
   const [activityItems, setActivityItems] = useState([])
   const [approvalResolution, setApprovalResolution] = useState({ requestId: null, status: 'idle' })
+  const [elicitationResolution, setElicitationResolution] = useState({ requestId: null, status: 'idle' })
   const [isInterrupting, setIsInterrupting] = useState(false)
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false)
   const [isRefreshingCodex, setIsRefreshingCodex] = useState(false)
@@ -427,13 +1072,19 @@ export function CowartAgentPanel({
   const activityPhase = bridgeState.activity?.phase || 'idle'
   const approvalRequestId = approvalRequestIdFromBridgeState(bridgeState)
   const approvalStatus = approvalStatusForRequest(approvalResolution, approvalRequestId)
+  const pendingElicitation = bridgeState.activity?.elicitation ?? null
+  const elicitationRequestId = elicitationRequestIdFromBridgeState(bridgeState)
+  const elicitationStatus = approvalStatusForRequest(elicitationResolution, elicitationRequestId)
   const followsAgentActivity = Boolean(
-    bridgeState.capabilities?.streaming || bridgeState.capabilities?.approvals
+    bridgeState.capabilities?.streaming ||
+    bridgeState.capabilities?.approvals ||
+    bridgeState.capabilities?.elicitation
   )
   const isSending =
     bridgeState.status === 'sending' ||
     bridgeState.pendingTaskIds?.length > 0 ||
-    (followsAgentActivity && ['submitting', 'running', 'waiting_approval'].includes(activityPhase))
+    Boolean(pendingElicitation) ||
+    (followsAgentActivity && ['submitting', 'running', 'waiting_approval', 'waiting_elicitation'].includes(activityPhase))
   const selectedCount = Number(context?.selectedCount) || 0
   const pageShapeCount = Number(context?.pageShapeCount) || 0
   const scopeLabel = selectedCount > 0 ? `已选 ${selectedCount} 项` : `页面 ${pageShapeCount} 项`
@@ -523,6 +1174,29 @@ export function CowartAgentPanel({
     }
   }
 
+  async function handleElicitation(action, content) {
+    const requestId = elicitationRequestId
+    if (
+      requestId == null ||
+      requestId === '' ||
+      typeof bridge?.respondElicitation !== 'function' ||
+      elicitationStatus === 'sending'
+    ) {
+      return
+    }
+
+    setElicitationResolution({ requestId, status: 'sending' })
+    setSendError('')
+    try {
+      await bridge.respondElicitation(requestId, { action, content })
+      setElicitationResolution({ requestId, status: action })
+    } catch (error) {
+      console.error(error)
+      setElicitationResolution({ requestId, status: 'error' })
+      setSendError(error?.message || '无法提交补充信息。')
+    }
+  }
+
   async function handleInterrupt() {
     if (typeof bridge?.interrupt !== 'function' || isInterrupting) return
     setIsInterrupting(true)
@@ -545,6 +1219,7 @@ export function CowartAgentPanel({
     setSendError('')
     setActivityItems([])
     setApprovalResolution({ requestId: null, status: 'idle' })
+    setElicitationResolution({ requestId: null, status: 'idle' })
     const taskId = createTaskId()
     let taskContext = readContext(contextProvider) ?? context ?? {}
     const startedAt = new Date().toISOString()
@@ -734,7 +1409,7 @@ export function CowartAgentPanel({
           <AgentTaskStatus task={recentTask} />
         </section>
 
-        {(activityItems.length > 0 || (followsAgentActivity && activityPhase !== 'idle')) && (
+        {(activityItems.length > 0 || pendingElicitation || (followsAgentActivity && activityPhase !== 'idle')) && (
           <section className="cowart-agent-activity" aria-labelledby="cowart-agent-activity-title">
             <div className="cowart-agent-section-heading">
               <span id="cowart-agent-activity-title">Agent 动态</span>
@@ -806,6 +1481,15 @@ export function CowartAgentPanel({
                   </small>
                 )}
               </div>
+            )}
+            {pendingElicitation && elicitationRequestId != null && (
+              <ElicitationCard
+                key={String(elicitationRequestId)}
+                onRespond={handleElicitation}
+                request={pendingElicitation}
+                requestId={elicitationRequestId}
+                responseStatus={elicitationStatus}
+              />
             )}
           </section>
         )}

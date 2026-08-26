@@ -8,6 +8,10 @@ import {
   writeCowartSelectionState,
   writeCowartViewState
 } from '../mcp/lib/canvas-storage.mjs'
+import {
+  normalizeMcpElicitationUrl,
+  validateMcpElicitationResponse
+} from './elicitation.mjs'
 
 export const IPC_CHANNELS = Object.freeze({
   bootstrap: 'yogurt-agent:bootstrap',
@@ -18,6 +22,7 @@ export const IPC_CHANNELS = Object.freeze({
   selectWorkspace: 'yogurt-agent:select-workspace',
   startCodexLogin: 'yogurt-agent:start-codex-login',
   respondApproval: 'yogurt-agent:respond-approval',
+  respondElicitation: 'yogurt-agent:respond-elicitation',
   sendTask: 'yogurt-agent:send-task',
   interrupt: 'yogurt-agent:interrupt'
 })
@@ -258,7 +263,8 @@ export class YogurtDesktopRuntime extends EventEmitter {
         sendTask: available,
         steer: available,
         interrupt: available,
-        approvals: available
+        approvals: available,
+        elicitations: available
       }),
       security: serviceCapabilities.security || frozenSecurityCapabilities(),
       setup: this.getSetup()
@@ -338,6 +344,15 @@ export class YogurtDesktopRuntime extends EventEmitter {
   async respondApproval(requestId, decision) {
     if (!this.#agentService) throw new Error('Codex Agent 尚未连接。')
     return this.#agentService.respondApproval(requestId, decision)
+  }
+
+  getPendingElicitation(requestId) {
+    return this.#agentService?.getPendingElicitation?.(requestId) ?? null
+  }
+
+  async respondElicitation(requestId, response) {
+    if (!this.#agentService) throw new Error('Codex Agent 尚未连接。')
+    return this.#agentService.respondElicitation(requestId, response)
   }
 
   async interrupt() {
@@ -478,6 +493,28 @@ export function registerYogurtAgentIpc({
     [IPC_CHANNELS.respondApproval, async (event, payload) => {
       trustedSender(event)
       return agentService.respondApproval(payload?.requestId, payload?.decision)
+    }],
+    [IPC_CHANNELS.respondElicitation, async (event, payload) => {
+      trustedSender(event)
+      const request = agentService.getPendingElicitation?.(payload?.requestId)
+      if (!request) {
+        throw new Error(`No pending MCP elicitation exists for request ${String(payload?.requestId || '')}.`)
+      }
+      const response = validateMcpElicitationResponse(request, {
+        action: payload?.action,
+        content: payload?.content
+      })
+      if (request.mode === 'url' && response.action === 'accept') {
+        if (typeof openExternal !== 'function') {
+          throw new Error('Yogurt AI cannot open this MCP authorization page in the current host.')
+        }
+        try {
+          await openExternal(normalizeMcpElicitationUrl(request.externalUrl))
+        } catch (_error) {
+          throw new Error(`Yogurt AI could not open the authorization page for ${request.publicRequest.urlHost}.`)
+        }
+      }
+      return agentService.respondElicitation(payload?.requestId, response)
     }],
     [IPC_CHANNELS.interrupt, async (event) => {
       trustedSender(event)

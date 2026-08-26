@@ -187,7 +187,10 @@ body {
 .cowart-agent-close:focus-visible,
 .cowart-agent-panel-launcher:focus-visible,
 .cowart-agent-quick-grid button:focus-visible,
-.cowart-agent-composer button:focus-visible {
+.cowart-agent-composer button:focus-visible,
+.cowart-agent-elicitation button:focus-visible,
+.cowart-agent-elicitation input:focus-visible,
+.cowart-agent-elicitation select:focus-visible {
   outline: 2px solid var(--cowart-panel-accent);
   outline-offset: 2px;
 }
@@ -618,6 +621,241 @@ body {
   line-height: 1.4;
 }
 
+.cowart-agent-elicitation {
+  margin-top: 8px;
+  padding: 12px;
+  background: #f7f6ff;
+  border: 1px solid #d9d6f4;
+  border-radius: 10px;
+}
+
+.cowart-agent-elicitation > header {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.cowart-agent-elicitation > header > span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  flex: 0 0 25px;
+  color: var(--cowart-panel-accent-strong);
+  background: var(--cowart-panel-accent-soft);
+  border-radius: 7px;
+}
+
+.cowart-agent-elicitation > header > div {
+  min-width: 0;
+}
+
+.cowart-agent-elicitation > header strong {
+  display: block;
+  color: var(--cowart-panel-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cowart-agent-elicitation > header p {
+  margin: 3px 0 0;
+  color: var(--cowart-panel-text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.cowart-agent-elicitation form {
+  margin-top: 11px;
+}
+
+.cowart-agent-elicitation-fields {
+  display: flex;
+  gap: 10px;
+  flex-direction: column;
+}
+
+.cowart-agent-elicitation-field {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.cowart-agent-elicitation-field > label,
+.cowart-agent-elicitation-field > legend {
+  display: block;
+  padding: 0;
+  margin: 0 0 4px;
+  color: var(--cowart-panel-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.cowart-agent-elicitation-field > label > span[aria-hidden="true"],
+.cowart-agent-elicitation-field > legend > span[aria-hidden="true"] {
+  color: #b43d50;
+}
+
+.cowart-agent-elicitation-field > small {
+  display: block;
+  margin: -1px 0 5px;
+  color: var(--cowart-panel-text-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.cowart-agent-elicitation-field > input:not([type="checkbox"]),
+.cowart-agent-elicitation-field > select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  color: var(--cowart-panel-text);
+  font: inherit;
+  font-size: 11px;
+  background: var(--cowart-panel-card);
+  border: 1px solid var(--cowart-panel-border-strong);
+  border-radius: 7px;
+  box-sizing: border-box;
+}
+
+.cowart-agent-elicitation-field[data-boolean="true"] > label,
+.cowart-agent-elicitation-options label {
+  display: flex;
+  min-height: 28px;
+  margin: 0;
+  gap: 7px;
+  align-items: center;
+  color: var(--cowart-panel-text);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cowart-agent-elicitation-field input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex: 0 0 15px;
+  accent-color: var(--cowart-panel-accent-strong);
+}
+
+.cowart-agent-elicitation-options {
+  display: grid;
+  padding: 5px 8px;
+  gap: 1px 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--cowart-panel-card);
+  border: 1px solid var(--cowart-panel-border);
+  border-radius: 7px;
+}
+
+.cowart-agent-elicitation-error,
+.cowart-agent-elicitation-errors,
+.cowart-agent-elicitation-response-error {
+  color: #a13946 !important;
+}
+
+.cowart-agent-elicitation-errors {
+  margin-top: 8px;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.cowart-agent-elicitation-errors p {
+  margin: 2px 0;
+}
+
+.cowart-agent-elicitation-actions {
+  display: flex;
+  margin-top: 11px;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.cowart-agent-elicitation button {
+  display: inline-flex;
+  min-height: 30px;
+  padding: 0 10px;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  color: #5f5960;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--cowart-panel-card);
+  border: 1px solid var(--cowart-panel-border-strong);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.cowart-agent-elicitation button[data-primary="true"] {
+  color: #fff;
+  background: var(--cowart-panel-accent-strong);
+  border-color: var(--cowart-panel-accent-strong);
+}
+
+.cowart-agent-elicitation button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.cowart-agent-elicitation-url,
+.cowart-agent-elicitation-unsupported {
+  padding: 9px 10px;
+  margin-top: 10px;
+  background: var(--cowart-panel-card);
+  border: 1px solid var(--cowart-panel-border);
+  border-radius: 8px;
+}
+
+.cowart-agent-elicitation-url > span,
+.cowart-agent-elicitation-url > small {
+  display: block;
+  color: var(--cowart-panel-text-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.cowart-agent-elicitation-url > strong {
+  display: block;
+  margin: 3px 0;
+  color: var(--cowart-panel-text);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.cowart-agent-elicitation-unsupported {
+  color: #7a3039;
+  background: #fff3f4;
+  border-color: #efcdd1;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.cowart-agent-elicitation-unsupported > strong {
+  font-size: 10px;
+}
+
+.cowart-agent-elicitation-unsupported p {
+  margin: 3px 0;
+}
+
+.cowart-agent-elicitation-unsupported ul {
+  padding-left: 15px;
+  margin: 4px 0 0;
+}
+
+.cowart-agent-elicitation-response-error {
+  display: block;
+  margin-top: 7px;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
 .cowart-agent-composer {
   padding: 13px 14px max(14px, env(safe-area-inset-bottom));
   flex: 0 0 auto;
@@ -811,6 +1049,23 @@ body {
     color: #dedce4;
     background: #2c2c31;
     border-color: #55515a;
+  }
+
+  .cowart-agent-elicitation {
+    background: #302e49;
+    border-color: #49456f;
+  }
+
+  .cowart-agent-elicitation-unsupported {
+    color: #f0b2ba;
+    background: #442d32;
+    border-color: #684148;
+  }
+
+  .cowart-agent-elicitation-error,
+  .cowart-agent-elicitation-errors,
+  .cowart-agent-elicitation-response-error {
+    color: #efa9b2 !important;
   }
 
   .cowart-agent-setup-card {

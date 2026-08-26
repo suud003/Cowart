@@ -47,6 +47,7 @@ test('Codex host adapter prefers the Electron preload bridge', async () => {
     sendTask: true,
     streaming: false,
     approvals: false,
+    elicitation: false,
     interrupt: false,
     message: { image: true }
   })
@@ -245,6 +246,130 @@ test('AgentBridge normalizes streamed App Server activity and completes the acce
     'approval.requested',
     'turn.completed'
   ])
+})
+
+test('AgentBridge accepts thread-scoped elicitations without turnId, forwards responses, and clears them', async () => {
+  let emitAgentEvent
+  const responses = []
+  const adapter = {
+    getCapabilities: () => ({
+      available: true,
+      provider: 'desktop',
+      sendTask: true,
+      streaming: true,
+      elicitation: true
+    }),
+    sendTask: async () => ({ threadId: 'thread:one', turnId: 'turn:one' }),
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => { emitAgentEvent = null }
+    },
+    respondElicitation: async (requestId, response) => {
+      responses.push([requestId, response])
+      return { delivered: true }
+    }
+  }
+  const bridge = createAgentBridge(adapter, { taskIdFactory: () => 'task:elicitation' })
+  await bridge.sendTask('ask me for a choice')
+  emitAgentEvent({
+    id: 'request:form',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      threadId: 'thread:one',
+      turnId: null,
+      mode: 'form',
+      message: 'Choose a format',
+      requestedSchema: {
+        type: 'object',
+        properties: { format: { type: 'string', enum: ['svg', 'html'] } }
+      }
+    }
+  })
+
+  assert.equal(bridge.getState().lastEvent.type, 'elicitation.requested')
+  assert.equal(bridge.getState().activity.phase, 'waiting_elicitation')
+  assert.equal(bridge.getState().activity.elicitation.requestId, 'request:form')
+  assert.equal(bridge.getState().activity.elicitation.message, 'Choose a format')
+
+  emitAgentEvent({
+    type: 'elicitation.resolved',
+    threadId: 'thread:one',
+    requestId: 'request:form'
+  })
+  assert.equal(bridge.getState().activity.phase, 'running')
+  assert.equal(bridge.getState().activity.elicitation, null)
+
+  emitAgentEvent({
+    type: 'elicitation.requested',
+    requestId: 'request:form-2',
+    threadId: 'thread:one',
+    turnId: 'turn:one',
+    mode: 'form',
+    message: 'Choose again',
+    requestedSchema: {
+      type: 'object',
+      properties: { format: { type: 'string', enum: ['svg', 'html'] } }
+    }
+  })
+
+  const response = { action: 'accept', content: { format: 'svg' } }
+  assert.deepEqual(await bridge.respondElicitation('request:form-2', response), { delivered: true })
+  assert.deepEqual(responses, [['request:form-2', response]])
+  assert.equal(bridge.getState().lastEvent.type, 'elicitation.resolved')
+  assert.equal(bridge.getState().activity.phase, 'running')
+  assert.equal(bridge.getState().activity.elicitation, null)
+})
+
+test('AgentBridge restores a standalone pending elicitation after the renderer bridge is rebuilt', () => {
+  let emitAgentEvent
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({
+      available: true,
+      provider: 'desktop',
+      sendTask: true,
+      streaming: true,
+      elicitation: true
+    }),
+    sendTask: async () => ({ accepted: true }),
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => { emitAgentEvent = null }
+    }
+  })
+
+  emitAgentEvent({
+    type: 'elicitation.requested',
+    requestId: 'request:restored',
+    threadId: 'thread:restored',
+    turnId: null,
+    mode: 'form',
+    message: 'Restore this request',
+    requestedSchema: { type: 'object', properties: {} }
+  })
+
+  assert.equal(bridge.getState().activity.phase, 'waiting_elicitation')
+  assert.equal(bridge.getState().activity.elicitation.requestId, 'request:restored')
+})
+
+test('Codex host adapter exposes only the preload elicitation responder', async () => {
+  const calls = []
+  const adapter = createCodexHostAgentAdapter(eventWindow({
+    yogurtAgent: {
+      getCapabilities: () => ({ streaming: true, elicitation: true }),
+      sendTask: async () => ({ accepted: true }),
+      respondElicitation: async (requestId, response) => {
+        calls.push([requestId, response])
+        return { delivered: true }
+      }
+    }
+  }))
+
+  assert.equal(adapter.getCapabilities().elicitation, true)
+  assert.deepEqual(
+    await adapter.respondElicitation('request:url', { action: 'accept', content: null }),
+    { delivered: true }
+  )
+  assert.deepEqual(calls, [['request:url', { action: 'accept', content: null }]])
 })
 
 test('AgentBridge ignores streamed terminal events from a different turn', async () => {

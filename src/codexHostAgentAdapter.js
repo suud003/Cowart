@@ -19,6 +19,7 @@ function normalizedHostCapabilities(host) {
       sendTask: false,
       streaming: false,
       approvals: false,
+      elicitation: false,
       interrupt: false,
       message: { image: false }
     }
@@ -33,6 +34,14 @@ function normalizedHostCapabilities(host) {
     sendTask: canSendTask,
     streaming: canSendTask && Boolean(capabilities.streaming ?? capabilities.agent?.streaming ?? host.subscribe),
     approvals: canSendTask && Boolean(capabilities.approvals ?? capabilities.agent?.approvals ?? host.respondApproval),
+    elicitation: canSendTask && Boolean(
+      capabilities.elicitation ??
+      capabilities.elicitations ??
+      capabilities.mcpElicitation ??
+      capabilities.agent?.elicitation ??
+      capabilities.agent?.elicitations ??
+      host.respondElicitation
+    ),
     interrupt: canSendTask && Boolean(capabilities.interrupt ?? capabilities.agent?.interrupt ?? host.interrupt),
     message: {
       image: Boolean(capabilities.message?.image ?? capabilities.messageImages)
@@ -122,6 +131,9 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
         respondApproval: typeof yogurtAgent.respondApproval === 'function'
           ? (requestId, decision) => yogurtAgent.respondApproval(requestId, decision)
           : null,
+        respondElicitation: typeof yogurtAgent.respondElicitation === 'function'
+          ? (requestId, response) => yogurtAgent.respondElicitation(requestId, response)
+          : null,
         interrupt: typeof yogurtAgent.interrupt === 'function'
           ? (options) => yogurtAgent.interrupt(options)
           : null,
@@ -154,6 +166,7 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
           : null,
         subscribe: false,
         respondApproval: null,
+        respondElicitation: null,
         interrupt: null,
         capabilities
       }
@@ -169,6 +182,7 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
           : null,
         subscribe: false,
         respondApproval: null,
+        respondElicitation: null,
         interrupt: null,
         capabilities: readOpenAiCapabilities(openai)
       }
@@ -190,6 +204,7 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
           sendTask: null,
           subscribe: false,
           respondApproval: null,
+          respondElicitation: null,
           interrupt: null,
           capabilities: globalCapabilities
         }
@@ -262,6 +277,15 @@ export function createCodexHostAgentAdapter(windowObject = globalThis.window) {
       const host = currentHost()
       if (!host?.respondApproval) throw new Error('The current agent host does not support approvals.')
       return await host.respondApproval(requestId, decision)
+    },
+
+    async respondElicitation(requestId, response) {
+      if (disposed) throw new Error('The Codex host adapter has been disposed.')
+      const host = currentHost()
+      if (!host?.respondElicitation) {
+        throw new Error('The current agent host does not support elicitation responses.')
+      }
+      return await host.respondElicitation(requestId, response)
     },
 
     async interrupt(options) {

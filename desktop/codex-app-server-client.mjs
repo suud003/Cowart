@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { createInterface } from 'node:readline'
 
+import { MCP_ELICITATION_ACTIONS, MCP_ELICITATION_METHOD } from './elicitation.mjs'
+
 const DEFAULT_CLIENT_INFO = Object.freeze({
   name: 'yogurt_ai_desktop',
   title: 'Yogurt AI Desktop',
@@ -21,6 +23,7 @@ const APPROVAL_REQUEST_METHODS = new Set([
   'item/fileChange/requestApproval'
 ])
 const LOGIN_APP_BRANDS = new Set(['codex', 'chatgpt'])
+const ELICITATION_ACTION_SET = new Set(MCP_ELICITATION_ACTIONS)
 
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -350,6 +353,29 @@ export class CodexAppServerClient extends EventEmitter {
     return { requestId: key, decision }
   }
 
+  async respondToElicitation(requestId, response) {
+    const key = String(requestId)
+    const request = this.#pendingServerRequests.get(key)
+    if (!request || request.method !== MCP_ELICITATION_METHOD) {
+      throw new Error(`No pending MCP elicitation exists for request ${key}.`)
+    }
+    if (!isRecord(response) || !ELICITATION_ACTION_SET.has(response.action)) {
+      throw new TypeError('MCP elicitation response action must be accept, decline, or cancel.')
+    }
+    if (!Object.prototype.hasOwnProperty.call(response, 'content')) {
+      throw new TypeError('MCP elicitation response must include content.')
+    }
+    await this.#write({
+      id: request.id,
+      result: {
+        action: response.action,
+        content: response.content
+      }
+    })
+    this.#pendingServerRequests.delete(key)
+    return { requestId: key, action: response.action }
+  }
+
   async respondToServerRequest(requestId, result) {
     const key = String(requestId)
     const request = this.#pendingServerRequests.get(key)
@@ -589,6 +615,7 @@ export const CODEX_APP_SERVER_PROTOCOL = Object.freeze({
   websocket: false,
   experimentalApiDefault: false,
   managedChatgptLogin: true,
+  mcpElicitation: true,
   threadLifecycleTimeoutMs: THREAD_LIFECYCLE_TIMEOUT_MS,
   approvalDecisions: Object.freeze(Array.from(SIMPLE_APPROVAL_DECISIONS))
 })

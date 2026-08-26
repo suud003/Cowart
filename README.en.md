@@ -44,7 +44,7 @@ flowchart LR
   A["Documents / notes / images / TAPD"] --> B["Organize evidence, hypotheses, and questions on canvas"]
   B --> C["Select objects and hand a task to Codex Agent"]
   C --> D["Agent creates diagrams / PRDs / prototypes"]
-  D --> E["Watch progress, approve actions, review results"]
+  D --> E["Watch progress, add context, approve actions"]
   E --> F["Return to canvas and export deliverables"]
   F --> B
 ```
@@ -62,7 +62,7 @@ flowchart LR
 
 The desktop app includes a persistent Codex Agent workbench on the right. It knows the active project, page, selected objects, and their stable IDs. Yogurt AI saves the latest canvas before sending a task, so the agent works from the real structure in front of you instead of a screenshot with drifting coordinates.
 
-Write any request or start with `Organize selection`, `Generate PRD`, or `Generate diagram`. While Codex works, the panel streams replies, plans, change summaries, and task status. You can approve or reject controlled actions and interrupt an active turn. Reopening the same project resumes its saved agent session.
+Write any request or start with `Organize selection`, `Generate PRD`, or `Generate diagram`. While Codex works, the panel streams replies, plans, change summaries, and task status. When the agent needs a scope, choice, or parameter, a structured form appears directly in the activity stream. External authorization requests show only the destination domain and open through the desktop app after your explicit confirmation. You can also approve or reject controlled actions and interrupt an active turn. Reopening the same project resumes its saved agent session.
 
 After you import documents, images, and notes, Yogurt AI preserves source paths and verbatim excerpts while recording agent summaries and inference separately. Work with cards, relations, zones, and freehand annotations as you would on a whiteboard, or ask the agent to build a panorama around one question.
 

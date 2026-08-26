@@ -1,6 +1,12 @@
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
 
+import {
+  MCP_ELICITATION_METHOD,
+  normalizeMcpElicitationRequest,
+  validateMcpElicitationResponse
+} from './elicitation.mjs'
+
 const COWART_MCP_SERVER = 'cowart_thinking_mcp'
 const COWART_TOOL_NAMES = Object.freeze([
   'copy_cowart_image_to_clipboard',
@@ -130,6 +136,7 @@ function loginState(status = 'idle', fields = {}) {
 }
 
 export class YogurtAgentService extends EventEmitter {
+  #activeElicitationRequestId = null
   #activeThreadId = null
   #activeTurnId = null
   #authState = initialAuthState()
@@ -140,6 +147,7 @@ export class YogurtAgentService extends EventEmitter {
   #loginAuthUrl = null
   #loginState = loginState()
   #onThreadChanged
+  #pendingElicitations = new Map()
   #projectDir
   #startPromise = null
   #status = 'idle'
@@ -209,6 +217,9 @@ export class YogurtAgentService extends EventEmitter {
   }
 
   getState() {
+    const activeElicitation = this.#activeElicitationRequestId
+      ? this.#pendingElicitations.get(this.#activeElicitationRequestId)
+      : null
     return Object.freeze({
       status: this.#status,
       threadId: this.#activeThreadId,
@@ -219,6 +230,10 @@ export class YogurtAgentService extends EventEmitter {
         request.method === 'item/commandExecution/requestApproval' ||
         request.method === 'item/fileChange/requestApproval'
       ).length ?? 0,
+      pendingElicitations: this.#pendingElicitations.size,
+      pendingElicitationRequests: Object.freeze(
+        activeElicitation ? [activeElicitation.publicRequest] : []
+      ),
       lastError: this.#lastError,
       auth: this.#authState,
       login: this.#loginState,
@@ -382,6 +397,22 @@ export class YogurtAgentService extends EventEmitter {
     return Object.freeze({ accepted: true, ...result })
   }
 
+  getPendingElicitation(requestId) {
+    const normalizedRequestId = requiredString(requestId, 'requestId', 512)
+    if (normalizedRequestId !== this.#activeElicitationRequestId) return null
+    return this.#pendingElicitations.get(normalizedRequestId) ?? null
+  }
+
+  async respondElicitation(requestId, response) {
+    await this.start()
+    const normalizedRequestId = requiredString(requestId, 'requestId', 512)
+    const request = this.getPendingElicitation(normalizedRequestId)
+    if (!request) throw new Error(`No pending MCP elicitation exists for request ${normalizedRequestId}.`)
+    const validated = validateMcpElicitationResponse(request, response)
+    const result = await this.#client.respondToElicitation(normalizedRequestId, validated)
+    return Object.freeze({ accepted: true, ...result })
+  }
+
   async interrupt() {
     await this.start()
     if (!this.#activeThreadId || !this.#activeTurnId) {
@@ -422,6 +453,8 @@ export class YogurtAgentService extends EventEmitter {
     await this.#client.dispose()
     this.#status = 'stopped'
     this.#activeTurnId = null
+    this.#activeElicitationRequestId = null
+    this.#pendingElicitations.clear()
     this.#threadNeedsResume = Boolean(this.#activeThreadId)
     this.#emitEvent(normalizedEvent('state.changed', { state: this.getState() }))
   }
@@ -517,7 +550,8 @@ export class YogurtAgentService extends EventEmitter {
         sendTask: true,
         steer: true,
         interrupt: true,
-        approvals: true
+        approvals: true,
+        elicitations: true
       }),
       security: Object.freeze({
         arbitraryRpc: false,
@@ -542,6 +576,8 @@ export class YogurtAgentService extends EventEmitter {
         this.#status = 'failed'
         this.#lastError = details.error || details.stderr || 'Codex App Server failed.'
         this.#activeTurnId = null
+        this.#activeElicitationRequestId = null
+        this.#pendingElicitations.clear()
         this.#threadNeedsResume = Boolean(this.#activeThreadId)
         this.#emitError(new Error(this.#lastError), 'sidecar')
       }
@@ -644,10 +680,24 @@ export class YogurtAgentService extends EventEmitter {
       return
     }
     if (method === 'serverRequest/resolved') {
-      this.#emitEvent(normalizedEvent('approval.resolved', {
-        threadId: params.threadId ?? this.#activeThreadId,
-        requestId: params.requestId == null ? null : String(params.requestId)
-      }))
+      const requestId = params.requestId == null ? null : String(params.requestId)
+      if (requestId && this.#pendingElicitations.has(requestId)) {
+        const wasActive = requestId === this.#activeElicitationRequestId
+        this.#pendingElicitations.delete(requestId)
+        if (wasActive) {
+          this.#activeElicitationRequestId = null
+          this.#emitEvent(normalizedEvent('elicitation.resolved', {
+            threadId: params.threadId ?? this.#activeThreadId,
+            requestId
+          }))
+          this.#publishNextElicitation()
+        }
+      } else {
+        this.#emitEvent(normalizedEvent('approval.resolved', {
+          threadId: params.threadId ?? this.#activeThreadId,
+          requestId
+        }))
+      }
       return
     }
     if (method === 'error') {
@@ -661,6 +711,33 @@ export class YogurtAgentService extends EventEmitter {
   }
 
   #handleServerRequest(request) {
+    if (request.method === MCP_ELICITATION_METHOD) {
+      try {
+        const normalized = normalizeMcpElicitationRequest(request.requestId, request.params)
+        if (this.#pendingElicitations.has(normalized.requestId)) {
+          throw new TypeError(`Duplicate MCP elicitation request: ${normalized.requestId}`)
+        }
+        this.#pendingElicitations.set(normalized.requestId, normalized)
+        this.#publishNextElicitation()
+      } catch (error) {
+        this.#emitError(error, 'protocol', {
+          requestId: String(request.requestId),
+          rejectedMethod: request.method
+        })
+        Promise.resolve(
+          this.#client.rejectServerRequest?.(request.requestId, {
+            code: -32602,
+            message: String(error?.message || 'Invalid MCP elicitation request.')
+          })
+        ).catch((rejectError) => {
+          this.#emitError(rejectError, 'protocol', {
+            requestId: String(request.requestId),
+            rejectedMethod: request.method
+          })
+        })
+      }
+      return
+    }
     const kind = approvalKind(request.method)
     if (kind === 'unsupported') {
       const message = `Unsupported Codex server request: ${request.method}`
@@ -704,6 +781,14 @@ export class YogurtAgentService extends EventEmitter {
     }))
   }
 
+  #publishNextElicitation() {
+    if (this.#activeElicitationRequestId) return
+    const next = this.#pendingElicitations.values().next().value
+    if (!next) return
+    this.#activeElicitationRequestId = next.requestId
+    this.#emitEvent(normalizedEvent('elicitation.requested', next.publicRequest))
+  }
+
   #emitEvent(event) {
     this.emit('event', event)
   }
@@ -722,6 +807,8 @@ export const YOGURT_DESKTOP_CAPABILITY_CONTRACT = Object.freeze({
     'diff.updated',
     'approval.requested',
     'approval.resolved',
+    'elicitation.requested',
+    'elicitation.resolved',
     'turn.started',
     'turn.completed',
     'error',

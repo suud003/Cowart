@@ -1,16 +1,26 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import * as React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 
+let CowartAgentPanel
 let buildAgentPanelMessage
+let buildElicitationContent
+let createElicitationInitialValues
 let approvalStatusForRequest
 let codexLoginButtonLabel
 let connectionPresentation
+let normalizeElicitationRequest
+let safeElicitationDomain
 let taskStatusPresentation
 let viteServer
+let previousReactGlobal
 
 test.before(async () => {
+  previousReactGlobal = globalThis.React
+  globalThis.React = React
   viteServer = await createServer({
     root: process.cwd(),
     configFile: false,
@@ -19,16 +29,23 @@ test.before(async () => {
     server: { middlewareMode: true }
   })
   ;({
+    CowartAgentPanel,
     buildAgentPanelMessage,
+    buildElicitationContent,
+    createElicitationInitialValues,
     approvalStatusForRequest,
     codexLoginButtonLabel,
     connectionPresentation,
+    normalizeElicitationRequest,
+    safeElicitationDomain,
     taskStatusPresentation
   } = await viteServer.ssrLoadModule('/src/AgentPanel.jsx'))
 })
 
 test.after(async () => {
   await viteServer?.close()
+  if (previousReactGlobal === undefined) delete globalThis.React
+  else globalThis.React = previousReactGlobal
 })
 
 test('Agent panel tasks include stable page and selection IDs instead of screenshot coordinates', () => {
@@ -119,4 +136,194 @@ test('Agent panel presents desktop onboarding before generic connection state', 
   assert.equal(codexLoginButtonLabel('login-required'), '登录 Codex')
   assert.equal(codexLoginButtonLabel('login-pending'), '重新打开登录页')
   assert.equal(codexLoginButtonLabel('login-pending', true), '正在打开…')
+})
+
+test('elicitation forms preserve supported primitive and multi-select values', () => {
+  const request = {
+    mode: 'form',
+    message: '补齐发布参数',
+    requestedSchema: {
+      type: 'object',
+      required: ['title', 'audience', 'score'],
+      properties: {
+        title: {
+          type: 'string',
+          title: '标题',
+          description: '用于画布卡片',
+          minLength: 2,
+          maxLength: 40,
+          default: '杀戮尖塔'
+        },
+        contact: { type: 'string', title: '邮箱', format: 'email' },
+        audience: {
+          type: 'string',
+          title: '受众',
+          oneOf: [
+            { const: 'core', title: '核心玩家' },
+            { const: 'new', title: '新玩家' }
+          ]
+        },
+        score: { type: 'integer', title: '优先级', minimum: 1, maximum: 5 },
+        public: { type: 'boolean', title: '公开', default: true },
+        platforms: {
+          type: 'array',
+          title: '平台',
+          minItems: 1,
+          maxItems: 2,
+          items: {
+            anyOf: [
+              { const: 'pc', title: 'PC' },
+              { const: 'mobile', title: '移动端' }
+            ]
+          }
+        }
+      }
+    }
+  }
+  const model = normalizeElicitationRequest(request, 'request:form')
+  const initial = createElicitationInitialValues(model)
+
+  assert.equal(model.supported, true)
+  assert.equal(model.fields.length, 6)
+  assert.equal(initial.title, '杀戮尖塔')
+  assert.equal(initial.public, true)
+  const result = buildElicitationContent(model, {
+    ...initial,
+    audience: 'core',
+    score: '4',
+    platforms: ['pc', 'mobile']
+  })
+  assert.equal(result.valid, true)
+  assert.deepEqual(result.content, {
+    title: '杀戮尖塔',
+    audience: 'core',
+    score: 4,
+    public: true,
+    platforms: ['pc', 'mobile']
+  })
+})
+
+test('optional boolean and multi-select fields can remain omitted', () => {
+  const model = normalizeElicitationRequest({
+    mode: 'form',
+    requestedSchema: {
+      type: 'object',
+      properties: {
+        includeRisks: { type: 'boolean', title: '标记风险' },
+        systems: {
+          type: 'array',
+          title: '覆盖系统',
+          minItems: 1,
+          items: { type: 'string', enum: ['core', 'combat'] }
+        }
+      }
+    }
+  })
+  const initial = createElicitationInitialValues(model)
+  const omitted = buildElicitationContent(model, initial)
+
+  assert.equal(initial.includeRisks, undefined)
+  assert.deepEqual(initial.systems, [])
+  assert.equal(omitted.valid, true)
+  assert.deepEqual(omitted.content, {})
+  assert.deepEqual(
+    buildElicitationContent(model, { includeRisks: false, systems: ['core'] }).content,
+    { includeRisks: false, systems: ['core'] }
+  )
+})
+
+test('unsupported elicitation fields fail closed instead of producing lossy content', () => {
+  const model = normalizeElicitationRequest({
+    mode: 'form',
+    requestedSchema: {
+      type: 'object',
+      properties: {
+        nested: { type: 'object', title: '<img src=x onerror=alert(1)>' }
+      }
+    }
+  })
+  const result = buildElicitationContent(model, { nested: { unsafe: true } })
+
+  assert.equal(model.supported, false)
+  assert.match(model.unsupportedReasons[0], /暂不支持 object 类型/)
+  assert.deepEqual(result, {
+    valid: false,
+    content: null,
+    errors: ['此请求无法安全提交。']
+  })
+})
+
+test('elicitation URL presentation exposes only safe HTTPS domains', () => {
+  assert.equal(safeElicitationDomain('https://accounts.example.com/authorize?secret=one'), 'accounts.example.com')
+  assert.equal(safeElicitationDomain('http://accounts.example.com/authorize'), '')
+  assert.equal(safeElicitationDomain('javascript:alert(1)'), '')
+  assert.equal(safeElicitationDomain('data:text/html,<script>alert(1)</script>'), '')
+
+  const model = normalizeElicitationRequest({
+    mode: 'url',
+    urlHost: 'accounts.example.com',
+    message: '<script>alert(1)</script>'
+  }, 'request:url')
+  assert.equal(model.supported, true)
+  assert.equal(model.domain, 'accounts.example.com')
+  assert.equal(model.message, '<script>alert(1)</script>')
+  assert.equal(Object.hasOwn(model, 'url'), false)
+})
+
+test('elicitation content creation does not allow prototype pollution', () => {
+  const request = JSON.parse('{"mode":"form","requestedSchema":{"type":"object","required":["__proto__"],"properties":{"__proto__":{"type":"string","title":"Safe"}}}}')
+  const values = JSON.parse('{"__proto__":"kept as data"}')
+  const result = buildElicitationContent(request, values)
+
+  assert.equal(result.valid, true)
+  assert.equal(Object.prototype.polluted, undefined)
+  assert.equal(Object.prototype.hasOwnProperty.call(result.content, '__proto__'), true)
+  assert.equal(result.content.__proto__, 'kept as data')
+})
+
+test('elicitation URL UI escapes server text and never exposes a renderer link', () => {
+  const state = {
+    status: 'sending',
+    capabilities: {
+      available: true,
+      provider: 'desktop',
+      sendTask: true,
+      streaming: true,
+      elicitation: true,
+      message: { image: false }
+    },
+    pendingTaskIds: [],
+    session: { threadId: 'thread:one', turnId: 'turn:one' },
+    activity: {
+      phase: 'waiting_elicitation',
+      message: '',
+      plan: null,
+      diff: null,
+      approval: null,
+      elicitation: {
+        requestId: 'request:url',
+        mode: 'url',
+        message: '<img src=x onerror=alert(1)>',
+        urlHost: 'accounts.example.com'
+      }
+    },
+    lastTask: null,
+    lastEvent: { type: 'elicitation.requested', requestId: 'request:url' }
+  }
+  const markup = renderToStaticMarkup(React.createElement(CowartAgentPanel, {
+    bridge: {
+      getState: () => state,
+      refreshCapabilities: () => state.capabilities,
+      respondElicitation: async () => ({ delivered: true })
+    },
+    contextProvider: () => ({ projectName: 'Test', pageShapeCount: 0 }),
+    isOpen: true,
+    onOpenChange: () => {}
+  }))
+
+  assert.match(markup, /accounts\.example\.com/)
+  assert.match(markup, /打开并继续/)
+  assert.match(markup, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  assert.doesNotMatch(markup, /<img src=x/)
+  assert.doesNotMatch(markup, /href=/)
 })

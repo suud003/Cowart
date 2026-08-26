@@ -55,6 +55,11 @@ class FakeCodexClient extends EventEmitter {
     return { requestId, decision }
   }
 
+  async respondToElicitation(requestId, response) {
+    this.calls.push(['respondToElicitation', requestId, response])
+    return { requestId, action: response.action }
+  }
+
   async rejectServerRequest(requestId, error) {
     this.calls.push(['rejectServerRequest', requestId, error])
     return { requestId, code: error?.code }
@@ -105,6 +110,40 @@ class FakeAuthCodexClient extends FakeCodexClient {
   async cancelLogin(loginId) {
     this.calls.push(['cancelLogin', loginId])
     return {}
+  }
+}
+
+function standardElicitationParams(overrides = {}) {
+  return {
+    mode: 'form',
+    message: 'Complete the interaction-game brief.',
+    serverName: 'map-systems',
+    threadId: 'thr_1',
+    turnId: 'turn_1',
+    requestedSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', title: 'Project title', minLength: 3 },
+        focus: {
+          type: 'string',
+          oneOf: [
+            { const: 'story', title: 'Story' },
+            { const: 'battle', title: 'Battle' }
+          ]
+        },
+        systems: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['dialogue', 'combat', 'economy']
+          },
+          minItems: 1,
+          maxItems: 2
+        }
+      },
+      required: ['title', 'focus', 'systems']
+    },
+    ...overrides
   }
 }
 
@@ -276,6 +315,165 @@ test('YogurtAgentService normalizes agent, approval, diff, plan, turn, and error
   assert.deepEqual(approval.availableDecisions, ['accept', 'acceptForSession', 'decline', 'cancel'])
 })
 
+test('YogurtAgentService publishes standard MCP forms and validates the structured reply', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  await service.start()
+  const events = []
+  service.on('event', (event) => events.push(event))
+
+  client.emit('serverRequest', {
+    requestId: 'elicitation-form-1',
+    method: 'mcpServer/elicitation/request',
+    params: standardElicitationParams()
+  })
+
+  const requested = events.find((event) => event.type === 'elicitation.requested')
+  assert.equal(requested.requestId, 'elicitation-form-1')
+  assert.equal(requested.mode, 'form')
+  assert.equal(requested.serverName, 'map-systems')
+  assert.deepEqual(requested.requestedSchema.required, ['title', 'focus', 'systems'])
+  assert.equal(service.getState().pendingElicitations, 1)
+
+  await assert.rejects(
+    service.respondElicitation('elicitation-form-1', {
+      action: 'accept',
+      content: { title: 'Echo Labyrinth', focus: 'unknown', systems: ['dialogue'] }
+    }),
+    /focus is not an allowed option/
+  )
+  await service.respondElicitation('elicitation-form-1', {
+    action: 'accept',
+    content: {
+      title: 'Echo Labyrinth',
+      focus: 'story',
+      systems: ['dialogue', 'combat']
+    }
+  })
+  const responseCall = client.calls.find(([name]) => name === 'respondToElicitation')
+  assert.deepEqual(responseCall, [
+    'respondToElicitation',
+    'elicitation-form-1',
+    {
+      action: 'accept',
+      content: {
+        title: 'Echo Labyrinth',
+        focus: 'story',
+        systems: ['dialogue', 'combat']
+      }
+    }
+  ])
+})
+
+test('YogurtAgentService serializes concurrent elicitations so every request remains answerable', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  await service.start()
+  const events = []
+  service.on('event', (event) => events.push(event))
+
+  for (const requestId of ['elicitation-queue-1', 'elicitation-queue-2']) {
+    client.emit('serverRequest', {
+      requestId,
+      method: 'mcpServer/elicitation/request',
+      params: standardElicitationParams({ message: `Complete ${requestId}.` })
+    })
+  }
+
+  assert.deepEqual(
+    events.filter((event) => event.type === 'elicitation.requested').map((event) => event.requestId),
+    ['elicitation-queue-1']
+  )
+  assert.equal(service.getState().pendingElicitations, 2)
+  assert.deepEqual(
+    service.getState().pendingElicitationRequests.map((request) => request.requestId),
+    ['elicitation-queue-1']
+  )
+  assert.equal(service.getPendingElicitation('elicitation-queue-2'), null)
+
+  client.emit('notification', {
+    method: 'serverRequest/resolved',
+    params: { threadId: 'thr_1', requestId: 'elicitation-queue-1' }
+  })
+
+  assert.deepEqual(
+    events.filter((event) => event.type === 'elicitation.requested').map((event) => event.requestId),
+    ['elicitation-queue-1', 'elicitation-queue-2']
+  )
+  assert.equal(service.getPendingElicitation('elicitation-queue-2').requestId, 'elicitation-queue-2')
+})
+
+test('YogurtAgentService hides raw URL elicitations and resolves them as elicitations', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  await service.start()
+  const events = []
+  service.on('event', (event) => events.push(event))
+
+  const rawUrl = 'https://accounts.example.com/authorize?state=private-secret'
+  client.emit('serverRequest', {
+    requestId: 'elicitation-url-1',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'url',
+      message: 'Authorize map-systems.',
+      url: rawUrl,
+      elicitationId: 'external-flow-1',
+      serverName: 'map-systems',
+      threadId: 'thr_1',
+      turnId: 'turn_1'
+    }
+  })
+
+  const requested = events.find((event) => event.type === 'elicitation.requested')
+  assert.equal(requested.mode, 'url')
+  assert.equal(requested.urlHost, 'accounts.example.com')
+  assert.equal(Object.prototype.hasOwnProperty.call(requested, 'url'), false)
+  assert.equal(Object.prototype.hasOwnProperty.call(requested, 'externalUrl'), false)
+  assert.equal(JSON.stringify(requested).includes('private-secret'), false)
+  assert.equal(JSON.stringify(service.getState()).includes('private-secret'), false)
+  assert.equal(service.getPendingElicitation('elicitation-url-1').externalUrl, rawUrl)
+
+  client.emit('notification', {
+    method: 'serverRequest/resolved',
+    params: { threadId: 'thr_1', requestId: 'elicitation-url-1' }
+  })
+  assert.equal(events.some((event) =>
+    event.type === 'elicitation.resolved' && event.requestId === 'elicitation-url-1'
+  ), true)
+  assert.equal(events.some((event) =>
+    event.type === 'approval.resolved' && event.requestId === 'elicitation-url-1'
+  ), false)
+  assert.equal(service.getState().pendingElicitations, 0)
+})
+
+test('YogurtAgentService rejects host-specific openai/form requests when not opted in', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  await service.start()
+  const events = []
+  service.on('event', (event) => events.push(event))
+
+  client.emit('serverRequest', {
+    requestId: 'openai-form-1',
+    method: 'mcpServer/elicitation/request',
+    params: standardElicitationParams({ mode: 'openai/form' })
+  })
+  await Promise.resolve()
+
+  const rejection = client.calls.find(
+    ([name, requestId]) => name === 'rejectServerRequest' && requestId === 'openai-form-1'
+  )
+  assert.equal(rejection[2].code, -32602)
+  assert.match(rejection[2].message, /has not opted in to openai\/form/)
+  assert.equal(events.some((event) =>
+    event.type === 'elicitation.requested' && event.requestId === 'openai-form-1'
+  ), false)
+  assert.equal(events.some((event) =>
+    event.type === 'error' && event.requestId === 'openai-form-1'
+  ), true)
+})
+
 test('YogurtAgentService rejects unsupported server requests instead of leaving a turn blocked', async () => {
   const client = new FakeCodexClient()
   const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
@@ -383,6 +581,7 @@ test('IPC bridge registers only the renderer whitelist and rejects foreign sende
     IPC_CHANNELS.startCodexLogin,
     IPC_CHANNELS.sendTask,
     IPC_CHANNELS.respondApproval,
+    IPC_CHANNELS.respondElicitation,
     IPC_CHANNELS.interrupt,
     IPC_CHANNELS.callCowartTool
   ]))
@@ -398,6 +597,191 @@ test('IPC bridge registers only the renderer whitelist and rejects foreign sende
   assert.equal(workspaceSelectionCount, 1)
   cleanup()
   assert.equal(handlers.size, 0)
+})
+
+test('elicitation IPC opens only an accepted main-process pending HTTPS URL', async () => {
+  const handlers = new Map()
+  const ipcMain = {
+    handle(channel, handler) { handlers.set(channel, handler) },
+    removeHandler(channel) { handlers.delete(channel) },
+    on() {},
+    removeListener() {}
+  }
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  await service.start()
+  const trusted = { id: 1, send() {}, isDestroyed: () => false }
+  const openedUrls = []
+  const cleanup = registerYogurtAgentIpc({
+    ipcMain,
+    agentService: service,
+    getTrustedWebContents: () => trusted,
+    openExternal: async (url) => openedUrls.push(url)
+  })
+  const handler = handlers.get(IPC_CHANNELS.respondElicitation)
+
+  client.emit('serverRequest', {
+    requestId: 'url-decline-1',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'url',
+      message: 'Authorize map-systems.',
+      url: 'https://accounts.example.com/declined?state=server-owned',
+      elicitationId: 'external-decline-1',
+      serverName: 'map-systems',
+      threadId: 'thr_1'
+    }
+  })
+  await handler(
+    { sender: trusted },
+    {
+      requestId: 'url-decline-1',
+      action: 'decline',
+      content: null,
+      url: 'https://attacker.example/renderer-controlled'
+    }
+  )
+  assert.deepEqual(openedUrls, [])
+  client.emit('notification', {
+    method: 'serverRequest/resolved',
+    params: { threadId: 'thr_1', requestId: 'url-decline-1' }
+  })
+
+  const acceptedUrl = 'https://accounts.example.com/accepted?state=server-owned'
+  client.emit('serverRequest', {
+    requestId: 'url-accept-1',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'url',
+      message: 'Authorize map-systems.',
+      url: acceptedUrl,
+      elicitationId: 'external-accept-1',
+      serverName: 'map-systems',
+      threadId: 'thr_1'
+    }
+  })
+  const result = await handler(
+    { sender: trusted },
+    {
+      requestId: 'url-accept-1',
+      action: 'accept',
+      content: null,
+      url: 'https://attacker.example/renderer-controlled'
+    }
+  )
+  assert.deepEqual(openedUrls, [acceptedUrl])
+  assert.deepEqual(result, {
+    accepted: true,
+    requestId: 'url-accept-1',
+    action: 'accept'
+  })
+  const responseCall = client.calls.find(
+    ([name, requestId]) => name === 'respondToElicitation' && requestId === 'url-accept-1'
+  )
+  assert.deepEqual(responseCall[2], { action: 'accept', content: null })
+
+  client.emit('serverRequest', {
+    requestId: 'url-foreign-1',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'url',
+      message: 'Authorize map-systems.',
+      url: 'https://accounts.example.com/foreign',
+      elicitationId: 'external-foreign-1',
+      serverName: 'map-systems',
+      threadId: 'thr_1'
+    }
+  })
+  await assert.rejects(
+    handler(
+      { sender: { id: 2 } },
+      { requestId: 'url-foreign-1', action: 'accept', content: null }
+    ),
+    /untrusted renderer/
+  )
+  assert.deepEqual(openedUrls, [acceptedUrl])
+
+  client.emit('serverRequest', {
+    requestId: 'url-malicious-1',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'url',
+      message: 'Authorize map-systems.',
+      url: 'javascript:alert(1)',
+      elicitationId: 'external-malicious-1',
+      serverName: 'map-systems',
+      threadId: 'thr_1'
+    }
+  })
+  await Promise.resolve()
+  const rejection = client.calls.find(
+    ([name, requestId]) => name === 'rejectServerRequest' && requestId === 'url-malicious-1'
+  )
+  assert.equal(rejection[2].code, -32602)
+  await assert.rejects(
+    handler(
+      { sender: trusted },
+      { requestId: 'url-malicious-1', action: 'accept', content: null }
+    ),
+    /No pending MCP elicitation/
+  )
+  assert.deepEqual(openedUrls, [acceptedUrl])
+  cleanup()
+})
+
+test('elicitation IPC never returns a secret authorization URL when the OS open fails', async () => {
+  const handlers = new Map()
+  const ipcMain = {
+    handle(channel, handler) { handlers.set(channel, handler) },
+    removeHandler(channel) { handlers.delete(channel) },
+    on() {},
+    removeListener() {}
+  }
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  await service.start()
+  const runtime = new YogurtDesktopRuntime({
+    agentService: service,
+    configuredWorkspace: true,
+    projectDir: 'C:\\workspace'
+  })
+  const trusted = { id: 1, send() {}, isDestroyed: () => false }
+  const cleanup = registerYogurtAgentIpc({
+    ipcMain,
+    agentService: runtime,
+    getTrustedWebContents: () => trusted,
+    openExternal: async (url) => {
+      throw new Error(`OS rejected ${url}`)
+    }
+  })
+  const secretUrl = 'https://accounts.example.com/authorize?state=private-secret'
+  client.emit('serverRequest', {
+    requestId: 'url-open-failure',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'url',
+      message: 'Authorize map-systems.',
+      url: secretUrl,
+      elicitationId: 'external-open-failure',
+      serverName: 'map-systems',
+      threadId: 'thr_1'
+    }
+  })
+
+  await assert.rejects(
+    handlers.get(IPC_CHANNELS.respondElicitation)(
+      { sender: trusted },
+      { requestId: 'url-open-failure', action: 'accept', content: null }
+    ),
+    (error) => {
+      assert.match(error.message, /accounts\.example\.com/)
+      assert.equal(error.message.includes('private-secret'), false)
+      assert.equal(error.message.includes(secretUrl), false)
+      return true
+    }
+  )
+  assert.equal(service.getState().pendingElicitations, 1)
+  cleanup()
 })
 
 test('desktop login IPC opens only the App Server managed OpenAI URL and does not expose it', async () => {

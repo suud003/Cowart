@@ -4,6 +4,7 @@ const DEFAULT_CAPABILITIES = Object.freeze({
   sendTask: false,
   streaming: false,
   approvals: false,
+  elicitation: false,
   interrupt: false,
   message: Object.freeze({ image: false })
 })
@@ -30,6 +31,7 @@ function normalizedCapabilities(capabilities) {
     sendTask: canSendTask,
     streaming: Boolean(capabilities.streaming),
     approvals: Boolean(capabilities.approvals),
+    elicitation: Boolean(capabilities.elicitation ?? capabilities.elicitations ?? capabilities.mcpElicitation),
     interrupt: Boolean(capabilities.interrupt),
     message: Object.freeze({ image: Boolean(capabilities.message?.image) }),
     ...(capabilities.setup ? { setup: Object.freeze(capabilities.setup) } : {})
@@ -43,6 +45,7 @@ function sameCapabilities(left, right) {
     left.sendTask === right.sendTask &&
     left.streaming === right.streaming &&
     left.approvals === right.approvals &&
+    left.elicitation === right.elicitation &&
     left.interrupt === right.interrupt &&
     left.message.image === right.message.image &&
     JSON.stringify(left.setup ?? null) === JSON.stringify(right.setup ?? null)
@@ -73,6 +76,10 @@ function valueAt(object, paths) {
 
 function canonicalAgentEventType(sourceType) {
   const compact = String(sourceType || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  if (compact.includes('elicitation') && compact.includes('request')) return 'elicitation.requested'
+  if (compact.includes('elicitation') && /(resolve|respond|complete|decision)/.test(compact)) {
+    return 'elicitation.resolved'
+  }
   if (compact.includes('approval') && compact.includes('request')) return 'approval.requested'
   if (compact.includes('approval') && /(resolve|respond|complete|decision)/.test(compact)) {
     return 'approval.resolved'
@@ -123,6 +130,15 @@ export function normalizeAgentEvent(rawEvent, at = Date.now()) {
   const approval = type.startsWith('approval.')
     ? valueAt(payload, [['approval']]) ?? payload
     : null
+  const elicitationValue = type.startsWith('elicitation.')
+    ? valueAt(payload, [['elicitation'], ['request']]) ?? payload
+    : null
+  const elicitation = elicitationValue && typeof elicitationValue === 'object' && !Array.isArray(elicitationValue)
+    ? Object.freeze({
+        ...elicitationValue,
+        requestId: elicitationValue.requestId ?? elicitationValue.id ?? requestId ?? null
+      })
+    : elicitationValue
 
   return Object.freeze({
     type,
@@ -134,6 +150,7 @@ export function normalizeAgentEvent(rawEvent, at = Date.now()) {
     plan,
     diff,
     approval,
+    elicitation,
     payload: rawEvent,
     at
   })
@@ -161,7 +178,8 @@ function isTaskScopedEvent(event) {
   return (
     event.type.startsWith('turn.') ||
     event.type.startsWith('agent.') ||
-    event.type.startsWith('approval.')
+    event.type.startsWith('approval.') ||
+    event.type.startsWith('elicitation.')
   )
 }
 
@@ -171,6 +189,16 @@ function eventMatchesTask(event, task) {
   const taskTurnId = task.turnId == null ? null : String(task.turnId)
   const eventThreadId = event.threadId == null ? null : String(event.threadId)
   const taskThreadId = task.threadId == null ? null : String(task.threadId)
+  const threadScopedInteraction = (
+    ['approval.requested', 'elicitation.requested'].includes(event.type) &&
+    !eventTurnId &&
+    Boolean(eventThreadId && taskThreadId && eventThreadId === taskThreadId)
+  )
+
+  // App Server permits interaction requests without a turnId. In that case the
+  // required threadId is the strongest available scope and keeps the active turn
+  // from becoming invisible while it waits for the user's response.
+  if (threadScopedInteraction) return true
 
   if (eventTurnId || taskTurnId) {
     if (!eventTurnId || !taskTurnId || eventTurnId !== taskTurnId) return false
@@ -183,6 +211,22 @@ function eventMatchesTask(event, task) {
   return true
 }
 
+function resolvesActiveInteraction(event, activity) {
+  if (!['approval.resolved', 'elicitation.resolved'].includes(event?.type) || event.requestId == null) {
+    return false
+  }
+  const active = event.type === 'approval.resolved' ? activity?.approval : activity?.elicitation
+  const activeRequestId = active?.requestId ?? active?.id ?? null
+  return activeRequestId != null && String(activeRequestId) === String(event.requestId)
+}
+
+function acceptsStandaloneElicitation(event, task, session) {
+  if (task || event?.type !== 'elicitation.requested' || event.requestId == null) return false
+  const eventThreadId = event.threadId == null ? null : String(event.threadId)
+  const sessionThreadId = session?.threadId == null ? null : String(session.threadId)
+  return !sessionThreadId || Boolean(eventThreadId && eventThreadId === sessionThreadId)
+}
+
 function emptyActivity() {
   return Object.freeze({
     phase: 'idle',
@@ -190,6 +234,7 @@ function emptyActivity() {
     plan: null,
     diff: null,
     approval: null,
+    elicitation: null,
     updatedAt: null
   })
 }
@@ -200,6 +245,7 @@ function activityFromEvent(previous, event) {
   let plan = previous.plan
   let diff = previous.diff
   let approval = previous.approval
+  let elicitation = previous.elicitation
 
   switch (event.type) {
     case 'turn.started':
@@ -208,6 +254,7 @@ function activityFromEvent(previous, event) {
       plan = null
       diff = null
       approval = null
+      elicitation = null
       break
     case 'agent.delta':
       phase = 'running'
@@ -224,29 +271,42 @@ function activityFromEvent(previous, event) {
     case 'approval.requested':
       phase = 'waiting_approval'
       approval = event.approval
+      elicitation = null
       break
     case 'approval.resolved':
       phase = 'running'
       approval = null
       break
+    case 'elicitation.requested':
+      phase = 'waiting_elicitation'
+      elicitation = event.elicitation
+      approval = null
+      break
+    case 'elicitation.resolved':
+      phase = 'running'
+      elicitation = null
+      break
     case 'turn.completed':
       phase = 'completed'
       approval = null
+      elicitation = null
       break
     case 'turn.failed':
       phase = 'failed'
       approval = null
+      elicitation = null
       if (event.text) message = event.text
       break
     case 'turn.cancelled':
       phase = 'cancelled'
       approval = null
+      elicitation = null
       break
     default:
       break
   }
 
-  return Object.freeze({ phase, message, plan, diff, approval, updatedAt: event.at })
+  return Object.freeze({ phase, message, plan, diff, approval, elicitation, updatedAt: event.at })
 }
 
 function initialState(capabilities) {
@@ -351,7 +411,12 @@ export function createAgentBridge(adapter, {
       lastTask = taskWithSession(lastTask, sessionFrom(event, state.session))
       pendingTasks.set(lastTask.id, lastTask)
     }
-    if (isTaskScopedEvent(event) && !eventMatchesTask(event, lastTask)) return
+    if (
+      isTaskScopedEvent(event) &&
+      !eventMatchesTask(event, lastTask) &&
+      !resolvesActiveInteraction(event, state.activity) &&
+      !acceptsStandaloneElicitation(event, lastTask, state.session)
+    ) return
 
     const session = sessionFrom(event, state.session)
     const activity = activityFromEvent(state.activity, event)
@@ -513,6 +578,31 @@ export function createAgentBridge(adapter, {
     return await adapter.respondApproval(requestId, decision)
   }
 
+  async function respondElicitation(requestId, response) {
+    if (disposed) throw new Error('The agent bridge has been disposed.')
+    const capabilities = updateCapabilities({ emit: false })
+    if (!capabilities.elicitation || typeof adapter?.respondElicitation !== 'function') {
+      throw new Error('The current agent host does not support elicitation responses.')
+    }
+    const result = await adapter.respondElicitation(requestId, response)
+    const activeRequestId = state.lastEvent?.type === 'elicitation.requested'
+      ? state.lastEvent.requestId
+      : state.activity?.elicitation?.requestId ?? state.activity?.elicitation?.id ?? null
+    if (
+      activeRequestId != null &&
+      String(activeRequestId) === String(requestId) &&
+      state.activity?.elicitation
+    ) {
+      receiveAdapterEvent({
+        type: 'elicitation.resolved',
+        requestId,
+        threadId: state.session.threadId,
+        turnId: state.session.turnId
+      })
+    }
+    return result
+  }
+
   async function interrupt(options) {
     if (disposed) throw new Error('The agent bridge has been disposed.')
     const capabilities = updateCapabilities({ emit: false })
@@ -575,6 +665,7 @@ export function createAgentBridge(adapter, {
   return Object.freeze({
     sendTask,
     respondApproval,
+    respondElicitation,
     interrupt,
     selectWorkspace,
     startCodexLogin,
