@@ -8,6 +8,7 @@ import App from './App.jsx'
 import './excalidrawFonts.css'
 import './styles.css'
 import './editorialTheme.css'
+import './atelierTheme.css'
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

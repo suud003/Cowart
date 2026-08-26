@@ -72,6 +72,11 @@ import 'tldraw/tldraw.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CowartAgentPanel } from './AgentPanel.jsx'
 import { YogurtAppChrome } from './YogurtAppChrome.jsx'
+import { YogurtSideRail } from './YogurtSideRail.jsx'
+import atelierBranchFlowUrl from './assets/atelier-branch-flow.webp'
+import atelierCityAlleyUrl from './assets/atelier-city-alley.webp'
+import atelierCityHeroUrl from './assets/atelier-city-hero.webp'
+import atelierInteriorUrl from './assets/atelier-interior.webp'
 import aiHtmlToolIconRaw from './assets/ai-html.svg?raw'
 import aiImageToolIconRaw from './assets/ai-image.svg?raw'
 import aiSlidesToolIconRaw from './assets/ai-slides.svg?raw'
@@ -6513,7 +6518,7 @@ export default function App() {
   const [skippedRecords, setSkippedRecords] = useState([])
   const [canvasSyncConflict, setCanvasSyncConflict] = useState(null)
   const [agentBridge, setAgentBridge] = useState(null)
-  const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(true)
+  const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false)
   const [agentPanelAttention, setAgentPanelAttention] = useState(null)
   const [isCompactAgentViewport, setIsCompactAgentViewport] = useState(() => (
     typeof window !== 'undefined' && window.matchMedia?.('(max-width: 720px)').matches
@@ -6977,6 +6982,11 @@ export default function App() {
       data-agent-open={isAgentPanelOpen ? 'true' : 'false'}
       aria-label="Yogurt AI workspace"
     >
+      <YogurtSideRail
+        agentAttention={agentPanelAttention}
+        isAgentPanelOpen={isAgentPanelOpen}
+        onAgentPanelOpenChange={setIsAgentPanelOpen}
+      />
       <YogurtAppChrome
         agentAttention={agentPanelAttention}
         isAgentPanelOpen={isAgentPanelOpen}
@@ -7035,16 +7045,80 @@ function CowartCanvasEditorialEmptyState() {
   return (
     <>
       <section aria-hidden="true" className="cowart-canvas-editorial-empty">
-        <span>{emptyPageName} / EMPTY CANVAS</span>
-        <strong>
-          THINK
-          <br />
-          <em>OUT LOUD</em>
-        </strong>
-        <p>粘贴文字、图片或链接。圈选一组材料后，直接把下一步交给 Agent。</p>
+        <article className="atelier-zone atelier-zone-world">
+          <h2><span>1</span> 世界语气</h2>
+          <div className="atelier-world-collage">
+            <img alt="" className="atelier-world-hero" src={atelierCityHeroUrl} />
+            <blockquote>雨一直下，<br />但每个人都在<br />等天亮。</blockquote>
+            <img alt="" className="atelier-world-interior" src={atelierInteriorUrl} />
+            <img alt="" className="atelier-world-alley" src={atelierCityAlleyUrl} />
+            <div className="atelier-palette" aria-label="氛围色板">
+              <i /><i /><i /><i /><i />
+            </div>
+            <small>mood_palette_v3.png · 5.4 MB</small>
+            <em>霓虹、潮湿、克制</em>
+          </div>
+        </article>
+
+        <article className="atelier-zone atelier-zone-loop">
+          <h2><span>2</span> 玩家循环</h2>
+          <section className="atelier-loop-brief">
+            <strong>在选择与因果之间，<br />拼凑真相，定义结局。</strong>
+            <ol>
+              <li><b>1</b> 探索场景，收集线索与碎片</li>
+              <li><b>2</b> 与角色互动，触发分支事件</li>
+              <li><b>3</b> 做出选择，推动因果链变化</li>
+              <li><b>4</b> 揭示真相，解锁不同结局</li>
+            </ol>
+          </section>
+          <aside className="atelier-blue-note">核心机制<br />时间回溯<br />信任 / 背叛<br />多结局收束</aside>
+          <img
+            alt=""
+            className="atelier-branch-note"
+            src={atelierBranchFlowUrl}
+          />
+          <section className="atelier-mechanic-note">
+            <strong>机制备忘</strong>
+            <label><input checked readOnly type="checkbox" /> 时间回溯（3 次）</label>
+            <label><input checked readOnly type="checkbox" /> 信任值系统</label>
+            <label><input checked readOnly type="checkbox" /> 线索关联度</label>
+            <label><input readOnly type="checkbox" /> 结局徽章</label>
+          </section>
+        </article>
+
+        <article className="atelier-zone atelier-zone-evidence">
+          <h2><span>3</span> 证据与约束</h2>
+          <section className="atelier-tapd-card">
+            <b>#INTE-2312</b>
+            <strong>时间回溯在关键剧情节点异常跳转</strong>
+            <dl>
+              <div><dt>状态</dt><dd>进行中</dd></div>
+              <div><dt>优先级</dt><dd>高</dd></div>
+              <div><dt>负责人</dt><dd>林翌</dd></div>
+              <div><dt>迭代</dt><dd>Sprint 23</dd></div>
+            </dl>
+            <small>12 条评论 · 3 个附件 · 更新于 14:37</small>
+          </section>
+          <em className="atelier-constraint">约束：<br />性能预算 16.6ms<br />（目标机型）</em>
+          <section className="atelier-research-card">
+            <strong>用户访谈摘录 · 05.18</strong>
+            <p>“我喜欢拼凑的感觉，但有时候线索太分散了，不知道该信哪个。”</p>
+            <mark>“如果能看到之前的关键选择和它带来的变化，会更有掌控感。”</mark>
+            <p>“不希望结局只是好坏之分，希望有灰色地带。”</p>
+            <small>—— 来自 7 位核心玩家访谈</small>
+          </section>
+          <section className="atelier-video-card">
+            <img alt="" src={atelierInteriorUrl} />
+            <span><strong>DEMO_试玩片段_雨夜追凶.mp4</strong><small>128 MB · 05-21 22:16</small></span>
+          </section>
+          <div className="atelier-risk-notes">
+            <p>风险：<br />分支数量爆炸<br />影响叙事节奏</p>
+            <p>风险：<br />关键线索被<br />玩家忽略</p>
+          </div>
+        </article>
       </section>
       <p className="yogurt-sr-only">
-        当前页面为空。粘贴文字、图片或链接，圈选一组材料后，可以把下一步交给 Agent。
+        当前页面为空。画布展示互动影游案例的世界语气、玩家循环、证据与约束三个示例分区。
       </p>
     </>
   )

@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const readProjectFile = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('the editorial desktop shell is wired after the legacy styles', async () => {
+test('the visual atelier desktop shell is wired after the legacy themes', async () => {
   const [mainSource, appSource] = await Promise.all([
     readProjectFile('src/main.jsx'),
     readProjectFile('src/App.jsx')
@@ -14,10 +14,17 @@ test('the editorial desktop shell is wired after the legacy styles', async () =>
   assert.match(mainSource, /@fontsource\/ibm-plex-mono\/latin-500\.css/)
   assert.ok(
     mainSource.indexOf("./editorialTheme.css") > mainSource.indexOf("./styles.css"),
-    'the visual theme must remain the final CSS override'
+    'the editorial compatibility theme must remain after the legacy CSS'
   )
+  assert.ok(
+    mainSource.indexOf("./atelierTheme.css") > mainSource.indexOf("./editorialTheme.css"),
+    'the selected visual atelier theme must remain the final CSS override'
+  )
+  assert.match(appSource, /<YogurtSideRail/)
   assert.match(appSource, /<YogurtAppChrome/)
   assert.match(appSource, /<CowartCanvasEditorialEmptyState \/>/)
+  assert.match(appSource, /atelier-city-hero\.webp/)
+  assert.match(appSource, /atelier-branch-flow\.webp/)
   assert.match(appSource, /licenseKey=\{TLDRAW_LICENSE_KEY\}/)
   assert.match(appSource, /data-agent-open=\{isAgentPanelOpen \? 'true' : 'false'\}/)
   assert.match(appSource, /inert=\{isModalAgentPanel \? true : undefined\}/)
@@ -37,30 +44,39 @@ test('the integrated Agent toggle preserves explicit state and attention semanti
   assert.doesNotMatch(chromeSource, /agentAttention\?\.accessibleLabel \|\| toggleLabel/)
 })
 
-test('the editorial theme keeps messages readable and alternate viewport states usable', async () => {
-  const theme = await readProjectFile('src/editorialTheme.css')
+test('the visual atelier theme keeps messages readable and alternate viewport states usable', async () => {
+  const theme = await readProjectFile('src/atelierTheme.css')
 
-  assert.match(theme, /@media \(max-width: 1260px\)/)
+  assert.match(theme, /@media \(max-width: 1180px\)/)
   assert.match(theme, /@media \(max-width: 940px\)/)
+  assert.match(theme, /@media \(max-width: 720px\)/)
   assert.match(theme, /@media \(max-width: 520px\)/)
-  assert.match(theme, /\.cowart-workbench\[data-agent-open="true"\]/)
+  assert.match(theme, /\.cowart-agent-panel\s*\{/)
+  assert.match(theme, /\.cowart-agent-panel-launcher\s*\{/)
   assert.match(theme, /@media \(prefers-reduced-motion: reduce\)/)
   assert.match(theme, /:focus-visible/)
   assert.doesNotMatch(theme, /line-clamp/i)
 })
 
-test('the compact empty state overrides the medium-width positioning with equal specificity', async () => {
-  const theme = await readProjectFile('src/editorialTheme.css')
+test('the compact visual atelier keeps one usable canvas column', async () => {
+  const theme = await readProjectFile('src/atelierTheme.css')
   const compactTheme = theme.slice(theme.indexOf('@media (max-width: 720px)'))
 
-  assert.match(
-    compactTheme,
-    /\.cowart-workbench\[data-agent-open="false"\] \.cowart-canvas-editorial-empty\s*\{[^}]*right:\s*36px;[^}]*left:\s*48px;[^}]*width:\s*auto;/s
-  )
+  assert.match(compactTheme, /\.yogurt-side-rail\s*\{\s*display:\s*none;/s)
+  assert.match(compactTheme, /\.cowart-canvas-editorial-empty\s*\{[^}]*grid-template-columns:\s*minmax\(260px, 1fr\)/s)
+  assert.match(compactTheme, /\.cowart-agent-panel\s*\{\s*inset:\s*54px 0 0;/s)
 })
 
-test('the editorial texture is a real bundled raster asset', async () => {
-  const asset = await stat(new URL('../src/assets/yogurt-editorial-field.webp', import.meta.url))
-  assert.ok(asset.size > 50_000)
-  assert.ok(asset.size < 500_000)
+test('the visual atelier uses optimized bundled raster assets', async () => {
+  const assetPaths = [
+    '../src/assets/atelier-city-hero.webp',
+    '../src/assets/atelier-city-alley.webp',
+    '../src/assets/atelier-interior.webp',
+    '../src/assets/atelier-branch-flow.webp'
+  ]
+  const assets = await Promise.all(assetPaths.map((path) => stat(new URL(path, import.meta.url))))
+  for (const asset of assets) {
+    assert.ok(asset.size > 50_000)
+    assert.ok(asset.size < 500_000)
+  }
 })

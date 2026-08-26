@@ -22,9 +22,9 @@ Yogurt AI is an installable AI product workspace, available as both a standalone
 The agent reads the active page and stable object IDs while streaming status, plans, and change summaries back into the workspace. Sensitive actions are approved in place. Results remain selectable, movable, editable, and open to follow-up questions instead of becoming a static image. The canvas is both the starting point for thought and the shared record after the agent finishes.
 
 <p align="center">
-  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Yogurt AI Desktop shows its cool lavender canvas and Codex Agent workbench in one window">
+  <img src="docs/images/yogurt-ai-workspace.png" width="100%" alt="Yogurt AI visual product workspace organizing world tone, player loop, evidence, and constraints">
 </p>
-<p align="center"><sub>The native canvas and Codex Agent workbench share the active project, page, and object context in one window.</sub></p>
+<p align="center"><sub>Keep visual references, the core loop, user evidence, and engineering constraints on one editable canvas. Codex reports status from the lower-right corner and expands only when needed.</sub></p>
 
 ## Windows Desktop App (Beta)
 
@@ -33,7 +33,7 @@ Regular users do not need to install Node.js, Git, or a global Codex CLI. Start 
 1. Download `Yogurt-AI-Beta-Setup-<version>-x64.exe`. The installer is currently supplied by the maintainer or a local build; it is publicly available only when an attachment is actually present on GitHub Releases.
 2. Double-click the installer and follow the setup wizard. It creates Desktop and Start Menu shortcuts.
 3. On first launch, choose a product folder as the workspace. Canvas data, generated files, and the project session stay there. Cancelling the picker does not crash the app; you can choose a folder later from the Agent panel.
-4. After the canvas opens, Codex Agent connects through the bundled, compatibility-tested Codex and Node runtimes and reuses the current Codex sign-in on the computer. If sign-in is required, click **Sign in to Codex** in the panel: Yogurt AI opens the official browser authorization flow and connects automatically after success—no terminal command is required.
+4. After the canvas opens, the Codex entry in the lower-right corner connects through the bundled, compatibility-tested Codex and Node runtimes and reuses the current Codex sign-in on the computer. If sign-in is required, expand the workbench and click **Sign in to Codex**: Yogurt AI opens the official browser authorization flow and connects automatically after success—no terminal command is required.
 
 The current local Beta installer is unsigned, so Windows SmartScreen may display a “Windows protected your PC” warning. Run only an installer obtained from a trusted source whose filename and checksum match the maintainer's information. This notice does not imply that an installer has been uploaded to GitHub Releases.
 
@@ -60,9 +60,14 @@ flowchart LR
 
 ### 1. Give The Canvas And Codex Agent The Same Context
 
-The desktop app includes a persistent Codex Agent workbench on the right. It knows the active project, page, selected objects, and their stable IDs. Yogurt AI saves the latest canvas before sending a task, so the agent works from the real structure in front of you instead of a screenshot with drifting coordinates.
+The Codex entry stays in the lower-right corner and expands into an overlay workbench only when needed, so it never compresses or rearranges the canvas. It knows the active project, page, selected objects, and their stable IDs. Yogurt AI saves the latest canvas before sending a task, so the agent works from the real structure in front of you instead of a screenshot with drifting coordinates.
 
 Write any request or start with `Organize selection`, `Generate PRD`, or `Generate diagram`. While Codex works, the panel streams replies, plans, change summaries, and task status. When the agent needs a scope, choice, or parameter, a structured form appears directly in the activity stream. External authorization requests show only the destination domain and open through the desktop app after your explicit confirmation. You can also approve or reject controlled actions and interrupt an active turn. Reopening the same project resumes its saved agent session.
+
+<p align="center">
+  <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Codex Agent opened as an overlay workbench over the Yogurt AI interactive-film canvas">
+</p>
+<p align="center"><sub>The canvas stays in place while context, quick tasks, full conversation history, approvals, and the composer live in one focused overlay.</sub></p>
 
 After you import documents, images, and notes, Yogurt AI preserves source paths and verbatim excerpts while recording agent summaries and inference separately. Work with cards, relations, zones, and freehand annotations as you would on a whiteboard, or ask the agent to build a panorama around one question.
 
@@ -188,7 +193,7 @@ See [`desktop/README.md`](desktop/README.md) for implementation details, environ
 
 ### 1. Choose A Real Project
 
-Open Yogurt AI from its Desktop shortcut and choose a product folder in the first-launch window. The app reads and saves the canvas in that workspace while the panel on the right connects to the local Codex Agent automatically. If authorization is required, click **Sign in to Codex** in the Agent panel and finish in the browser.
+Open Yogurt AI from its Desktop shortcut and choose a product folder in the first-launch window. The app reads and saves the canvas in that workspace while the lower-right Codex entry connects to the local agent automatically. If authorization is required, expand the workbench, click **Sign in to Codex**, and finish in the browser.
 
 ### 2. Add Material And Build The First Structure
 

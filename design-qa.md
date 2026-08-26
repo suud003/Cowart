@@ -2,30 +2,37 @@
 
 ## Evidence
 
-- Visual source: `C:\Users\TIANYI~1\AppData\Local\Temp\codex-clipboard-9a51dcd4-e769-4fe4-b2a5-5d1cc9fa1cdc.png` (`1568×776`).
-- Full desktop implementation: `D:\CodexHome\visualizations\2026\08\22\01a0275f-0583-7d42-af40-f6216a433256\editorial-ui-final.png` (`2139×1346`, Electron window `1440×960` at system scale).
-- Minimum supported desktop window: `D:\CodexHome\visualizations\2026\08\22\01a0275f-0583-7d42-af40-f6216a433256\editorial-ui-min-window-pass3.png` (Electron window `1024×720` at system scale).
-- Same-input comparison: `D:\CodexHome\visualizations\2026\08\22\01a0275f-0583-7d42-af40-f6216a433256\editorial-source-vs-final.png`.
+- Visual source: `C:\Users\TIANYI~1\AppData\Local\Temp\codex-clipboard-32b90f08-8d4d-41ac-a0d7-bcada4d8b83a.png` (`1488×1058`).
+- Full desktop implementation: `qa/atelier-desktop-release.png`, captured from the real Electron renderer at a `1488×1058` BrowserWindow and normalized to `docs/images/yogurt-ai-workspace.png`.
+- Open Agent state: `qa/atelier-agent-case.png`, captured from the real Electron renderer with the visual project case still visible behind the overlay.
+- Minimum supported desktop window: `qa/atelier-min-1024x720-v2.png`, captured from a `1024×720` BrowserWindow.
+- Same-viewport comparison: `qa/atelier-comparison-final.png`, with the visual source and implementation rendered together at `1488×1058` per side.
 
-## Target translation
+## Fidelity surfaces checked
 
-The supplied poster is an art-direction source rather than an application layout. The implementation translates its cold cobalt and faded lavender field, ink-black cinematic framing, coral signal color, condensed display typography, rough painted texture, and asymmetrical light/dark split into a working canvas and Agent desktop application.
+- Layout: the black 78 px application rail, 56 px breadcrumb bar, three editorial canvas columns, visual hierarchy, evidence stack, lower-right Codex entry, and floating Agent workbench match the selected direction.
+- Typography: serif section titles, restrained sans-serif product copy, and handwriting-style notes keep distinct roles without clipped headings or broken vertical text.
+- Color and surfaces: warm canvas paper, near-black navigation, cobalt interaction accents, amber evidence highlight, pale-blue mechanism note, and pink risk notes remain consistent across canvas and Agent states.
+- Imagery: the rainy-city hero, alley, interior, and hand-drawn branch diagram are bundled raster assets with intentional crops and optimized WebP delivery. No placeholder boxes or synthetic SVG stand-ins are used.
+- Icons: application navigation and actions use the Phosphor icon family; existing tldraw tools retain their native icon system.
+- Responsive behavior: the `1024×720` pass scales the showcase composition as one unit so the three-column case remains readable and no longer clips outside the visible canvas. Narrow browser/widget layouts retain the single-column and modal-Agent fallbacks.
+- State treatment: the source screenshot includes an actively selected research card. The shipped onboarding canvas uses a neutral state instead of baking a fake selection into non-interactive sample content; real tldraw selection and contextual tools remain functional above it.
 
-## Comparison passes
+## Comparison history
 
-1. The first desktop pass established the shell, canvas tools, Agent workbench, bundled fonts, real raster texture, and coherent color tokens. It exposed excessive empty-canvas flatness and a minimum-window toolbar overlap.
-2. The second pass introduced the responsive toolbar safe area and verified all 215 automated tests, but the empty canvas still lacked the poster's editorial focal point.
-3. The final pass added a real empty-page editorial state, increased texture visibility without reducing text contrast, strengthened small functional type, constrained the canvas menu to its column, aligned the Agent panel with the canvas at minimum width, and moved the empty-state composition out of the style panel's safe area.
+1. The first Electron capture exposed a legacy style-panel overlay and an inherited empty-state title rule that expanded “事件触发” into a clipped vertical word. Both were removed from the selected visual direction.
+2. The second pass replaced the improvised branch text with a real hand-drawn raster note, aligned the three evidence cards, and converted the Codex launcher into a persistent status surface.
+3. The Agent pass exposed a dark legacy setup card and an oversized empty gap. Specific light-theme overrides and a flexible welcome layout made the connection state, quick tasks, complete conversation area, and composer visible together.
+4. The final source-versus-implementation comparison aligned the palette, evidence stack, branch note, typography, and canvas margins. A separate `1024×720` pass found and fixed minimum-window clipping with a height-aware composition scale.
 
 ## Functional and accessibility verification
 
-- The integrated Agent toggle preserves pressed state, accessible labels, reply attention, and blocking attention.
-- At compact widths, the Agent becomes a modal drawer with an inert canvas, focus containment, Escape dismissal, and focus restoration.
-- Agent replies remain complete and are not line-clamped.
-- The minimum supported `1024×720` desktop window keeps the full tool row, canvas menu, Agent input, and persistent controls visible.
-- Focus-visible treatment, reduced-motion behavior, hover/selected states, semantic status colors, and keyboard labels remain present.
-- Automated tests pass with 217 checks, including compact Agent dialog semantics, narrow-screen empty-state positioning, and the complete-message regression guard.
-- A valid tldraw SDK license can be injected at build time with `VITE_TLDRAW_LICENSE_KEY`; without one, the official watermark remains visible as required by tldraw's license.
+- Side-rail navigation, canvas upload access, undo, redo, share, and Agent open/close controls remain real buttons with accessible names and visible focus treatment.
+- The Agent launcher continues to distinguish unread replies from blocking requests; blocking interactions remain prominent in the expanded panel and background notifications remain supported.
+- Agent messages are not line-clamped, retain line breaks, and remain scrollable. Compact Agent mode retains dialog semantics, focus containment, Escape dismissal, and focus restoration.
+- Reduced-motion handling, keyboard focus indicators, semantic connection colors, and practical mobile tap targets remain present.
+- Renderer captures completed without logged console or load errors.
+- `npm run quality` passed: plugin metadata checks, syntax checks, 217 automated tests, production build, MCP probe, analytics probe, and GA4 probe.
 
 ## Remaining findings
 
@@ -33,6 +40,4 @@ The supplied poster is an art-direction source rather than an application layout
 - P1: none.
 - P2: none.
 
-## Final result
-
-passed
+final result: passed

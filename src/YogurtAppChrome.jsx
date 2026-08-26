@@ -1,9 +1,12 @@
 import {
-  CaretRight,
-  CrosshairSimple,
+  ArrowClockwise,
+  ArrowCounterClockwise,
+  CaretDown,
+  DotsThree,
   Robot,
-  SelectionAll,
-  SidebarSimple
+  ShareNetwork,
+  SidebarSimple,
+  UserPlus
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
@@ -12,6 +15,7 @@ function readCanvasTelemetry() {
   if (!editor) {
     return {
       pageName: 'LOADING CANVAS',
+      pageShapeCount: 0,
       selectedCount: 0,
       zoom: 100
     }
@@ -21,13 +25,14 @@ function readCanvasTelemetry() {
   const zoomLevel = Number(editor.getZoomLevel?.())
   return {
     pageName: String(page?.name || 'UNTITLED PAGE').trim(),
+    pageShapeCount: editor.getCurrentPageShapeIds?.().size || 0,
     selectedCount: editor.getSelectedShapeIds?.().length || 0,
     zoom: Number.isFinite(zoomLevel) ? Math.round(zoomLevel * 100) : 100
   }
 }
 
 function telemetryKey(value) {
-  return `${value.pageName}:${value.selectedCount}:${value.zoom}`
+  return `${value.pageName}:${value.pageShapeCount}:${value.selectedCount}:${value.zoom}`
 }
 
 export function YogurtAppChrome({
@@ -37,6 +42,7 @@ export function YogurtAppChrome({
   projectName
 }) {
   const [telemetry, setTelemetry] = useState(readCanvasTelemetry)
+  const [shareStatus, setShareStatus] = useState('idle')
 
   useEffect(() => {
     let previousKey = telemetryKey(telemetry)
@@ -65,32 +71,63 @@ export function YogurtAppChrome({
   const accessibleToggleLabel = attentionAnnouncement
     ? `${toggleLabel}；${attentionAnnouncement}`
     : toggleLabel
+  const displayPageName = telemetry.pageName === 'Page 1' && telemetry.pageShapeCount === 0
+    ? '世界与玩法'
+    : telemetry.pageName
+
+  function runEditorCommand(command) {
+    globalThis.window?.__cowartEditor?.[command]?.()
+  }
+
+  async function handleShare() {
+    const pageName = displayPageName || 'Yogurt AI 画布'
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: pageName, text: `Yogurt AI · ${pageName}` })
+      } else {
+        await navigator.clipboard.writeText(globalThis.location?.href || pageName)
+      }
+      setShareStatus('shared')
+      window.setTimeout(() => setShareStatus('idle'), 1800)
+    } catch (error) {
+      if (error?.name !== 'AbortError') setShareStatus('error')
+    }
+  }
 
   return (
     <header className="yogurt-app-chrome" aria-label="Yogurt AI 应用栏">
-      <div className="yogurt-app-brand" aria-label="Yogurt AI">
-        <span className="yogurt-app-brand-signal" aria-hidden="true">Y</span>
-        <span className="yogurt-app-brand-copy">
-          <strong>YOGURT</strong>
-          <small>AI / THINKING WORKBENCH</small>
-        </span>
-      </div>
-
       <nav className="yogurt-app-breadcrumb" aria-label="当前画布位置">
-        <span>{projectName || 'YOGURT WORKSPACE'}</span>
-        <CaretRight aria-hidden="true" size={12} weight="bold" />
-        <strong title={telemetry.pageName}>{telemetry.pageName}</strong>
+        <span>Yogurt</span>
+        <i aria-hidden="true">/</i>
+        <span>{projectName || '互动影游'}</span>
+        <i aria-hidden="true">/</i>
+        <strong title={displayPageName}>{displayPageName}</strong>
+        <CaretDown aria-hidden="true" size={12} weight="bold" />
       </nav>
 
-      <div className="yogurt-app-telemetry" aria-label="画布状态">
-        <span title="当前缩放比例">
-          <CrosshairSimple aria-hidden="true" size={13} weight="bold" />
-          ZOOM {telemetry.zoom}%
+      <div className="yogurt-app-actions" aria-label="画布操作">
+        <button aria-label="撤销" onClick={() => runEditorCommand('undo')} title="撤销" type="button">
+          <ArrowCounterClockwise aria-hidden="true" size={18} />
+        </button>
+        <button aria-label="重做" onClick={() => runEditorCommand('redo')} title="重做" type="button">
+          <ArrowClockwise aria-hidden="true" size={18} />
+        </button>
+        <span className="yogurt-app-action-divider" aria-hidden="true" />
+        <button aria-label="邀请协作者" disabled title="协作能力即将接入" type="button">
+          <UserPlus aria-hidden="true" size={18} />
+        </button>
+        <span className="yogurt-app-collaborators" aria-label="当前协作者">
+          <i>林</i><i>顾</i><i>乔</i><small>+2</small>
         </span>
-        <span title="当前选中对象数">
-          <SelectionAll aria-hidden="true" size={13} weight="bold" />
-          SELECT {String(telemetry.selectedCount).padStart(2, '0')}
-        </span>
+        <button
+          className="yogurt-app-share"
+          data-status={shareStatus}
+          onClick={handleShare}
+          type="button"
+        >
+          <ShareNetwork aria-hidden="true" size={16} />
+          <span>{shareStatus === 'shared' ? '已复制' : shareStatus === 'error' ? '重试' : '分享'}</span>
+        </button>
         <button
           aria-controls="yogurt-codex-agent-panel"
           aria-expanded={isAgentPanelOpen}
@@ -108,8 +145,11 @@ export function YogurtAppChrome({
           ) : (
             <Robot aria-hidden="true" size={16} weight="bold" />
           )}
-          <span>AGENT</span>
+          <span>Codex</span>
           {attentionLabel && <b aria-hidden="true">{attentionLabel}</b>}
+        </button>
+        <button aria-label="更多操作" title="更多" type="button">
+          <DotsThree aria-hidden="true" size={20} weight="bold" />
         </button>
       </div>
     </header>

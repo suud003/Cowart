@@ -246,7 +246,7 @@ async function createMainWindow() {
       minWidth: 1024,
       minHeight: 720,
       show: false,
-      backgroundColor: '#080a0f',
+      backgroundColor: '#f4f2ed',
       webPreferences: {
         preload: preloadPath,
         contextIsolation: true,

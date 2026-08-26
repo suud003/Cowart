@@ -1911,7 +1911,16 @@ export function CowartAgentPanel({
         type="button"
       >
         <Bot aria-hidden="true" size={19} />
-        <span>Agent</span>
+        <span className="cowart-agent-launcher-copy">
+          <strong>Codex</strong>
+          <small>
+            {launcherAttention?.kind === 'blocking'
+              ? '等待你的操作'
+              : launcherAttention?.kind === 'reply'
+                ? '有新的完整回复'
+                : '就绪 · 处理当前画布'}
+          </small>
+        </span>
         {launcherAttention && (
           <span
             aria-hidden="true"
