@@ -436,6 +436,40 @@ test('AgentBridge preserves an early matching completion received before turn/st
   assert.deepEqual(bridge.getState().pendingTaskIds, [])
 })
 
+test('AgentBridge keeps an authoritative streamed terminal state when task dispatch rejects late', async () => {
+  let emitAgentEvent
+  let rejectTask
+  const taskAccepted = new Promise((_resolve, reject) => { rejectTask = reject })
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({ available: true, provider: 'desktop', sendTask: true, streaming: true }),
+    sendTask: async () => taskAccepted,
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => {}
+    }
+  }, { taskIdFactory: () => 'task:early-terminal-reject' })
+  const eventTypes = []
+  bridge.subscribe((_state, event) => eventTypes.push(event.type))
+
+  const sending = bridge.sendTask('finish before transport rejects')
+  emitAgentEvent({ type: 'turn.started', threadId: 'thread:one', turnId: 'turn:fast' })
+  emitAgentEvent({ type: 'turn.completed', threadId: 'thread:one', turnId: 'turn:fast' })
+  rejectTask(new Error('late transport rejection'))
+  const result = await sending
+
+  assert.deepEqual(result, {
+    threadId: 'thread:one',
+    turnId: 'turn:fast',
+    terminal: true,
+    status: 'succeeded'
+  })
+  assert.equal(bridge.getState().lastTask.status, 'succeeded')
+  assert.equal(bridge.getState().activity.phase, 'completed')
+  assert.equal(bridge.getState().status, 'idle')
+  assert.deepEqual(bridge.getState().pendingTaskIds, [])
+  assert.deepEqual(eventTypes, ['task.started', 'turn.started', 'turn.completed', 'state.current'])
+})
+
 test('failed App Server completions and service errors become turn failures', async () => {
   let emitAgentEvent
   const bridge = createAgentBridge({
@@ -456,6 +490,166 @@ test('failed App Server completions and service errors become turn failures', as
   emitAgentEvent({ type: 'error', turnId: 'turn:failed', message: 'Codex failed.' })
   assert.equal(bridge.getState().lastEvent.type, 'turn.failed')
   assert.equal(bridge.getState().activity.message, 'Codex failed.')
+})
+
+test('AgentBridge terminal turn states absorb late activity and interaction events', async () => {
+  const terminalCases = [
+    { type: 'turn.completed', taskStatus: 'succeeded', phase: 'completed' },
+    { type: 'turn.failed', taskStatus: 'failed', phase: 'failed' },
+    { type: 'turn.cancelled', taskStatus: 'cancelled', phase: 'cancelled' }
+  ]
+
+  for (const terminalCase of terminalCases) {
+    let emitAgentEvent
+    const bridge = createAgentBridge({
+      getCapabilities: () => ({
+        available: true,
+        provider: 'desktop',
+        sendTask: true,
+        streaming: true,
+        approvals: true,
+        elicitation: true
+      }),
+      sendTask: async () => ({ threadId: 'thread:terminal', turnId: 'turn:terminal' }),
+      subscribe(listener) {
+        emitAgentEvent = listener
+        return () => {}
+      }
+    }, { taskIdFactory: () => `task:${terminalCase.phase}` })
+    const eventTypes = []
+    bridge.subscribe((_state, event) => eventTypes.push(event.type))
+
+    await bridge.sendTask(`reach ${terminalCase.phase}`)
+    emitAgentEvent({
+      type: terminalCase.type,
+      threadId: 'thread:terminal',
+      turnId: 'turn:terminal',
+      text: terminalCase.type === 'turn.failed' ? 'Expected failure.' : null
+    })
+    const terminalState = bridge.getState()
+    const terminalEventTypes = [...eventTypes]
+
+    for (const lateEvent of [
+      { type: 'turn.started' },
+      { type: 'agent.delta', text: 'late reply' },
+      { type: 'agent.plan', plan: [{ step: 'late plan' }] },
+      { type: 'agent.diff', diff: 'late diff' },
+      { type: 'approval.requested', requestId: 'approval:late', approval: { requestId: 'approval:late' } },
+      { type: 'approval.resolved', requestId: 'approval:late' },
+      { type: 'elicitation.requested', requestId: 'elicitation:late', elicitation: { requestId: 'elicitation:late' } },
+      { type: 'elicitation.resolved', requestId: 'elicitation:late' },
+      ...terminalCases
+        .filter(({ type }) => type !== terminalCase.type)
+        .map(({ type }) => ({ type }))
+    ]) {
+      emitAgentEvent({
+        ...lateEvent,
+        threadId: 'thread:terminal',
+        turnId: 'turn:terminal'
+      })
+    }
+
+    assert.equal(bridge.getState(), terminalState, `${terminalCase.phase} state must remain unchanged`)
+    assert.equal(bridge.getState().lastTask.status, terminalCase.taskStatus)
+    assert.equal(bridge.getState().activity.phase, terminalCase.phase)
+    assert.deepEqual(eventTypes, terminalEventTypes, `${terminalCase.phase} must not publish late activity`)
+  }
+})
+
+test('AgentBridge resolves approvals and elicitations only for the active request id', async () => {
+  let emitAgentEvent
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({
+      available: true,
+      provider: 'desktop',
+      sendTask: true,
+      streaming: true,
+      approvals: true,
+      elicitation: true
+    }),
+    sendTask: async () => ({ threadId: 'thread:requests', turnId: 'turn:requests' }),
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => {}
+    }
+  }, { taskIdFactory: () => 'task:requests' })
+  const eventTypes = []
+  bridge.subscribe((_state, event) => eventTypes.push(event.type))
+
+  await bridge.sendTask('request user input')
+  emitAgentEvent({
+    id: 'approval:active',
+    method: 'item/commandExecution/requestApproval',
+    params: {
+      threadId: 'thread:requests',
+      turnId: 'turn:requests',
+      command: 'npm test'
+    }
+  })
+  assert.equal(bridge.getState().activity.phase, 'waiting_approval')
+  assert.equal(bridge.getState().activity.approval.requestId, 'approval:active')
+
+  const waitingApproval = bridge.getState()
+  emitAgentEvent({
+    type: 'approval.resolved',
+    requestId: 'approval:other',
+    threadId: 'thread:requests',
+    turnId: 'turn:requests'
+  })
+  emitAgentEvent({
+    type: 'elicitation.resolved',
+    requestId: 'approval:active',
+    threadId: 'thread:requests',
+    turnId: 'turn:requests'
+  })
+  assert.equal(bridge.getState(), waitingApproval)
+  assert.equal(bridge.getState().activity.approval.requestId, 'approval:active')
+
+  emitAgentEvent({ type: 'approval.resolved', requestId: 'approval:active' })
+  assert.equal(bridge.getState().activity.phase, 'running')
+  assert.equal(bridge.getState().activity.approval, null)
+
+  emitAgentEvent({
+    id: 'elicitation:active',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      threadId: 'thread:requests',
+      turnId: 'turn:requests',
+      mode: 'form',
+      message: 'Choose a format',
+      requestedSchema: { type: 'object', properties: {} }
+    }
+  })
+  assert.equal(bridge.getState().activity.phase, 'waiting_elicitation')
+  assert.equal(bridge.getState().activity.elicitation.requestId, 'elicitation:active')
+
+  const waitingElicitation = bridge.getState()
+  emitAgentEvent({
+    type: 'elicitation.resolved',
+    requestId: 'elicitation:other',
+    threadId: 'thread:requests',
+    turnId: 'turn:requests'
+  })
+  emitAgentEvent({
+    type: 'approval.resolved',
+    requestId: 'elicitation:active',
+    threadId: 'thread:requests',
+    turnId: 'turn:requests'
+  })
+  assert.equal(bridge.getState(), waitingElicitation)
+  assert.equal(bridge.getState().activity.elicitation.requestId, 'elicitation:active')
+
+  emitAgentEvent({ type: 'elicitation.resolved', requestId: 'elicitation:active' })
+  assert.equal(bridge.getState().activity.phase, 'running')
+  assert.equal(bridge.getState().activity.elicitation, null)
+  assert.deepEqual(eventTypes, [
+    'task.started',
+    'task.accepted',
+    'approval.requested',
+    'approval.resolved',
+    'elicitation.requested',
+    'elicitation.resolved'
+  ])
 })
 
 test('AgentBridge exposes failures without swallowing the host error', async () => {

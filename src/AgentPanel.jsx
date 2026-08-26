@@ -19,7 +19,7 @@ import {
   X,
   Workflow
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 
 const EMPTY_BRIDGE_STATE = {
   status: 'unavailable',
@@ -34,7 +34,26 @@ const EMPTY_BRIDGE_STATE = {
 
 const AGENT_CONTEXT_MAX_SHAPE_IDS = 250
 export const AGENT_ACTIVITY_MAX_ITEMS = 80
-const AGENT_ACTIVITY_MAX_EVENT_IDS = 4_096
+export const AGENT_ACTIVITY_MAX_EVENT_IDS = 4_096
+export const AGENT_CONVERSATION_MAX_TURNS = 20
+
+const AGENT_TURN_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])
+const AGENT_TURN_EVENTS_ABSORBED_AFTER_TERMINAL = new Set([
+  'turn.started',
+  'agent.delta',
+  'agent.plan',
+  'agent.diff',
+  'approval.requested',
+  'approval.resolved',
+  'elicitation.requested',
+  'elicitation.resolved'
+])
+
+const DEFAULT_TERMINAL_ACTIVITY_TEXT = new Set([
+  '结果已返回 Yogurt AI。',
+  '执行中遇到错误。',
+  '已停止当前执行。'
+])
 
 const QUICK_TASKS = [
   { icon: Sparkles, label: '整理选区', prompt: '整理当前画布选区；如果没有选中对象，则整理当前页面。找出主题、关系与待确认问题。' },
@@ -665,6 +684,431 @@ export function mergeAgentActivityItems(items, nextItem) {
   return [...currentItems, nextItem].slice(-AGENT_ACTIVITY_MAX_ITEMS)
 }
 
+function idText(value) {
+  return value == null || value === '' ? null : String(value)
+}
+
+function taskFromConversationEvent(event) {
+  return event?.task && typeof event.task === 'object' ? event.task : null
+}
+
+function taskIdFromConversationEvent(event) {
+  const task = taskFromConversationEvent(event)
+  return idText(event?.taskId ?? task?.id ?? task?.taskId)
+}
+
+function threadIdFromConversationEvent(event) {
+  const task = taskFromConversationEvent(event)
+  return idText(event?.threadId ?? task?.threadId)
+}
+
+function turnIdFromConversationEvent(event) {
+  const task = taskFromConversationEvent(event)
+  return idText(event?.turnId ?? task?.turnId)
+}
+
+function conversationRequestKey(event) {
+  const type = String(event?.type || '')
+  const family = type.startsWith('elicitation.')
+    ? 'elicitation'
+    : type.startsWith('approval.')
+      ? 'approval'
+      : null
+  if (!family) return null
+  const requestId = idText(
+    event?.requestId ??
+      event?.approval?.requestId ??
+      event?.approval?.id ??
+      event?.elicitation?.requestId ??
+      event?.elicitation?.id
+  )
+  return requestId ? `${family}:${requestId}` : null
+}
+
+function isConversationEvent(event) {
+  const type = String(event?.type || '')
+  return (
+    type === 'task.restored' ||
+    type.startsWith('task.') ||
+    type.startsWith('turn.') ||
+    type.startsWith('agent.') ||
+    type.startsWith('approval.') ||
+    type.startsWith('elicitation.')
+  )
+}
+
+function isTerminalTurnStatus(status) {
+  return AGENT_TURN_TERMINAL_STATUSES.has(status)
+}
+
+function conversationStatusFromTask(status) {
+  const normalized = String(status || '').toLowerCase()
+  if (['succeeded', 'completed', 'complete'].includes(normalized)) return 'completed'
+  if (['failed', 'error'].includes(normalized)) return 'failed'
+  if (['cancelled', 'canceled'].includes(normalized)) return 'cancelled'
+  if (['accepted', 'sent', 'running'].includes(normalized)) return 'running'
+  if (['sending', 'pending', 'submitting'].includes(normalized)) return 'submitting'
+  return null
+}
+
+function terminalStatusFromConversationEvent(event) {
+  const taskStatus = conversationStatusFromTask(taskFromConversationEvent(event)?.status)
+  if (isTerminalTurnStatus(taskStatus)) return taskStatus
+  if (event?.type === 'turn.completed') return 'completed'
+  if (event?.type === 'turn.failed' || event?.type === 'task.failed') return 'failed'
+  if (event?.type === 'turn.cancelled' || event?.type === 'task.cancelled') return 'cancelled'
+  return null
+}
+
+function conversationStatusFromEvent(event, currentStatus = 'submitting') {
+  if (isTerminalTurnStatus(currentStatus)) return currentStatus
+  const taskStatus = conversationStatusFromTask(taskFromConversationEvent(event)?.status)
+  if (taskStatus) return taskStatus
+  switch (event?.type) {
+    case 'task.started':
+      return 'submitting'
+    case 'task.accepted':
+    case 'task.restored':
+    case 'turn.started':
+    case 'agent.delta':
+    case 'agent.plan':
+    case 'agent.diff':
+    case 'approval.resolved':
+    case 'elicitation.resolved':
+      return 'running'
+    case 'approval.requested':
+      return 'waiting_approval'
+    case 'elicitation.requested':
+      return 'waiting_input'
+    case 'turn.completed':
+      return 'completed'
+    case 'task.failed':
+    case 'turn.failed':
+      return 'failed'
+    case 'task.cancelled':
+    case 'turn.cancelled':
+      return 'cancelled'
+    default:
+      return currentStatus
+  }
+}
+
+function userTextFromConversationEvent(event) {
+  const task = taskFromConversationEvent(event)
+  return normalizeActivityText(
+    task?.metadata?.instruction ??
+      event?.metadata?.instruction ??
+      event?.instruction ??
+      ''
+  ).trim()
+}
+
+function conversationErrorItem(event) {
+  if (!['task.failed', 'turn.failed'].includes(event?.type)) return null
+  const task = taskFromConversationEvent(event)
+  const message = normalizeActivityText(
+    event?.error?.message ?? task?.error?.message ?? event?.text ?? '执行中遇到错误。'
+  ).trim()
+  return {
+    id: event?.eventId || `${event?.type}:${taskIdFromConversationEvent(event) || turnIdFromConversationEvent(event) || event?.at || ''}`,
+    sourceEventId: event?.eventId || null,
+    sourceEventIds: event?.eventId ? [event.eventId] : [],
+    type: event?.type,
+    kind: 'error',
+    label: '任务失败',
+    metaLabel: '需要检查',
+    text: message,
+    at: event?.at || task?.finishedAt || new Date().toISOString(),
+    turnId: turnIdFromConversationEvent(event),
+    itemId: null
+  }
+}
+
+function mergeConversationTurnItem(items, nextItem) {
+  if (!nextItem) return Array.isArray(items) ? items.slice(-AGENT_ACTIVITY_MAX_ITEMS) : []
+  const currentItems = Array.isArray(items) ? items : []
+  if (['agent.plan', 'agent.diff'].includes(nextItem.type)) {
+    return [...currentItems.filter((item) => item.type !== nextItem.type), nextItem]
+      .slice(-AGENT_ACTIVITY_MAX_ITEMS)
+  }
+  if (nextItem.type === 'turn.started') {
+    return [...currentItems.filter((item) => item.type !== 'turn.started'), nextItem]
+      .slice(-AGENT_ACTIVITY_MAX_ITEMS)
+  }
+  if (['turn.completed', 'turn.failed', 'turn.cancelled', 'task.failed', 'task.cancelled'].includes(nextItem.type)) {
+    return [
+      ...currentItems.filter((item) => ![
+        'turn.completed',
+        'turn.failed',
+        'turn.cancelled',
+        'task.failed',
+        'task.cancelled'
+      ].includes(item.type)),
+      nextItem
+    ].slice(-AGENT_ACTIVITY_MAX_ITEMS)
+  }
+  return mergeAgentActivityItems(currentItems, nextItem)
+}
+
+function newConversationTurn(event, index) {
+  const task = taskFromConversationEvent(event)
+  const taskId = taskIdFromConversationEvent(event)
+  const threadId = threadIdFromConversationEvent(event)
+  const turnId = turnIdFromConversationEvent(event)
+  const requestKey = conversationRequestKey(event)
+  const fallbackKey = `${String(event?.type || 'event')}:${event?.at || index}`
+  return {
+    key: taskId ? `task:${taskId}` : turnId ? `turn:${turnId}` : requestKey || fallbackKey,
+    taskId,
+    threadId,
+    turnId,
+    userText: userTextFromConversationEvent(event),
+    startedAt: event?.at || task?.startedAt || new Date().toISOString(),
+    finishedAt: task?.finishedAt || null,
+    status: conversationStatusFromEvent(event),
+    items: [],
+    requestKeys: requestKey ? [requestKey] : [],
+    seenEventIds: []
+  }
+}
+
+function findConversationTurnIndex(turns, event) {
+  const taskId = taskIdFromConversationEvent(event)
+  const turnId = turnIdFromConversationEvent(event)
+  const threadId = threadIdFromConversationEvent(event)
+  const requestKey = conversationRequestKey(event)
+  if (taskId) {
+    const index = turns.findIndex((turn) => turn.taskId === taskId)
+    if (index >= 0) return index
+  }
+  if (turnId) {
+    const index = turns.findIndex((turn) => turn.turnId === turnId)
+    if (index >= 0) return index
+  }
+  if (requestKey) {
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      if (!isTerminalTurnStatus(turns[index].status) && turns[index].requestKeys.includes(requestKey)) return index
+    }
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      if (turns[index].requestKeys.includes(requestKey)) return index
+    }
+    if (String(event?.type || '').endsWith('.resolved')) return -1
+  }
+
+  const activeTurns = turns
+    .map((turn, index) => ({ turn, index }))
+    .filter(({ turn }) => !isTerminalTurnStatus(turn.status))
+  if (threadId) {
+    const sameThread = activeTurns.filter(({ turn }) => turn.threadId === threadId)
+    if (sameThread.length === 1) return sameThread[0].index
+    const unbound = activeTurns.filter(({ turn }) => !turn.threadId)
+    if (sameThread.length === 0 && unbound.length === 1) return unbound[0].index
+  }
+  if (turnId) {
+    const unbound = activeTurns.filter(({ turn }) => !turn.turnId)
+    if (unbound.length === 1) return unbound[0].index
+    return -1
+  }
+  if (activeTurns.length === 1 && !String(event?.type || '').startsWith('task.')) {
+    return activeTurns[0].index
+  }
+  return -1
+}
+
+export function createAgentConversationState() {
+  return { turns: [] }
+}
+
+export function reduceAgentConversation(state = createAgentConversationState(), event) {
+  if (event?.type === 'conversation.reset') {
+    return restoreAgentConversationState(event.bridgeState)
+  }
+  if (!isConversationEvent(event)) return state
+
+  const turns = Array.isArray(state?.turns) ? state.turns : []
+  let turnIndex = findConversationTurnIndex(turns, event)
+  if (turnIndex < 0 && String(event?.type || '').endsWith('.resolved')) return state
+  let turn = turnIndex >= 0 ? turns[turnIndex] : newConversationTurn(event, turns.length)
+  const eventId = idText(event?.eventId)
+  if (eventId && turn.seenEventIds.includes(eventId)) return state
+  if (
+    isTerminalTurnStatus(turn.status) &&
+    AGENT_TURN_EVENTS_ABSORBED_AFTER_TERMINAL.has(String(event?.type || ''))
+  ) {
+    return state
+  }
+  const incomingTerminalStatus = terminalStatusFromConversationEvent(event)
+  if (
+    isTerminalTurnStatus(turn.status) &&
+    incomingTerminalStatus &&
+    incomingTerminalStatus !== turn.status
+  ) {
+    return state
+  }
+
+  const task = taskFromConversationEvent(event)
+  const requestKey = conversationRequestKey(event)
+  const nextItem = conversationErrorItem(event) || normalizeActivityEvent(event)
+  const nextTurn = {
+    ...turn,
+    taskId: turn.taskId || taskIdFromConversationEvent(event),
+    threadId: turn.threadId || threadIdFromConversationEvent(event),
+    turnId: turn.turnId || turnIdFromConversationEvent(event),
+    userText: turn.userText || userTextFromConversationEvent(event),
+    startedAt: turn.startedAt || event?.at || task?.startedAt || null,
+    finishedAt: task?.finishedAt || (
+      ['turn.completed', 'turn.failed', 'turn.cancelled', 'task.failed', 'task.cancelled'].includes(event?.type)
+        ? event?.at || turn.finishedAt
+        : turn.finishedAt
+    ),
+    status: conversationStatusFromEvent(event, turn.status),
+    items: mergeConversationTurnItem(turn.items, nextItem),
+    requestKeys: requestKey && !turn.requestKeys.includes(requestKey)
+      ? [...turn.requestKeys, requestKey]
+      : turn.requestKeys,
+    seenEventIds: eventId
+      ? [...turn.seenEventIds, eventId].slice(-AGENT_ACTIVITY_MAX_EVENT_IDS)
+      : turn.seenEventIds
+  }
+
+  const nextTurns = turnIndex >= 0
+    ? turns.map((candidate, index) => (index === turnIndex ? nextTurn : candidate))
+    : [...turns, nextTurn]
+  return { turns: nextTurns.slice(-AGENT_CONVERSATION_MAX_TURNS) }
+}
+
+export function restoreAgentConversationState(bridgeState) {
+  let state = createAgentConversationState()
+  if (bridgeState?.lastTask) {
+    state = reduceAgentConversation(state, {
+      type: 'task.restored',
+      task: bridgeState.lastTask,
+      at: bridgeState.lastTask.startedAt || bridgeState.lastTask.finishedAt || new Date().toISOString()
+    })
+  }
+  if (bridgeState?.lastEvent) {
+    state = reduceAgentConversation(state, bridgeState.lastEvent)
+  }
+  return state
+}
+
+export function conversationTurnParts(turn) {
+  const items = Array.isArray(turn?.items) ? turn.items : []
+  const messageItems = items.filter((item) => item.kind === 'message' && item.text)
+  const terminalResultItem = items
+    .filter((item) => item.type === 'turn.completed' && item.text && !DEFAULT_TERMINAL_ACTIVITY_TEXT.has(item.text))
+    .at(-1) || null
+  const traceItems = items.filter((item) => ['plan', 'progress'].includes(item.kind))
+  const changeItem = items.filter((item) => item.kind === 'diff' && item.text).at(-1) || null
+  const errorItem = items.filter((item) => item.kind === 'error' && item.text).at(-1) || null
+  return {
+    assistantText: messageItems.length > 0
+      ? messageItems.map((item) => item.text.trim()).filter(Boolean).join('\n\n')
+      : terminalResultItem?.text || '',
+    traceItems,
+    changeText: changeItem?.text || '',
+    errorText: errorItem?.text || ''
+  }
+}
+
+function conversationStatusPresentation(status) {
+  if (status === 'completed') return { label: '已完成', tone: 'success', Icon: CheckCircle2 }
+  if (status === 'failed') return { label: '执行失败', tone: 'error', Icon: AlertCircle }
+  if (status === 'cancelled') return { label: '已停止', tone: 'idle', Icon: Square }
+  if (status === 'waiting_approval' || status === 'waiting_input') {
+    return { label: '等待你的操作', tone: 'attention', Icon: AlertCircle }
+  }
+  if (status === 'submitting') return { label: '正在准备', tone: 'working', Icon: LoaderCircle }
+  return { label: '正在执行', tone: 'working', Icon: LoaderCircle }
+}
+
+function AgentExecutionTrace({ status, traceItems }) {
+  const active = !isTerminalTurnStatus(status)
+  const count = traceItems.length
+  const summary = active
+    ? count > 0 ? `正在执行 · ${count} 条进度` : '正在读取画布与任务上下文'
+    : count > 0 ? `执行过程 · ${count} 条记录` : '执行过程'
+  return (
+    <details className="cowart-agent-trace" open={active || undefined}>
+      <summary>
+        {active ? (
+          <LoaderCircle aria-hidden="true" className="cowart-spin" size={13} />
+        ) : (
+          <CheckCircle2 aria-hidden="true" size={13} />
+        )}
+        <span>{summary}</span>
+        <ChevronRight aria-hidden="true" className="cowart-agent-trace-chevron" size={13} />
+      </summary>
+      <div className="cowart-agent-trace-list">
+        {traceItems.length > 0 ? traceItems.map((item) => (
+          <div className="cowart-agent-trace-item" key={item.id}>
+            <span aria-hidden="true"><Workflow size={12} /></span>
+            <p>{item.text}</p>
+          </div>
+        )) : (
+          <p className="cowart-agent-trace-empty">Agent 正在分析当前画布，新的进度会显示在这里。</p>
+        )}
+      </div>
+    </details>
+  )
+}
+
+function AgentConversationTurn({ turn }) {
+  const parts = conversationTurnParts(turn)
+  const presentation = conversationStatusPresentation(turn.status)
+  const StatusIcon = presentation.Icon
+  const active = !isTerminalTurnStatus(turn.status)
+  return (
+    <article className="cowart-agent-turn" data-status={turn.status}>
+      {turn.userText && (
+        <div className="cowart-agent-user-row">
+          <div className="cowart-agent-user-bubble">{turn.userText}</div>
+        </div>
+      )}
+      <div className="cowart-agent-assistant-row">
+        <span className="cowart-agent-assistant-avatar" aria-hidden="true"><Bot size={15} /></span>
+        <div className="cowart-agent-assistant-body">
+          <header>
+            <strong>Codex Agent</strong>
+            <small data-tone={presentation.tone}>
+              <StatusIcon className={presentation.tone === 'working' ? 'cowart-spin' : undefined} size={11} />
+              {presentation.label}
+            </small>
+          </header>
+          {parts.assistantText ? (
+            <div className="cowart-agent-message-content">{parts.assistantText}</div>
+          ) : active ? (
+            <div className="cowart-agent-message-pending">
+              <span aria-hidden="true"><i /><i /><i /></span>
+              Agent 正在处理这项任务
+            </div>
+          ) : null}
+          <AgentExecutionTrace status={turn.status} traceItems={parts.traceItems} />
+          {parts.changeText && (
+            <details className="cowart-agent-change-set">
+              <summary>
+                <FileText aria-hidden="true" size={13} />
+                <span>变更摘要</span>
+                <ChevronRight aria-hidden="true" size={13} />
+              </summary>
+              <p>{parts.changeText}</p>
+            </details>
+          )}
+          {parts.errorText && (
+            <div className="cowart-agent-turn-error" role="alert">
+              <AlertCircle aria-hidden="true" size={13} />
+              <p>{parts.errorText}</p>
+            </div>
+          )}
+          {turn.finishedAt && (
+            <time dateTime={turn.finishedAt}>{formatTaskTime(turn.finishedAt)}</time>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
 function approvalRequestIdFromBridgeState(state) {
   return (
     state?.activity?.approval?.requestId ??
@@ -738,6 +1182,16 @@ export function buildAgentPanelMessage(instruction, context = {}) {
 function createTaskId() {
   const suffix = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
   return `cowart-agent-${Date.now()}-${suffix}`
+}
+
+export function claimAgentSubmission(lock) {
+  if (!lock || lock.current) return false
+  lock.current = true
+  return true
+}
+
+export function releaseAgentSubmission(lock) {
+  if (lock) lock.current = false
 }
 
 function AgentTaskStatus({ task }) {
@@ -1048,10 +1502,13 @@ export function CowartAgentPanel({
   onOpenChange
 }) {
   const [bridgeState, setBridgeState] = useState(() => bridge?.getState?.() ?? EMPTY_BRIDGE_STATE)
+  const [conversation, dispatchConversation] = useReducer(
+    reduceAgentConversation,
+    bridge?.getState?.() ?? EMPTY_BRIDGE_STATE,
+    restoreAgentConversationState
+  )
   const [context, setContext] = useState(() => readContext(contextProvider))
   const [instruction, setInstruction] = useState('')
-  const [localTask, setLocalTask] = useState(null)
-  const [activityItems, setActivityItems] = useState([])
   const [approvalResolution, setApprovalResolution] = useState({ requestId: null, status: 'idle' })
   const [elicitationResolution, setElicitationResolution] = useState({ requestId: null, status: 'idle' })
   const [isInterrupting, setIsInterrupting] = useState(false)
@@ -1060,11 +1517,15 @@ export function CowartAgentPanel({
   const [isStartingCodexLogin, setIsStartingCodexLogin] = useState(false)
   const [setupNotice, setSetupNotice] = useState('')
   const [sendError, setSendError] = useState('')
+  const [isPreparing, setIsPreparing] = useState(false)
   const [hasUnreadReply, setHasUnreadReply] = useState(() => (
     !isOpen && bridge?.getState?.()?.lastEvent?.type === 'agent.delta'
   ))
   const textAreaRef = useRef(null)
   const blockingInteractionRef = useRef(null)
+  const panelBodyRef = useRef(null)
+  const submissionLockRef = useRef(false)
+  const shouldFollowConversationRef = useRef(true)
   const isOpenRef = useRef(isOpen)
   const autoOpenedInteractionRef = useRef(null)
 
@@ -1076,25 +1537,25 @@ export function CowartAgentPanel({
   useEffect(() => {
     if (!bridge) {
       setBridgeState(EMPTY_BRIDGE_STATE)
+      dispatchConversation({ type: 'conversation.reset', bridgeState: EMPTY_BRIDGE_STATE })
       return undefined
     }
 
-    function recordActivity(event) {
-      const nextItem = normalizeActivityEvent(event)
-      if (!nextItem) return
-      if (nextItem.type === 'agent.delta' && !isOpenRef.current) {
+    function recordConversationEvent(event) {
+      if (!isConversationEvent(event)) return
+      if (event.type === 'agent.delta' && !isOpenRef.current) {
         setHasUnreadReply(true)
       }
-      setActivityItems((items) => mergeAgentActivityItems(items, nextItem))
+      dispatchConversation(event)
     }
 
     const initialState = bridge.getState()
     setBridgeState(initialState)
-    recordActivity(initialState.lastEvent)
+    dispatchConversation({ type: 'conversation.reset', bridgeState: initialState })
     const unsubscribe = bridge.subscribe(
       (nextState, event) => {
         setBridgeState(nextState)
-        recordActivity(event ?? nextState.lastEvent)
+        recordConversationEvent(event ?? nextState.lastEvent)
       },
       { emitCurrent: true }
     )
@@ -1119,32 +1580,6 @@ export function CowartAgentPanel({
     return () => window.clearInterval(interval)
   }, [contextProvider, isOpen])
 
-  const bridgeTask = bridgeState.lastTask
-  const recentTask = useMemo(() => {
-    if (!bridgeTask) return localTask
-    if (!localTask || bridgeTask.id !== localTask.id) {
-      return {
-        id: bridgeTask.id,
-        title: bridgeTask.metadata?.instruction || '画布任务',
-        status: taskStatusFromActivity(
-          bridgeState.activity,
-          bridgeTask.status,
-          bridgeState.capabilities?.streaming
-        ),
-        startedAt: bridgeTask.startedAt
-      }
-    }
-    return {
-      ...localTask,
-      status: taskStatusFromActivity(
-        bridgeState.activity,
-        bridgeTask.status,
-        bridgeState.capabilities?.streaming
-      ),
-      startedAt: bridgeTask.startedAt || localTask.startedAt
-    }
-  }, [bridgeState.activity, bridgeState.capabilities?.streaming, bridgeTask, localTask])
-
   const connection = connectionPresentation(bridgeState)
   const desktopSetup = bridgeState.capabilities?.setup ?? null
   const workspaceSetup = desktopSetup?.workspace ?? null
@@ -1164,10 +1599,19 @@ export function CowartAgentPanel({
     bridgeState.capabilities?.elicitation
   )
   const isSending =
+    isPreparing ||
     bridgeState.status === 'sending' ||
     bridgeState.pendingTaskIds?.length > 0 ||
     Boolean(pendingElicitation) ||
     (followsAgentActivity && ['submitting', 'running', 'waiting_approval', 'waiting_elicitation'].includes(activityPhase))
+  const canInterrupt = Boolean(
+    isSending &&
+      bridgeState.capabilities?.interrupt &&
+      typeof bridge?.interrupt === 'function' &&
+      !hasBlockingInteraction
+  )
+  const conversationTurns = conversation.turns
+  const hasConversation = conversationTurns.length > 0
   const selectedCount = Number(context?.selectedCount) || 0
   const pageShapeCount = Number(context?.pageShapeCount) || 0
   const scopeLabel = selectedCount > 0 ? `已选 ${selectedCount} 项` : `页面 ${pageShapeCount} 项`
@@ -1199,10 +1643,19 @@ export function CowartAgentPanel({
   useEffect(() => {
     if (!isOpen || !hasBlockingInteraction) return undefined
     const frame = window.requestAnimationFrame(() => {
-      blockingInteractionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+      blockingInteractionRef.current?.focus?.({ preventScroll: true })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [approvalRequestId, elicitationRequestId, hasBlockingInteraction, isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !shouldFollowConversationRef.current || conversation.turns.length === 0) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const body = panelBodyRef.current
+      body?.scrollTo?.({ top: body.scrollHeight, behavior: 'auto' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [conversation, isOpen])
 
   const applyQuickTask = useCallback((prompt) => {
     setInstruction(prompt)
@@ -1329,16 +1782,30 @@ export function CowartAgentPanel({
   async function handleSubmit(event) {
     event?.preventDefault()
     const request = instruction.trim()
-    if (!request || isSending || !isAvailable || !bridge) return
+    if (!request || isSending || !isAvailable || !bridge || !claimAgentSubmission(submissionLockRef)) return
 
+    setIsPreparing(true)
+    shouldFollowConversationRef.current = true
     setSendError('')
-    setActivityItems([])
     setApprovalResolution({ requestId: null, status: 'idle' })
     setElicitationResolution({ requestId: null, status: 'idle' })
     const taskId = createTaskId()
     let taskContext = readContext(contextProvider) ?? context ?? {}
     const startedAt = new Date().toISOString()
-    setLocalTask({ id: taskId, title: request, status: 'sending', startedAt })
+    const initialTask = {
+      id: taskId,
+      status: 'sending',
+      startedAt,
+      metadata: {
+        source: 'cowart-agent-panel',
+        instruction: request,
+        projectName: taskContext.projectName || null,
+        pageId: taskContext.pageId || null,
+        pageName: taskContext.pageName || null,
+        selectedCount: Number(taskContext.selectedCount) || 0
+      }
+    }
+    dispatchConversation({ type: 'task.started', task: initialTask, at: startedAt })
 
     try {
       const preparedContext = await beforeSend?.(taskContext)
@@ -1346,8 +1813,7 @@ export function CowartAgentPanel({
       await bridge.sendTask(buildAgentPanelMessage(request, taskContext), {
         taskId,
         metadata: {
-          source: 'cowart-agent-panel',
-          instruction: request,
+          ...initialTask.metadata,
           projectName: taskContext.projectName || null,
           pageId: taskContext.pageId || null,
           pageName: taskContext.pageName || null,
@@ -1358,12 +1824,21 @@ export function CowartAgentPanel({
           hasReference: Number(taskContext.selectedCount) > 0
         }
       })
-      setLocalTask((task) => (task?.id === taskId ? { ...task, status: 'sent' } : task))
       setInstruction('')
     } catch (error) {
       console.error(error)
-      setLocalTask((task) => (task?.id === taskId ? { ...task, status: 'error' } : task))
-      setSendError(error?.message || '无法发送任务，请稍后重试。')
+      const message = error?.message || '无法发送任务，请稍后重试。'
+      const finishedAt = new Date().toISOString()
+      dispatchConversation({
+        type: 'task.failed',
+        task: { ...initialTask, status: 'failed', finishedAt, error: { message } },
+        error: { message },
+        at: finishedAt
+      })
+      setSendError(message)
+    } finally {
+      releaseAgentSubmission(submissionLockRef)
+      setIsPreparing(false)
     }
   }
 
@@ -1400,7 +1875,7 @@ export function CowartAgentPanel({
         </span>
         <span className="cowart-agent-heading">
           <strong>Codex Agent</strong>
-          <small>画布任务工作台</small>
+          <small>画布协作 Agent</small>
         </span>
         <span className="cowart-agent-connection" data-tone={connection.tone} aria-live="polite">
           <i aria-hidden="true" />
@@ -1417,71 +1892,15 @@ export function CowartAgentPanel({
         </button>
       </header>
 
-      <div className="cowart-agent-panel-body">
-        {hasBlockingInteraction && (
-          <section
-            ref={blockingInteractionRef}
-            aria-labelledby="cowart-agent-blocking-title"
-            className="cowart-agent-blocking"
-            role="region"
-          >
-            <header
-              aria-atomic="true"
-              aria-live="assertive"
-              className="cowart-agent-blocking-header"
-              role="alert"
-            >
-              <span aria-hidden="true"><AlertCircle size={17} /></span>
-              <div>
-                <strong id="cowart-agent-blocking-title">需要你的操作</strong>
-                <p>任务已暂停，完成下面的确认后 Codex 才会继续。</p>
-              </div>
-              <small>任务已暂停</small>
-            </header>
-            {hasPendingApproval && (
-              <div className="cowart-agent-approval">
-                <strong>确认这次操作</strong>
-                <p>
-                  {activityText(bridgeState.activity.approval) ||
-                    '这一步可能会修改画布或项目文件。'}
-                </p>
-                {typeof bridge?.respondApproval === 'function' && approvalCanRespond(approvalStatus) && (
-                  <div>
-                    <button onClick={() => handleApproval('decline')} type="button">
-                      <X aria-hidden="true" size={13} />
-                      拒绝
-                    </button>
-                    <button data-primary="true" onClick={() => handleApproval('accept')} type="button">
-                      <CheckCircle2 aria-hidden="true" size={13} />
-                      {approvalStatus === 'error' ? '重试并继续' : '允许并继续'}
-                    </button>
-                  </div>
-                )}
-                {approvalStatus !== 'idle' && (
-                  <small aria-live="polite">
-                    {approvalStatus === 'sending'
-                      ? '正在提交…'
-                      : approvalStatus === 'accept'
-                        ? '已允许，Codex 将继续执行。'
-                        : approvalStatus === 'decline'
-                          ? '已拒绝这一步。'
-                          : '提交失败，请重试。'}
-                  </small>
-                )}
-              </div>
-            )}
-            {pendingElicitation && elicitationRequestId != null && (
-              <ElicitationCard
-                key={String(elicitationRequestId)}
-                onRespond={handleElicitation}
-                request={pendingElicitation}
-                requestId={elicitationRequestId}
-                responseStatus={elicitationStatus}
-              />
-            )}
-          </section>
-        )}
-
+      <div
+        ref={panelBodyRef}
+        className="cowart-agent-panel-body"
+        onScroll={(event) => {
+          const element = event.currentTarget
+          const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+          shouldFollowConversationRef.current = distanceFromBottom < 96
+        }}
+      >
         {workspaceSetup?.status === 'required' && (
           <section className="cowart-agent-setup-card" data-kind="workspace" aria-labelledby="cowart-agent-setup-title">
             <span className="cowart-agent-setup-icon" aria-hidden="true">
@@ -1542,117 +1961,135 @@ export function CowartAgentPanel({
           <p className="cowart-agent-setup-notice" role="status">{setupNotice}</p>
         )}
 
-        <section className="cowart-agent-context-card" aria-labelledby="cowart-agent-context-title">
-          <div className="cowart-agent-section-heading">
-            <span id="cowart-agent-context-title">项目上下文</span>
-            <span className="cowart-agent-context-actions">
-              {workspaceSetup?.status === 'ready' && typeof bridge?.selectWorkspace === 'function' && (
-                <button
-                  disabled={isSelectingWorkspace}
-                  onClick={handleSelectWorkspace}
-                  title="更换工作区并重新打开应用"
-                  type="button"
-                >
-                  <FolderOpen aria-hidden="true" size={12} />
-                  更换
-                </button>
-              )}
-              <span className="cowart-agent-scope-chip" data-selection={selectedCount > 0 ? 'true' : 'false'}>
-                {scopeLabel}
-              </span>
-            </span>
-          </div>
-          <strong className="cowart-agent-project-name">
-            {context?.projectName || 'Yogurt AI 画布'}
-          </strong>
-          <span className="cowart-agent-page-name">
-            <span aria-hidden="true">当前页</span>
-            <b>{context?.pageName || '未命名页面'}</b>
-          </span>
-          <p>
-            {selectedCount > 0
-              ? 'Agent 会优先使用已选对象，同时保留它们在页面中的关系。'
-              : '未选中对象，Agent 将以当前页面作为工作范围。'}
-          </p>
-        </section>
-
-        <section className="cowart-agent-quick-section" aria-labelledby="cowart-agent-quick-title">
-          <div className="cowart-agent-section-heading">
-            <span id="cowart-agent-quick-title">快捷任务</span>
-          </div>
-          <div className="cowart-agent-quick-grid">
-            {QUICK_TASKS.map(({ icon: Icon, label, prompt }) => (
-              <button key={label} onClick={() => applyQuickTask(prompt)} type="button">
-                <Icon aria-hidden="true" size={15} />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="cowart-agent-recent" aria-labelledby="cowart-agent-recent-title">
-          <div className="cowart-agent-section-heading">
-            <span id="cowart-agent-recent-title">最近任务</span>
-          </div>
-          <AgentTaskStatus task={recentTask} />
-        </section>
-
-        {(activityItems.length > 0 || pendingElicitation || (followsAgentActivity && activityPhase !== 'idle')) && (
-          <section
-            className="cowart-agent-activity"
-            aria-labelledby="cowart-agent-activity-title"
-            data-blocked={hasBlockingInteraction ? 'true' : 'false'}
-          >
-            <div className="cowart-agent-section-heading">
-              <span id="cowart-agent-activity-title">Agent 对话与进度</span>
-              {isSending &&
-                bridgeState.capabilities?.interrupt &&
-                typeof bridge?.interrupt === 'function' && (
-                  <button
-                    className="cowart-agent-interrupt"
-                    disabled={isInterrupting}
-                    onClick={handleInterrupt}
-                    type="button"
-                  >
-                    <Square aria-hidden="true" size={10} />
-                    {isInterrupting ? '正在中断' : '中断'}
+        {!hasConversation && (
+          <section className="cowart-agent-welcome" aria-labelledby="cowart-agent-welcome-title">
+            <span className="cowart-agent-welcome-icon" aria-hidden="true"><Sparkles size={19} /></span>
+            <h2 id="cowart-agent-welcome-title">和 Agent 一起整理这张画布</h2>
+            <p>直接描述你想完成的事。Agent 会读取当前页与选区，并把结果继续写回 Yogurt AI。</p>
+            <div className="cowart-agent-welcome-context" aria-label="当前工作范围">
+              <span><FileText aria-hidden="true" size={13} />{context?.pageName || '未命名页面'}</span>
+              <span data-selection={selectedCount > 0 ? 'true' : 'false'}>{scopeLabel}</span>
+            </div>
+            {isAvailable && (
+              <div className="cowart-agent-quick-grid" aria-label="快捷任务">
+                {QUICK_TASKS.map(({ icon: Icon, label, prompt }) => (
+                  <button key={label} onClick={() => applyQuickTask(prompt)} type="button">
+                    <Icon aria-hidden="true" size={15} />
+                    <span>{label}</span>
+                    <ChevronRight aria-hidden="true" size={13} />
                   </button>
-                )}
-            </div>
-            <div
-              className="cowart-agent-activity-list"
-              aria-live="polite"
-              aria-relevant="additions text"
-              role="log"
-            >
-              {activityItems.length > 0 ? (
-                activityItems.map((item) => <AgentActivityItem item={item} key={item.id} />)
-              ) : (
-                <div className="cowart-agent-activity-waiting">
-                  {hasBlockingInteraction ? (
-                    <AlertCircle aria-hidden="true" size={14} />
-                  ) : (
-                    <LoaderCircle aria-hidden="true" className="cowart-spin" size={14} />
-                  )}
-                  <span>
-                    {hasBlockingInteraction
-                      ? '任务正在等待你的操作。'
-                      : bridgeState.activity?.message || 'Codex 正在处理画布任务…'}
-                  </span>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {hasConversation && (
+          <section
+            aria-label="Agent 对话"
+            aria-live="polite"
+            aria-relevant="additions text"
+            className="cowart-agent-thread"
+            role="log"
+          >
+            {conversationTurns.map((turn) => (
+              <AgentConversationTurn key={turn.key} turn={turn} />
+            ))}
           </section>
         )}
       </div>
 
+      {hasBlockingInteraction && (
+        <div className="cowart-agent-interaction-dock">
+          <section
+            ref={blockingInteractionRef}
+            aria-labelledby="cowart-agent-blocking-title"
+            className="cowart-agent-blocking"
+            role="region"
+            tabIndex={-1}
+          >
+            <header
+              aria-atomic="true"
+              aria-live="assertive"
+              className="cowart-agent-blocking-header"
+              role="alert"
+            >
+              <span aria-hidden="true"><AlertCircle size={17} /></span>
+              <div>
+                <strong id="cowart-agent-blocking-title">需要你的操作</strong>
+                <p>任务已暂停，处理下面的问题后 Agent 才会继续。</p>
+              </div>
+            </header>
+            {hasPendingApproval && (
+              <div className="cowart-agent-approval">
+                <strong>确认这次操作</strong>
+                <p>
+                  {activityText(bridgeState.activity.approval) ||
+                    '这一步可能会修改画布或项目文件。'}
+                </p>
+                {typeof bridge?.respondApproval === 'function' && approvalCanRespond(approvalStatus) && (
+                  <div>
+                    <button onClick={() => handleApproval('decline')} type="button">
+                      <X aria-hidden="true" size={13} />
+                      拒绝
+                    </button>
+                    <button data-primary="true" onClick={() => handleApproval('accept')} type="button">
+                      <CheckCircle2 aria-hidden="true" size={13} />
+                      {approvalStatus === 'error' ? '重试并继续' : '允许并继续'}
+                    </button>
+                  </div>
+                )}
+                {approvalStatus !== 'idle' && (
+                  <small aria-live="polite">
+                    {approvalStatus === 'sending'
+                      ? '正在提交…'
+                      : approvalStatus === 'accept'
+                        ? '已允许，Agent 将继续执行。'
+                        : approvalStatus === 'decline'
+                          ? '已拒绝这一步。'
+                          : '提交失败，请重试。'}
+                  </small>
+                )}
+              </div>
+            )}
+            {pendingElicitation && elicitationRequestId != null && (
+              <ElicitationCard
+                key={String(elicitationRequestId)}
+                onRespond={handleElicitation}
+                request={pendingElicitation}
+                requestId={elicitationRequestId}
+                responseStatus={elicitationStatus}
+              />
+            )}
+          </section>
+        </div>
+      )}
+
       <form className="cowart-agent-composer" onSubmit={handleSubmit}>
+        <div className="cowart-agent-composer-context" aria-label="Agent 将使用的画布范围">
+          <span title={context?.pageName || '未命名页面'}>
+            <FileText aria-hidden="true" size={12} />
+            {context?.pageName || '未命名页面'}
+          </span>
+          <span data-selection={selectedCount > 0 ? 'true' : 'false'}>{scopeLabel}</span>
+          {workspaceSetup?.status === 'ready' && typeof bridge?.selectWorkspace === 'function' && (
+            <button
+              disabled={isSelectingWorkspace}
+              onClick={handleSelectWorkspace}
+              title="更换工作区并重新打开应用"
+              type="button"
+            >
+              <FolderOpen aria-hidden="true" size={12} />
+              工作区
+            </button>
+          )}
+        </div>
         <label htmlFor="cowart-agent-instruction">告诉 Agent 你想完成什么</label>
         <textarea
           ref={textAreaRef}
           id="cowart-agent-instruction"
           aria-describedby={sendError ? 'cowart-agent-send-error' : undefined}
-          disabled={isSending}
+          disabled={!isAvailable || hasBlockingInteraction}
           maxLength={2400}
           onChange={(event) => setInstruction(event.target.value)}
           onKeyDown={(event) => {
@@ -1663,8 +2100,12 @@ export function CowartAgentPanel({
             }
           }}
           placeholder={
-            isAvailable
-              ? '例如：把这些想法整理成产品结构并补齐缺口…'
+            hasBlockingInteraction
+              ? '先完成上方需要你的操作…'
+              : isAvailable
+              ? isSending
+                ? 'Agent 执行期间，你可以先写下一条消息…'
+                : '例如：把这些想法整理成产品结构并补齐缺口…'
               : workspaceSetup?.status === 'required'
                 ? '选择工作区后即可连接 Codex Agent'
                 : '按上方提示完成 Codex 设置'
@@ -1684,19 +2125,52 @@ export function CowartAgentPanel({
           </p>
         )}
         <div className="cowart-agent-composer-footer">
-          <span>Enter 发送 · Shift + Enter 换行</span>
-          <button
-            aria-label={isSending ? '正在发送任务' : '发送给 Codex Agent'}
-            disabled={!instruction.trim() || isSending || !isAvailable}
-            type="submit"
-          >
-            {isSending ? (
-              <LoaderCircle aria-hidden="true" className="cowart-spin" size={16} />
-            ) : (
+          <span>
+            {hasBlockingInteraction
+              ? '完成上方操作后，Agent 会继续'
+              : isSending
+                ? '当前任务完成后可发送下一条'
+                : 'Enter 发送 · Shift + Enter 换行'}
+          </span>
+          {isSending ? (
+            <button
+              aria-label={
+                hasBlockingInteraction
+                  ? '等待处理上方操作'
+                  : canInterrupt
+                    ? '停止当前 Agent 任务'
+                    : 'Agent 正在执行'
+              }
+              data-mode={canInterrupt ? 'stop' : 'busy'}
+              disabled={!canInterrupt || isInterrupting}
+              onClick={canInterrupt ? handleInterrupt : undefined}
+              type="button"
+            >
+              {isInterrupting ? (
+                <LoaderCircle aria-hidden="true" className="cowart-spin" size={16} />
+              ) : (
+                <Square aria-hidden="true" size={12} />
+              )}
+              <span>
+                {isInterrupting
+                  ? '正在停止'
+                  : hasBlockingInteraction
+                    ? '等待操作'
+                    : canInterrupt
+                      ? '停止'
+                      : '执行中'}
+              </span>
+            </button>
+          ) : (
+            <button
+              aria-label="发送给 Codex Agent"
+              disabled={!instruction.trim() || !isAvailable}
+              type="submit"
+            >
               <Send aria-hidden="true" size={16} />
-            )}
-            <span>{isSending ? '发送中' : '发送'}</span>
-          </button>
+              <span>发送</span>
+            </button>
+          )}
         </div>
       </form>
     </aside>

@@ -11,6 +11,17 @@ const DEFAULT_CAPABILITIES = Object.freeze({
 
 const EMPTY_SESSION = Object.freeze({ threadId: null, turnId: null })
 
+const TERMINAL_EVENT_BY_TASK_STATUS = Object.freeze({
+  succeeded: 'turn.completed',
+  failed: 'turn.failed',
+  cancelled: 'turn.cancelled'
+})
+const TERMINAL_EVENT_BY_ACTIVITY_PHASE = Object.freeze({
+  completed: 'turn.completed',
+  failed: 'turn.failed',
+  cancelled: 'turn.cancelled'
+})
+
 let fallbackTaskSequence = 0
 
 function defaultTaskIdFactory() {
@@ -129,9 +140,15 @@ export function normalizeAgentEvent(rawEvent, at = Date.now()) {
   ])
   const plan = valueAt(payload, [['plan'], ['items']])
   const diff = valueAt(payload, [['diff'], ['patch'], ['changes']])
-  const approval = type.startsWith('approval.')
+  const approvalValue = type.startsWith('approval.')
     ? valueAt(payload, [['approval']]) ?? payload
     : null
+  const approval = approvalValue && typeof approvalValue === 'object' && !Array.isArray(approvalValue)
+    ? Object.freeze({
+        ...approvalValue,
+        requestId: approvalValue.requestId ?? approvalValue.id ?? requestId ?? null
+      })
+    : approvalValue
   const elicitationValue = type.startsWith('elicitation.')
     ? valueAt(payload, [['elicitation'], ['request']]) ?? payload
     : null
@@ -222,6 +239,19 @@ function resolvesActiveInteraction(event, activity) {
   const active = event.type === 'approval.resolved' ? activity?.approval : activity?.elicitation
   const activeRequestId = active?.requestId ?? active?.id ?? null
   return activeRequestId != null && String(activeRequestId) === String(event.requestId)
+}
+
+function isInteractionResolution(event) {
+  return ['approval.resolved', 'elicitation.resolved'].includes(event?.type)
+}
+
+function isAbsorbedByTerminalState(event, task, activity) {
+  if (!isTaskScopedEvent(event)) return false
+  const terminalEventType = (
+    TERMINAL_EVENT_BY_ACTIVITY_PHASE[activity?.phase] ||
+    TERMINAL_EVENT_BY_TASK_STATUS[task?.status]
+  )
+  return Boolean(terminalEventType && event.type !== terminalEventType)
 }
 
 function acceptsStandaloneElicitation(event, task, session) {
@@ -368,6 +398,22 @@ export function createAgentBridge(adapter, {
     }
   }
 
+  function publishCurrentState(stateOverrides = {}) {
+    state = Object.freeze({
+      ...state,
+      ...stateOverrides,
+      pendingTaskIds: Object.freeze([...pendingTasks.keys()])
+    })
+    const event = Object.freeze({ type: 'state.current', at: clock() })
+    for (const listener of [...listeners]) {
+      try {
+        listener(state, event)
+      } catch (error) {
+        onSubscriberError(error)
+      }
+    }
+  }
+
   function updateCapabilities({ emit = true } = {}) {
     const capabilities = disposed ? DEFAULT_CAPABILITIES : readCapabilities()
     const changed = !sameCapabilities(state.capabilities, capabilities)
@@ -415,12 +461,15 @@ export function createAgentBridge(adapter, {
       lastTask = taskWithSession(lastTask, sessionFrom(event, state.session))
       pendingTasks.set(lastTask.id, lastTask)
     }
+    const resolvesCurrentInteraction = resolvesActiveInteraction(event, state.activity)
     if (
       isTaskScopedEvent(event) &&
       !eventMatchesTask(event, lastTask) &&
-      !resolvesActiveInteraction(event, state.activity) &&
+      !resolvesCurrentInteraction &&
       !acceptsStandaloneElicitation(event, lastTask, state.session)
     ) return
+    if (isInteractionResolution(event) && !resolvesCurrentInteraction) return
+    if (isAbsorbedByTerminalState(event, lastTask, state.activity)) return
 
     const session = sessionFrom(event, state.session)
     const activity = activityFromEvent(state.activity, event)
@@ -543,10 +592,27 @@ export function createAgentBridge(adapter, {
       )
       return result
     } catch (error) {
+      const pendingTask = pendingTasks.get(taskId) ?? task
       pendingTasks.delete(taskId)
+      if (TERMINAL_EVENT_BY_TASK_STATUS[pendingTask.status]) {
+        publishCurrentState({
+          status: pendingTasks.size > 0
+            ? 'sending'
+            : pendingTask.status === 'failed'
+              ? 'error'
+              : state.capabilities.available ? 'idle' : 'unavailable',
+          lastTask: pendingTask
+        })
+        return Object.freeze({
+          threadId: pendingTask.threadId ?? state.session.threadId,
+          turnId: pendingTask.turnId ?? state.session.turnId,
+          terminal: true,
+          status: pendingTask.status
+        })
+      }
       const cancelled = error?.name === 'AbortError' || options.signal?.aborted
       const completedTask = Object.freeze({
-        ...task,
+        ...pendingTask,
         status: cancelled ? 'cancelled' : 'failed',
         finishedAt: clock(),
         error: errorDetails(error)

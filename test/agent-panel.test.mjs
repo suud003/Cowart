@@ -8,8 +8,12 @@ import { createServer } from 'vite'
 
 let CowartAgentPanel
 let AGENT_ACTIVITY_MAX_ITEMS
+let AGENT_CONVERSATION_MAX_TURNS
 let buildAgentPanelMessage
 let buildElicitationContent
+let claimAgentSubmission
+let conversationTurnParts
+let createAgentConversationState
 let createElicitationInitialValues
 let approvalStatusForRequest
 let approvalCanRespond
@@ -18,6 +22,9 @@ let connectionPresentation
 let mergeAgentActivityItems
 let normalizeActivityEvent
 let normalizeElicitationRequest
+let reduceAgentConversation
+let releaseAgentSubmission
+let restoreAgentConversationState
 let safeElicitationDomain
 let taskStatusPresentation
 let viteServer
@@ -35,9 +42,13 @@ test.before(async () => {
   })
   ;({
     AGENT_ACTIVITY_MAX_ITEMS,
+    AGENT_CONVERSATION_MAX_TURNS,
     CowartAgentPanel,
     buildAgentPanelMessage,
     buildElicitationContent,
+    claimAgentSubmission,
+    conversationTurnParts,
+    createAgentConversationState,
     createElicitationInitialValues,
     approvalStatusForRequest,
     approvalCanRespond,
@@ -46,6 +57,9 @@ test.before(async () => {
     mergeAgentActivityItems,
     normalizeActivityEvent,
     normalizeElicitationRequest,
+    reduceAgentConversation,
+    releaseAgentSubmission,
+    restoreAgentConversationState,
     safeElicitationDomain,
     taskStatusPresentation
   } = await viteServer.ssrLoadModule('/src/AgentPanel.jsx'))
@@ -281,6 +295,216 @@ test('Agent activity keeps complete card text while bounding retained card count
   assert.equal(replayedEarlierEvent[0].text, 'AApple', 'an earlier chunk replay must remain deduplicated after later chunks merge')
 })
 
+test('Agent conversation groups one task into a user turn, one complete reply, trace, and change summary', () => {
+  const events = [
+    {
+      type: 'task.started',
+      task: {
+        id: 'task:one',
+        status: 'sending',
+        startedAt: '2026-08-26T10:00:00.000Z',
+        metadata: { instruction: '梳理这张玩法画布并找出缺口' }
+      },
+      at: '2026-08-26T10:00:00.000Z'
+    },
+    { type: 'turn.started', eventId: 'event:start', threadId: 'thread:one', turnId: 'turn:one', at: '2026-08-26T10:00:01.000Z' },
+    { type: 'agent.delta', eventId: 'event:a', threadId: 'thread:one', turnId: 'turn:one', itemId: 'message:one', text: '我先确认玩法核心，', at: '2026-08-26T10:00:02.000Z' },
+    { type: 'agent.delta', eventId: 'event:b', threadId: 'thread:one', turnId: 'turn:one', itemId: 'message:one', text: '再检查循环。', at: '2026-08-26T10:00:03.000Z' },
+    { type: 'agent.delta', eventId: 'event:c', threadId: 'thread:one', turnId: 'turn:one', itemId: 'message:two', text: '结论：当前缺少失败后的回流路径。', at: '2026-08-26T10:00:04.000Z' },
+    { type: 'agent.plan', eventId: 'event:plan-old', turnId: 'turn:one', plan: [{ step: '旧计划' }] },
+    { type: 'agent.plan', eventId: 'event:plan-new', turnId: 'turn:one', plan: [{ step: '读取画布' }, { step: '补齐循环' }] },
+    { type: 'agent.diff', eventId: 'event:diff-old', turnId: 'turn:one', diff: '旧变更' },
+    { type: 'agent.diff', eventId: 'event:diff-new', turnId: 'turn:one', diff: '新增失败回流节点并连接核心循环' },
+    { type: 'turn.completed', eventId: 'event:done', threadId: 'thread:one', turnId: 'turn:one', at: '2026-08-26T10:00:05.000Z' }
+  ]
+  const state = events.reduce(reduceAgentConversation, createAgentConversationState())
+  const turn = state.turns[0]
+  const parts = conversationTurnParts(turn)
+
+  assert.equal(state.turns.length, 1)
+  assert.equal(turn.userText, '梳理这张玩法画布并找出缺口')
+  assert.equal(turn.status, 'completed')
+  assert.equal(parts.assistantText, '我先确认玩法核心，再检查循环。\n\n结论：当前缺少失败后的回流路径。')
+  assert.equal(parts.traceItems.length, 2, 'turn start and the latest plan remain in the trace')
+  assert.match(parts.traceItems.at(-1).text, /读取画布 · 补齐循环/)
+  assert.doesNotMatch(parts.traceItems.at(-1).text, /旧计划/)
+  assert.equal(parts.changeText, '新增失败回流节点并连接核心循环')
+})
+
+test('Agent conversation shows a final reply carried only by turn completion', () => {
+  let state = reduceAgentConversation(createAgentConversationState(), {
+    type: 'task.started',
+    task: { id: 'task:terminal-only', metadata: { instruction: '给出最终结论' } }
+  })
+  state = reduceAgentConversation(state, {
+    type: 'turn.completed',
+    eventId: 'event:terminal-only',
+    taskId: 'task:terminal-only',
+    text: '最终结论：先验证核心循环，再扩展支线内容。'
+  })
+  assert.equal(
+    conversationTurnParts(state.turns[0]).assistantText,
+    '最终结论：先验证核心循环，再扩展支线内容。'
+  )
+
+  let defaultOnly = reduceAgentConversation(createAgentConversationState(), {
+    type: 'task.started',
+    task: { id: 'task:default-only', metadata: { instruction: '执行任务' } }
+  })
+  defaultOnly = reduceAgentConversation(defaultOnly, {
+    type: 'turn.completed',
+    taskId: 'task:default-only'
+  })
+  assert.equal(conversationTurnParts(defaultOnly.turns[0]).assistantText, '')
+})
+
+test('Agent panel submission lock rejects a second pre-send claim until released', () => {
+  const lock = { current: false }
+  assert.equal(claimAgentSubmission(lock), true)
+  assert.equal(claimAgentSubmission(lock), false)
+  releaseAgentSubmission(lock)
+  assert.equal(claimAgentSubmission(lock), true)
+})
+
+test('Agent conversation terminal states and blocking requests are monotonic and request-scoped', () => {
+  let state = reduceAgentConversation(createAgentConversationState(), {
+    type: 'task.started',
+    task: { id: 'task:one', metadata: { instruction: '检查风险' } }
+  })
+  state = reduceAgentConversation(state, { type: 'turn.started', turnId: 'turn:one' })
+  state = reduceAgentConversation(state, {
+    type: 'approval.requested',
+    eventId: 'event:approval',
+    turnId: 'turn:one',
+    requestId: 'request:one',
+    approval: { requestId: 'request:one' }
+  })
+  assert.equal(state.turns[0].status, 'waiting_approval')
+
+  const wrongResolution = reduceAgentConversation(state, {
+    type: 'approval.resolved',
+    eventId: 'event:wrong',
+    requestId: 'request:other'
+  })
+  assert.equal(wrongResolution, state)
+
+  state = reduceAgentConversation(state, {
+    type: 'approval.resolved',
+    eventId: 'event:resolved',
+    requestId: 'request:one'
+  })
+  assert.equal(state.turns[0].status, 'running')
+  state = reduceAgentConversation(state, { type: 'turn.completed', eventId: 'event:done', turnId: 'turn:one' })
+  const completed = state
+  state = reduceAgentConversation(state, {
+    type: 'agent.delta',
+    eventId: 'event:late',
+    turnId: 'turn:one',
+    text: '不应出现的迟到回复'
+  })
+  assert.equal(state, completed)
+  assert.equal(state.turns[0].status, 'completed')
+  assert.doesNotMatch(conversationTurnParts(state.turns[0]).assistantText, /迟到回复/)
+
+  state = reduceAgentConversation(state, {
+    type: 'task.failed',
+    task: { id: 'task:one', status: 'failed', error: { message: '迟到的传输错误' } }
+  })
+  assert.equal(state, completed)
+  assert.equal(conversationTurnParts(state.turns[0]).errorText, '')
+})
+
+test('Agent conversation resolves a reused request id against the newest active turn', () => {
+  let state = reduceAgentConversation(createAgentConversationState(), {
+    type: 'task.started',
+    task: { id: 'task:old', metadata: { instruction: '旧任务' } }
+  })
+  state = reduceAgentConversation(state, {
+    type: 'approval.requested',
+    taskId: 'task:old',
+    requestId: 'request:reused',
+    approval: { requestId: 'request:reused' }
+  })
+  state = reduceAgentConversation(state, { type: 'turn.completed', taskId: 'task:old' })
+  state = reduceAgentConversation(state, {
+    type: 'task.started',
+    task: { id: 'task:new', metadata: { instruction: '新任务' } }
+  })
+  state = reduceAgentConversation(state, {
+    type: 'approval.requested',
+    taskId: 'task:new',
+    requestId: 'request:reused',
+    approval: { requestId: 'request:reused' }
+  })
+  state = reduceAgentConversation(state, {
+    type: 'approval.resolved',
+    requestId: 'request:reused'
+  })
+
+  assert.equal(state.turns[0].status, 'completed')
+  assert.equal(state.turns[1].status, 'running')
+})
+
+test('Agent conversation retains the latest twenty completed turns', () => {
+  let state = createAgentConversationState()
+  for (let index = 0; index < AGENT_CONVERSATION_MAX_TURNS + 2; index += 1) {
+    const taskId = `task:${index}`
+    state = reduceAgentConversation(state, {
+      type: 'task.started',
+      task: { id: taskId, metadata: { instruction: `任务 ${index}` } }
+    })
+    state = reduceAgentConversation(state, { type: 'turn.completed', taskId })
+  }
+
+  assert.equal(state.turns.length, AGENT_CONVERSATION_MAX_TURNS)
+  assert.equal(state.turns[0].userText, '任务 2')
+  assert.equal(state.turns.at(-1).userText, `任务 ${AGENT_CONVERSATION_MAX_TURNS + 1}`)
+})
+
+test('Agent conversation restores a reviewable turn and renders it as dialogue instead of an event feed', () => {
+  const state = {
+    status: 'sending',
+    capabilities: { available: true, provider: 'desktop', streaming: true, interrupt: true },
+    pendingTaskIds: ['task:restored'],
+    activity: { phase: 'running' },
+    lastTask: {
+      id: 'task:restored',
+      status: 'accepted',
+      threadId: 'thread:restored',
+      turnId: 'turn:restored',
+      startedAt: '2026-08-26T10:00:00.000Z',
+      metadata: { instruction: '把战斗、构筑和地图风险整理成一个核心循环' }
+    },
+    lastEvent: {
+      type: 'agent.delta',
+      eventId: 'event:restored',
+      threadId: 'thread:restored',
+      turnId: 'turn:restored',
+      itemId: 'message:restored',
+      text: '我会保留现有结构，并补充失败回流。最后一句必须完整显示。'
+    }
+  }
+  const restored = restoreAgentConversationState(state)
+  const markup = renderToStaticMarkup(React.createElement(CowartAgentPanel, {
+    bridge: {
+      getState: () => state,
+      refreshCapabilities: () => state.capabilities,
+      interrupt: async () => ({ interrupted: true })
+    },
+    contextProvider: () => ({ pageName: '核心循环', pageShapeCount: 12 }),
+    isOpen: true,
+    onOpenChange: () => {}
+  }))
+
+  assert.equal(restored.turns.length, 1)
+  assert.equal(restored.turns[0].userText, '把战斗、构筑和地图风险整理成一个核心循环')
+  assert.match(markup, /把战斗、构筑和地图风险整理成一个核心循环/)
+  assert.match(markup, /最后一句必须完整显示/)
+  assert.match(markup, /正在执行/)
+  assert.match(markup, /停止/)
+  assert.doesNotMatch(markup, /最近任务|Agent 对话与进度|快捷任务/)
+})
+
 test('failed approval submissions remain actionable for retry', () => {
   assert.equal(approvalCanRespond('idle'), true)
   assert.equal(approvalCanRespond('error'), true)
@@ -289,9 +513,9 @@ test('failed approval submissions remain actionable for retry', () => {
   assert.equal(approvalCanRespond('decline'), false)
 })
 
-test('Agent activity messages are not visually line-clamped', async () => {
+test('Agent conversation messages are not visually line-clamped', async () => {
   const styles = await readFile('src/styles.css', 'utf8')
-  const messageRule = styles.match(/\.cowart-agent-activity-copy p\s*\{([\s\S]*?)\}/)?.[1] || ''
+  const messageRule = styles.match(/\.cowart-agent-message-content\s*\{([\s\S]*?)\}/)?.[1] || ''
 
   assert.match(messageRule, /white-space:\s*pre-wrap/)
   assert.match(messageRule, /overflow-wrap:\s*anywhere/)
