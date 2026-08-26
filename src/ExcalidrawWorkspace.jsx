@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileCode, LoaderCircle, Presentation, Sparkles, Workflow } from 'lucide-react'
+import { FileCode, LoaderCircle, Presentation, Sparkles } from 'lucide-react'
 import { useEditor, useToasts } from 'tldraw'
 import {
   getExcalidrawKeyboardAction,
@@ -9,10 +9,6 @@ import {
   PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE,
   PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
 } from './productBridgePrompt.js'
-import {
-  SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE,
-  SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
-} from './semanticDiagramPrompt.js'
 
 const PRODUCT_NAME = 'Yogurt AI'
 
@@ -104,8 +100,7 @@ function CowartAiMenu({ brandIcon, items }) {
       })
     } catch (error) {
       if (
-        error?.code === PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE ||
-        error?.code === SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+        error?.code === PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
       ) {
         addToast({
           title: '范围过大，请缩小选区',
@@ -115,8 +110,7 @@ function CowartAiMenu({ brandIcon, items }) {
         return
       }
       if (
-        error?.code === PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE ||
-        error?.code === SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE
+        error?.code === PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE
       ) {
         addToast({
           title: '当前是本地预览',
@@ -193,7 +187,6 @@ export function ExcalidrawCowartChrome({
   onCreateHtml,
   onCreateImage,
   onCreateProductBridge,
-  onCreateSemanticDiagram,
   onCreateSlides,
   onExportCanvasHtml,
   onExportCanvasPptx,
@@ -239,20 +232,6 @@ export function ExcalidrawCowartChrome({
           ? `已携带当前选区的 ${result.selectedCount} 个对象。`
           : '当前没有选中对象，已使用整页产品内容。',
       errorTitle: '交互 PRD 生成任务发送失败'
-    },
-    {
-      id: 'semantic-diagram',
-      label: '生成画布框线图',
-      description: '在当前画布生成可编辑分区、节点与关系线',
-      icon: <Workflow aria-hidden="true" />,
-      badge: 'CANVAS',
-      onSelect: () => onCreateSemanticDiagram(editor),
-      successTitle: '已发送给画布制图 Agent',
-      successDescription: (result) =>
-        result?.scope === 'selection'
-          ? `已冻结当前选区的 ${result.selectedCount} 个对象。`
-          : '当前没有选中对象，已使用整页内容。',
-      errorTitle: '画布框线图生成任务发送失败'
     },
     {
       id: 'export-html',

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
@@ -6,6 +6,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { YogurtAgentService } from './agent-service.mjs'
+import { createAgentAttentionController } from './agent-attention.mjs'
 import { CodexAppServerClient } from './codex-app-server-client.mjs'
 import { registerYogurtAgentIpc, YogurtDesktopRuntime } from './ipc-bridge.mjs'
 import {
@@ -19,6 +20,8 @@ const desktopDir = path.dirname(fileURLToPath(import.meta.url))
 const applicationRoot = path.resolve(desktopDir, '..')
 const preloadPath = path.join(desktopDir, 'preload.cjs')
 const desktopSettingsFileName = 'yogurt-desktop-settings.json'
+
+if (process.platform === 'win32') app.setAppUserModelId('com.yogurtai.desktop')
 
 function rendererDevUrl(value) {
   if (!value) return null
@@ -56,6 +59,7 @@ let relaunchScheduled = false
 let desktopRuntime = null
 let distIndexPath = null
 let settingsFile = null
+let agentAttention = null
 
 async function readDesktopSettings(filePath) {
   try {
@@ -182,6 +186,13 @@ async function initializeDesktopRuntime() {
     canvasDir,
     workspaceSource: workspace.source
   })
+
+  agentAttention = createAgentAttentionController({
+    getWindow: () => mainWindow,
+    isNotificationSupported: () => Notification.isSupported(),
+    createNotification: (options) => new Notification(options)
+  })
+  desktopRuntime.on('event', agentAttention.handle)
 }
 
 function trustedWebContents() {
@@ -269,6 +280,7 @@ async function createMainWindow() {
     })
   }
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('focus', () => agentAttention?.stopFlashing())
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -319,6 +331,8 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   quitAfterCleanup = true
   unregisterIpc?.()
+  if (desktopRuntime && agentAttention) desktopRuntime.off('event', agentAttention.handle)
+  agentAttention?.dispose()
   desktopRuntime?.dispose()
     .catch((error) => console.error('Could not stop Yogurt AI Codex sidecar cleanly:', error))
     .finally(() => app.quit())

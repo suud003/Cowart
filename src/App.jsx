@@ -152,12 +152,6 @@ import {
   PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE,
   PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
 } from './productBridgePrompt.js'
-import {
-  buildSemanticDiagramPrompt,
-  getSemanticDiagramScopeSize,
-  SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE,
-  SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
-} from './semanticDiagramPrompt.js'
 import { getCowartHtmlDraftSandbox } from './htmlDraftSecurity.js'
 
 if (!isYogurtDesktopRenderer()) installCowartHandDrawnFontFaces()
@@ -3893,89 +3887,6 @@ async function submitCowartProductBridge(editor) {
   }
 }
 
-async function submitCowartSemanticDiagram(editor) {
-  const { selectedRootShapeIds, exactShapeIds } = getCowartFrozenSelectionIds(editor)
-  const currentPageShapeCount = exactShapeIds.length > 0 ? 0 : editor.getCurrentPageShapeIds().size
-  const scopeSize = getSemanticDiagramScopeSize({
-    selectedShapeIds: exactShapeIds,
-    currentPageShapeCount
-  })
-  if (scopeSize.isTooLarge) {
-    const scopeLabel = scopeSize.scope === 'selection' ? '当前选区展开后' : '当前页面'
-    const error = new Error(
-      `${scopeLabel}包含 ${scopeSize.shapeCount} 个对象，超过最多 ${scopeSize.maxShapes} 个对象的限制。请缩小选区或拆分关系图。`
-    )
-    error.code = SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
-    error.scope = scopeSize.scope
-    error.shapeCount = scopeSize.shapeCount
-    error.maxShapes = scopeSize.maxShapes
-    throw error
-  }
-
-  const selectedShapeIds = exactShapeIds
-  const currentPageId = editor.getCurrentPageId()
-  const currentPageName = String(editor.getCurrentPage()?.name || '').trim() || '未命名页面'
-  const scope = scopeSize.scope
-  const requestedAt = new Date().toISOString()
-  const semanticDiagramContext = {
-    selectedShapes: selectedShapeIds.map((id) => ({ id })),
-    selectedRootShapeIds,
-    exactShapeIds,
-    scope,
-    currentPageId,
-    currentPageName,
-    requestType: 'semantic-diagram',
-    updatedAt: requestedAt
-  }
-
-  const flushCanvasSnapshot = cowartCanvasSnapshotFlushers.get(editor)
-  if (!flushCanvasSnapshot) {
-    throw new Error('Yogurt AI 画布保存尚未就绪，请稍后再生成画布框线图。')
-  }
-  await flushCanvasSnapshot()
-  writeCowartSelectionState(semanticDiagramContext)
-  await saveCowartSelectionState(semanticDiagramContext)
-
-  const prompt = buildSemanticDiagramPrompt({
-    selectedShapeIds,
-    currentPageId,
-    currentPageName
-  })
-  const sender = followUpSender()
-  if (!sender) {
-    let copied = false
-    try {
-      const clipboard = globalThis.navigator?.clipboard
-      if (typeof clipboard?.writeText === 'function') {
-        await clipboard.writeText(prompt)
-        copied = true
-      }
-    } catch (_clipboardError) {
-      // Persisted IDs and page identity keep the scoped request recoverable.
-    }
-
-    const error = new Error(
-      copied
-        ? '选区/页面上下文已保存，画布框线图指令已复制。请在 Codex 原生 Yogurt AI 画布中发送。'
-        : '选区/页面上下文已保存。生成画布框线图需要在 Codex 原生 Yogurt AI 画布中使用。'
-    )
-    error.code = SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE
-    throw error
-  }
-
-  const response = await sender(
-    { prompt },
-    { promptType: 'other', hasReference: true }
-  )
-  return {
-    response,
-    scope,
-    selectedCount: selectedShapeIds.length,
-    currentPageId,
-    currentPageName
-  }
-}
-
 function CowartCanvasOverlay() {
   return (
     <>
@@ -3985,7 +3896,6 @@ function CowartCanvasOverlay() {
         onCreateHtml={createAiDraftHolderAtViewportCenter}
         onCreateImage={createAiImageHolderAtViewportCenter}
         onCreateProductBridge={submitCowartProductBridge}
-        onCreateSemanticDiagram={submitCowartSemanticDiagram}
         onCreateSlides={createAiSlidesAtViewportCenter}
         onExportCanvasHtml={(editor) => exportCowartCanvas(editor, 'html')}
         onExportCanvasPptx={(editor) => exportCowartCanvas(editor, 'pptx')}

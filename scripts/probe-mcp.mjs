@@ -210,10 +210,29 @@ try {
     throw new Error("Semantic HTML insertion must reject active script content on the server.");
   }
 
+  const overflowedSemantic = await client.callTool({
+    name: "insert_cowart_html_draft",
+    arguments: {
+      projectDir,
+      htmlContent: semanticHtml.replace(
+        'x="80" y="50" width="240"',
+        'x="300" y="50" width="240"',
+      ),
+      fileName: "overflowed-semantic.html",
+      semanticDiagram,
+      dryRun: true,
+    },
+  });
+  if (overflowedSemantic.isError !== true) {
+    throw new Error("Semantic HTML insertion must reject geometry outside the SVG viewBox.");
+  }
+
   const semanticPreviewArguments = {
     projectDir,
-    htmlContent: semanticHtml,
+    htmlContent: semanticHtml.replace('viewBox="0 0 400 180"', 'viewBox="0 0 400 800"'),
     fileName: "semantic-probe.html",
+    displayWidth: 300,
+    displayHeight: 100,
     matchAnchor: false,
     updateExistingDraft: false,
     replaceDraftHolder: false,
@@ -232,9 +251,11 @@ try {
   if (
     semanticPreview.isError ||
     semanticPreview.structuredContent?.dryRun !== true ||
-    semanticPreview.structuredContent?.baseRevision !== thinkingRevision
+    semanticPreview.structuredContent?.baseRevision !== thinkingRevision ||
+    semanticPreview.structuredContent?.bounds?.w !== 300 ||
+    semanticPreview.structuredContent?.bounds?.h < 624
   ) {
-    throw new Error("Semantic HTML insertion did not return a revisioned dry-run preview.");
+    throw new Error("Semantic HTML insertion did not return a revisioned, aspect-safe dry-run preview.");
   }
 
   const staleThinkingApply = await client.callTool({

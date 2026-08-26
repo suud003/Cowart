@@ -33,11 +33,12 @@ const EMPTY_BRIDGE_STATE = {
 }
 
 const AGENT_CONTEXT_MAX_SHAPE_IDS = 250
+export const AGENT_ACTIVITY_MAX_ITEMS = 80
+const AGENT_ACTIVITY_MAX_EVENT_IDS = 4_096
 
 const QUICK_TASKS = [
   { icon: Sparkles, label: '整理选区', prompt: '整理当前画布选区；如果没有选中对象，则整理当前页面。找出主题、关系与待确认问题。' },
-  { icon: FileText, label: '生成 PRD', prompt: '根据当前画布与选区信息，生成可评审的产品 PRD 和交互原型。' },
-  { icon: Workflow, label: '生成框线图', prompt: '把当前内容整理为语义清晰的框线图，并写回 Yogurt AI 画布。' }
+  { icon: FileText, label: '生成 PRD', prompt: '根据当前画布与选区信息，生成可评审的产品 PRD 和交互原型。' }
 ]
 
 function stableContextKey(context) {
@@ -69,6 +70,9 @@ export function connectionPresentation(state) {
   }
   if (['missing', 'login-required'].includes(setup?.codex?.status)) {
     return { label: '需配置', tone: 'offline' }
+  }
+  if (['waiting_approval', 'waiting_elicitation'].includes(state?.activity?.phase)) {
+    return { label: '等待你', tone: 'attention' }
   }
   if (
     state?.status === 'sending' ||
@@ -159,9 +163,9 @@ function activityText(value) {
   return ''
 }
 
-function clipActivityText(value, maxLength = 560) {
-  const compact = String(value || '').replace(/\s+/g, ' ').trim()
-  return compact.length > maxLength ? `${compact.slice(0, maxLength)}…` : compact
+function normalizeActivityText(value) {
+  return String(value || '')
+    .replace(/\r\n?/g, '\n')
 }
 
 const ELICITATION_STRING_FORMATS = new Set(['email', 'uri', 'date', 'date-time'])
@@ -527,49 +531,53 @@ export function buildElicitationContent(requestOrModel, values = {}) {
   return { valid: errors.length === 0, content, errors }
 }
 
-function normalizeActivityEvent(event) {
+export function normalizeActivityEvent(event) {
   if (!event || typeof event !== 'object') return null
   const type = String(event.type || '')
+  const eventIdentity = event.itemId || event.requestId || event.turnId || ''
   const common = {
-    id: `${event.at || Date.now()}:${type}:${event.requestId || event.turnId || ''}:${String(event.text || '').slice(0, 24)}`,
+    id: event.eventId || `${type}:${eventIdentity}:${event.at || ''}`,
+    sourceEventId: event.eventId || null,
+    sourceEventIds: event.eventId ? [event.eventId] : [],
     type,
     at: event.at || new Date().toISOString(),
     requestId: event.requestId || event.approval?.requestId || event.approval?.id || null,
     turnId: event.turnId || null,
+    itemId: event.itemId || null,
     approval: event.approval || null
   }
 
   if (type === 'agent.delta') {
-    const text = clipActivityText(event.text)
-    return text ? { ...common, kind: 'message', label: 'Agent 回复', text } : null
+    const text = normalizeActivityText(event.text)
+    return text.length > 0 ? { ...common, kind: 'message', label: 'Codex Agent', metaLabel: '回复', text } : null
   }
   if (type === 'agent.plan') {
-    const text = clipActivityText(activityText(event.plan) || event.text)
-    return text ? { ...common, kind: 'plan', label: '执行计划', text } : null
+    const text = normalizeActivityText(activityText(event.plan) || event.text)
+    return text.trim() ? { ...common, kind: 'plan', label: '执行计划', metaLabel: '计划', text } : null
   }
   if (type === 'agent.diff') {
-    const text = clipActivityText(activityText(event.diff) || event.text)
-    return text ? { ...common, kind: 'diff', label: '修改摘要', text } : null
+    const text = normalizeActivityText(activityText(event.diff) || event.text)
+    return text.trim() ? { ...common, kind: 'diff', label: '修改摘要', metaLabel: '变更', text } : null
   }
   if (type === 'approval.requested') {
-    const text = clipActivityText(activityText(event.approval) || event.text || '这一步需要你确认后继续。')
-    return { ...common, kind: 'approval', label: '等待确认', text }
+    const text = normalizeActivityText(activityText(event.approval) || event.text || '这一步需要你确认后继续。')
+    return { ...common, kind: 'approval', label: '等待确认', metaLabel: '需要你', text }
   }
   if (type === 'approval.resolved') {
-    const text = clipActivityText(event.text || '已记录你的选择。')
-    return { ...common, kind: 'status', label: '已确认', text }
+    const text = normalizeActivityText(event.text || '已记录你的选择。')
+    return { ...common, kind: 'complete', label: '已确认', metaLabel: '状态', text }
   }
   if (type === 'turn.started') {
-    return { ...common, kind: 'status', label: 'Codex 开始执行', text: event.text || '正在读取画布上下文…' }
+    return { ...common, kind: 'progress', label: 'Codex 开始执行', metaLabel: '进度', text: event.text || '正在读取画布上下文…' }
   }
   if (type === 'turn.completed') {
-    return { ...common, kind: 'status', label: '任务完成', text: event.text || '结果已返回 Yogurt AI。' }
+    return { ...common, kind: 'complete', label: '任务完成', metaLabel: '已完成', text: event.text || '结果已返回 Yogurt AI。' }
   }
   if (type === 'turn.failed') {
-    return { ...common, kind: 'error', label: '任务失败', text: event.text || '执行中遇到错误。' }
+    return { ...common, kind: 'error', label: '任务失败', metaLabel: '需要检查', text: event.text || '执行中遇到错误。' }
   }
   if (type === 'turn.cancelled' || type === 'task.cancelled') {
-    return { ...common, kind: 'status', label: '任务已中断', text: event.text || '已停止当前执行。' }
+    return { ...common, kind: 'complete', label: '任务已中断', metaLabel: '已停止', text: event.text || '已停止当前执行。' }
   }
   return null
 }
@@ -578,8 +586,83 @@ function activityIcon(kind) {
   if (kind === 'plan') return Workflow
   if (kind === 'diff') return FileText
   if (kind === 'approval' || kind === 'error') return AlertCircle
-  if (kind === 'status') return CheckCircle2
+  if (kind === 'progress') return LoaderCircle
+  if (kind === 'complete') return CheckCircle2
   return Bot
+}
+
+function AgentActivityItem({ item }) {
+  const Icon = activityIcon(item.kind)
+  return (
+    <article
+      aria-label={`${item.label}：${item.metaLabel || '动态'}`}
+      className="cowart-agent-activity-item"
+      data-kind={item.kind}
+    >
+      <span aria-hidden="true">
+        <Icon className={item.kind === 'progress' ? 'cowart-spin' : undefined} size={15} />
+      </span>
+      <div className="cowart-agent-activity-copy">
+        <header>
+          <strong>{item.label}</strong>
+          <small>{item.metaLabel || '动态'}</small>
+        </header>
+        <p>{item.text}</p>
+      </div>
+    </article>
+  )
+}
+
+export function mergeAgentActivityItems(items, nextItem) {
+  const currentItems = Array.isArray(items) ? items : []
+  if (!nextItem) return currentItems.slice(-AGENT_ACTIVITY_MAX_ITEMS)
+  const nextSourceEventIds = Array.from(new Set([
+    ...(Array.isArray(nextItem.sourceEventIds) ? nextItem.sourceEventIds : []),
+    ...(nextItem.sourceEventId ? [nextItem.sourceEventId] : [])
+  ]))
+  if (
+    nextSourceEventIds.length > 0 &&
+    currentItems.some((item) => {
+      const seen = Array.isArray(item.sourceEventIds) ? item.sourceEventIds : []
+      return nextSourceEventIds.some((eventId) => (
+        item.sourceEventId === eventId || seen.includes(eventId)
+      ))
+    })
+  ) {
+    return currentItems.slice(-AGENT_ACTIVITY_MAX_ITEMS)
+  }
+  const lastItem = currentItems.at(-1)
+  const sameDeltaStream = (
+    nextItem.type === 'agent.delta' &&
+    lastItem?.type === 'agent.delta' &&
+    lastItem.turnId === nextItem.turnId &&
+    (lastItem.itemId || null) === (nextItem.itemId || null)
+  )
+  if (
+    sameDeltaStream
+  ) {
+    const nextText = `${lastItem.text}${nextItem.text}`
+    return [
+      ...currentItems.slice(0, -1),
+      {
+        ...nextItem,
+        text: normalizeActivityText(nextText),
+        id: lastItem.id,
+        sourceEventIds: Array.from(new Set([
+          ...(Array.isArray(lastItem.sourceEventIds) ? lastItem.sourceEventIds : []),
+          ...(lastItem.sourceEventId ? [lastItem.sourceEventId] : []),
+          ...nextSourceEventIds
+        ])).slice(-AGENT_ACTIVITY_MAX_EVENT_IDS)
+      }
+    ].slice(-AGENT_ACTIVITY_MAX_ITEMS)
+  }
+  const existingIndex = currentItems.findIndex((item) => item.id === nextItem.id)
+  if (existingIndex >= 0) {
+    return currentItems
+      .map((item, index) => (index === existingIndex ? nextItem : item))
+      .slice(-AGENT_ACTIVITY_MAX_ITEMS)
+  }
+  return [...currentItems, nextItem].slice(-AGENT_ACTIVITY_MAX_ITEMS)
 }
 
 function approvalRequestIdFromBridgeState(state) {
@@ -607,6 +690,10 @@ export function approvalStatusForRequest(resolution, requestId) {
     return 'idle'
   }
   return resolution.status || 'idle'
+}
+
+export function approvalCanRespond(status) {
+  return status === 'idle' || status === 'error'
 }
 
 export function buildAgentPanelMessage(instruction, context = {}) {
@@ -973,7 +1060,18 @@ export function CowartAgentPanel({
   const [isStartingCodexLogin, setIsStartingCodexLogin] = useState(false)
   const [setupNotice, setSetupNotice] = useState('')
   const [sendError, setSendError] = useState('')
+  const [hasUnreadReply, setHasUnreadReply] = useState(() => (
+    !isOpen && bridge?.getState?.()?.lastEvent?.type === 'agent.delta'
+  ))
   const textAreaRef = useRef(null)
+  const blockingInteractionRef = useRef(null)
+  const isOpenRef = useRef(isOpen)
+  const autoOpenedInteractionRef = useRef(null)
+
+  useEffect(() => {
+    isOpenRef.current = isOpen
+    if (isOpen) setHasUnreadReply(false)
+  }, [isOpen])
 
   useEffect(() => {
     if (!bridge) {
@@ -984,27 +1082,10 @@ export function CowartAgentPanel({
     function recordActivity(event) {
       const nextItem = normalizeActivityEvent(event)
       if (!nextItem) return
-      setActivityItems((items) => {
-        const existingIndex = items.findIndex((item) => item.id === nextItem.id)
-        if (existingIndex >= 0) {
-          return items.map((item, index) => (index === existingIndex ? nextItem : item))
-        }
-        const lastItem = items.at(-1)
-        if (
-          nextItem.type === 'agent.delta' &&
-          lastItem?.type === 'agent.delta' &&
-          lastItem.turnId === nextItem.turnId
-        ) {
-          const nextText = nextItem.text.startsWith(lastItem.text)
-            ? nextItem.text
-            : `${lastItem.text}${nextItem.text}`
-          return [
-            ...items.slice(0, -1),
-            { ...nextItem, text: clipActivityText(nextText), id: lastItem.id }
-          ]
-        }
-        return [...items, nextItem].slice(-8)
-      })
+      if (nextItem.type === 'agent.delta' && !isOpenRef.current) {
+        setHasUnreadReply(true)
+      }
+      setActivityItems((items) => mergeAgentActivityItems(items, nextItem))
     }
 
     const initialState = bridge.getState()
@@ -1075,6 +1156,8 @@ export function CowartAgentPanel({
   const pendingElicitation = bridgeState.activity?.elicitation ?? null
   const elicitationRequestId = elicitationRequestIdFromBridgeState(bridgeState)
   const elicitationStatus = approvalStatusForRequest(elicitationResolution, elicitationRequestId)
+  const hasPendingApproval = activityPhase === 'waiting_approval' && Boolean(bridgeState.activity?.approval)
+  const hasBlockingInteraction = hasPendingApproval || Boolean(pendingElicitation)
   const followsAgentActivity = Boolean(
     bridgeState.capabilities?.streaming ||
     bridgeState.capabilities?.approvals ||
@@ -1088,6 +1171,38 @@ export function CowartAgentPanel({
   const selectedCount = Number(context?.selectedCount) || 0
   const pageShapeCount = Number(context?.pageShapeCount) || 0
   const scopeLabel = selectedCount > 0 ? `已选 ${selectedCount} 项` : `页面 ${pageShapeCount} 项`
+  const launcherAttention = hasBlockingInteraction
+    ? { kind: 'blocking', label: '待处理', accessibleLabel: '打开 Codex Agent 面板，有任务等待你的操作' }
+    : hasUnreadReply
+      ? { kind: 'reply', label: '新回复', accessibleLabel: '打开 Codex Agent 面板，有新回复' }
+      : null
+  const blockingInteractionKey = pendingElicitation
+    ? `elicitation:${elicitationRequestId ?? 'pending'}`
+    : hasPendingApproval
+      ? `approval:${approvalRequestId ?? 'pending'}`
+      : null
+
+  useEffect(() => {
+    if (!blockingInteractionKey) {
+      autoOpenedInteractionRef.current = null
+      return
+    }
+    if (isOpen) {
+      autoOpenedInteractionRef.current = blockingInteractionKey
+      return
+    }
+    if (autoOpenedInteractionRef.current === blockingInteractionKey) return
+    autoOpenedInteractionRef.current = blockingInteractionKey
+    onOpenChange?.(true)
+  }, [blockingInteractionKey, isOpen, onOpenChange])
+
+  useEffect(() => {
+    if (!isOpen || !hasBlockingInteraction) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      blockingInteractionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [approvalRequestId, elicitationRequestId, hasBlockingInteraction, isOpen])
 
   const applyQuickTask = useCallback((prompt) => {
     setInstruction(prompt)
@@ -1255,14 +1370,23 @@ export function CowartAgentPanel({
   if (!isOpen) {
     return (
       <button
-        aria-label="打开 Codex Agent 面板"
+        aria-label={launcherAttention?.accessibleLabel || '打开 Codex Agent 面板'}
         className="cowart-agent-panel-launcher"
+        data-attention={launcherAttention?.kind || 'none'}
         onClick={() => onOpenChange(true)}
-        title="打开 Codex Agent"
+        title={launcherAttention?.accessibleLabel || '打开 Codex Agent'}
         type="button"
       >
         <Bot aria-hidden="true" size={19} />
         <span>Agent</span>
+        {launcherAttention && (
+          <span
+            aria-hidden="true"
+            className="cowart-agent-launcher-notice"
+          >
+            {launcherAttention.label}
+          </span>
+        )}
         <ChevronRight aria-hidden="true" size={15} />
       </button>
     )
@@ -1294,6 +1418,70 @@ export function CowartAgentPanel({
       </header>
 
       <div className="cowart-agent-panel-body">
+        {hasBlockingInteraction && (
+          <section
+            ref={blockingInteractionRef}
+            aria-labelledby="cowart-agent-blocking-title"
+            className="cowart-agent-blocking"
+            role="region"
+          >
+            <header
+              aria-atomic="true"
+              aria-live="assertive"
+              className="cowart-agent-blocking-header"
+              role="alert"
+            >
+              <span aria-hidden="true"><AlertCircle size={17} /></span>
+              <div>
+                <strong id="cowart-agent-blocking-title">需要你的操作</strong>
+                <p>任务已暂停，完成下面的确认后 Codex 才会继续。</p>
+              </div>
+              <small>任务已暂停</small>
+            </header>
+            {hasPendingApproval && (
+              <div className="cowart-agent-approval">
+                <strong>确认这次操作</strong>
+                <p>
+                  {activityText(bridgeState.activity.approval) ||
+                    '这一步可能会修改画布或项目文件。'}
+                </p>
+                {typeof bridge?.respondApproval === 'function' && approvalCanRespond(approvalStatus) && (
+                  <div>
+                    <button onClick={() => handleApproval('decline')} type="button">
+                      <X aria-hidden="true" size={13} />
+                      拒绝
+                    </button>
+                    <button data-primary="true" onClick={() => handleApproval('accept')} type="button">
+                      <CheckCircle2 aria-hidden="true" size={13} />
+                      {approvalStatus === 'error' ? '重试并继续' : '允许并继续'}
+                    </button>
+                  </div>
+                )}
+                {approvalStatus !== 'idle' && (
+                  <small aria-live="polite">
+                    {approvalStatus === 'sending'
+                      ? '正在提交…'
+                      : approvalStatus === 'accept'
+                        ? '已允许，Codex 将继续执行。'
+                        : approvalStatus === 'decline'
+                          ? '已拒绝这一步。'
+                          : '提交失败，请重试。'}
+                  </small>
+                )}
+              </div>
+            )}
+            {pendingElicitation && elicitationRequestId != null && (
+              <ElicitationCard
+                key={String(elicitationRequestId)}
+                onRespond={handleElicitation}
+                request={pendingElicitation}
+                requestId={elicitationRequestId}
+                responseStatus={elicitationStatus}
+              />
+            )}
+          </section>
+        )}
+
         {workspaceSetup?.status === 'required' && (
           <section className="cowart-agent-setup-card" data-kind="workspace" aria-labelledby="cowart-agent-setup-title">
             <span className="cowart-agent-setup-icon" aria-hidden="true">
@@ -1410,9 +1598,13 @@ export function CowartAgentPanel({
         </section>
 
         {(activityItems.length > 0 || pendingElicitation || (followsAgentActivity && activityPhase !== 'idle')) && (
-          <section className="cowart-agent-activity" aria-labelledby="cowart-agent-activity-title">
+          <section
+            className="cowart-agent-activity"
+            aria-labelledby="cowart-agent-activity-title"
+            data-blocked={hasBlockingInteraction ? 'true' : 'false'}
+          >
             <div className="cowart-agent-section-heading">
-              <span id="cowart-agent-activity-title">Agent 动态</span>
+              <span id="cowart-agent-activity-title">Agent 对话与进度</span>
               {isSending &&
                 bridgeState.capabilities?.interrupt &&
                 typeof bridge?.interrupt === 'function' && (
@@ -1427,70 +1619,29 @@ export function CowartAgentPanel({
                   </button>
                 )}
             </div>
-            <div className="cowart-agent-activity-list" aria-live="polite">
+            <div
+              className="cowart-agent-activity-list"
+              aria-live="polite"
+              aria-relevant="additions text"
+              role="log"
+            >
               {activityItems.length > 0 ? (
-                activityItems.slice(-5).map((item) => {
-                  const Icon = activityIcon(item.kind)
-                  return (
-                    <article key={item.id} className="cowart-agent-activity-item" data-kind={item.kind}>
-                      <span aria-hidden="true">
-                        <Icon size={14} />
-                      </span>
-                      <div>
-                        <strong>{item.label}</strong>
-                        <p>{item.text}</p>
-                      </div>
-                    </article>
-                  )
-                })
+                activityItems.map((item) => <AgentActivityItem item={item} key={item.id} />)
               ) : (
                 <div className="cowart-agent-activity-waiting">
-                  <LoaderCircle aria-hidden="true" className="cowart-spin" size={14} />
-                  <span>{bridgeState.activity?.message || 'Codex 正在处理画布任务…'}</span>
+                  {hasBlockingInteraction ? (
+                    <AlertCircle aria-hidden="true" size={14} />
+                  ) : (
+                    <LoaderCircle aria-hidden="true" className="cowart-spin" size={14} />
+                  )}
+                  <span>
+                    {hasBlockingInteraction
+                      ? '任务正在等待你的操作。'
+                      : bridgeState.activity?.message || 'Codex 正在处理画布任务…'}
+                  </span>
                 </div>
               )}
             </div>
-            {activityPhase === 'waiting_approval' && bridgeState.activity?.approval && (
-              <div className="cowart-agent-approval">
-                <strong>需要你确认</strong>
-                <p>
-                  {activityText(bridgeState.activity.approval) ||
-                    '这一步可能会修改画布或项目文件。'}
-                </p>
-                {typeof bridge?.respondApproval === 'function' && approvalStatus === 'idle' && (
-                  <div>
-                    <button onClick={() => handleApproval('decline')} type="button">
-                      <X aria-hidden="true" size={13} />
-                      拒绝
-                    </button>
-                    <button data-primary="true" onClick={() => handleApproval('accept')} type="button">
-                      <CheckCircle2 aria-hidden="true" size={13} />
-                      允许
-                    </button>
-                  </div>
-                )}
-                {approvalStatus !== 'idle' && (
-                  <small aria-live="polite">
-                    {approvalStatus === 'sending'
-                      ? '正在提交…'
-                      : approvalStatus === 'accept'
-                        ? '已允许，Codex 将继续执行。'
-                        : approvalStatus === 'decline'
-                          ? '已拒绝这一步。'
-                          : '提交失败，请重试。'}
-                  </small>
-                )}
-              </div>
-            )}
-            {pendingElicitation && elicitationRequestId != null && (
-              <ElicitationCard
-                key={String(elicitationRequestId)}
-                onRespond={handleElicitation}
-                request={pendingElicitation}
-                requestId={elicitationRequestId}
-                responseStatus={elicitationStatus}
-              />
-            )}
           </section>
         )}
       </div>

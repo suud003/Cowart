@@ -150,6 +150,18 @@ body {
   box-shadow: 0 0 0 3px rgb(196 154 32 / 14%);
 }
 
+.cowart-agent-connection[data-tone="attention"] {
+  color: #8d3f1f;
+  background: #fff1e8;
+  border-color: #f2c4a9;
+  box-shadow: 0 0 0 3px rgb(212 106 54 / 10%);
+}
+
+.cowart-agent-connection[data-tone="attention"] i {
+  background: #d76a36;
+  box-shadow: 0 0 0 3px rgb(215 106 54 / 17%);
+}
+
 .cowart-agent-connection[data-tone="error"],
 .cowart-agent-connection[data-tone="offline"] {
   color: #7d7474;
@@ -188,6 +200,7 @@ body {
 .cowart-agent-panel-launcher:focus-visible,
 .cowart-agent-quick-grid button:focus-visible,
 .cowart-agent-composer button:focus-visible,
+.cowart-agent-approval button:focus-visible,
 .cowart-agent-elicitation button:focus-visible,
 .cowart-agent-elicitation input:focus-visible,
 .cowart-agent-elicitation select:focus-visible {
@@ -390,7 +403,7 @@ body {
 
 .cowart-agent-quick-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -501,18 +514,24 @@ body {
 
 .cowart-agent-activity-list {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-direction: column;
 }
 
 .cowart-agent-activity-item {
   display: flex;
-  padding: 9px 10px;
-  gap: 8px;
+  min-width: 0;
+  padding: 11px;
+  gap: 9px;
   align-items: flex-start;
   background: var(--cowart-panel-card);
   border: 1px solid var(--cowart-panel-border);
-  border-radius: 9px;
+  border-radius: 10px;
+}
+
+.cowart-agent-activity-item[data-kind="message"] {
+  border-left: 3px solid var(--cowart-panel-accent);
+  box-shadow: 0 3px 11px rgb(35 32 74 / 4%);
 }
 
 .cowart-agent-activity-item > span {
@@ -532,26 +551,58 @@ body {
   background: #fff0ef;
 }
 
-.cowart-agent-activity-item > div {
-  min-width: 0;
+.cowart-agent-activity-item[data-kind="complete"] > span {
+  color: #2f825a;
+  background: #e8f6ee;
 }
 
-.cowart-agent-activity-item strong {
-  display: block;
+.cowart-agent-activity-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cowart-agent-activity-copy > header {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cowart-agent-activity-copy strong {
   color: var(--cowart-panel-text);
-  font-size: 11px;
+  font-size: 11.5px;
+  font-weight: 700;
   line-height: 1.3;
 }
 
-.cowart-agent-activity-item p {
-  display: -webkit-box;
-  margin: 3px 0 0;
-  overflow: hidden;
+.cowart-agent-activity-copy > header small {
+  display: inline-flex;
+  min-height: 19px;
+  padding: 1px 6px;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--cowart-panel-accent-strong);
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--cowart-panel-accent-soft);
+  border-radius: 999px;
+}
+
+.cowart-agent-activity-item[data-kind="error"] .cowart-agent-activity-copy > header small,
+.cowart-agent-activity-item[data-kind="approval"] .cowart-agent-activity-copy > header small {
+  color: #a64a42;
+  background: #fff0ef;
+}
+
+.cowart-agent-activity-copy p {
+  margin: 5px 0 0;
   color: var(--cowart-panel-text-muted);
-  font-size: 10px;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: pre-wrap;
 }
 
 .cowart-agent-activity-waiting {
@@ -566,24 +617,89 @@ body {
   border-radius: 9px;
 }
 
-.cowart-agent-approval {
-  margin-top: 8px;
-  padding: 11px;
-  background: #fff9e8;
-  border: 1px solid #eddfaf;
+.cowart-agent-activity[data-blocked="true"] .cowart-agent-section-heading {
+  color: #9c4f27;
+}
+
+.cowart-agent-blocking {
+  padding: 13px;
+  background: #fff8ef;
+  border: 2px solid #e9ad73;
+  border-radius: 13px;
+  box-shadow: 0 8px 24px rgb(126 66 27 / 12%);
+}
+
+.cowart-agent-blocking-header {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 2px 9px;
+  align-items: start;
+}
+
+.cowart-agent-blocking-header > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  color: #a44a23;
+  background: #ffe4d2;
   border-radius: 9px;
 }
 
+.cowart-agent-blocking-header > div {
+  min-width: 0;
+}
+
+.cowart-agent-blocking-header strong {
+  display: block;
+  color: #6f2f18;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.cowart-agent-blocking-header p {
+  margin: 3px 0 0;
+  color: #875138;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.cowart-agent-blocking-header > small {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 21px;
+  margin-top: 6px;
+  padding: 2px 7px;
+  grid-column: 2;
+  align-items: center;
+  color: #8d3f1f;
+  font-size: 9px;
+  font-weight: 750;
+  background: #ffe4d2;
+  border-radius: 999px;
+}
+
+.cowart-agent-approval {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e8c598;
+  border-radius: 10px;
+}
+
 .cowart-agent-approval > strong {
-  color: #675914;
-  font-size: 11px;
+  color: #63361f;
+  font-size: 12px;
 }
 
 .cowart-agent-approval > p {
-  margin: 4px 0 9px;
-  color: #786d3c;
-  font-size: 10px;
-  line-height: 1.45;
+  margin: 5px 0 11px;
+  color: #78513a;
+  font-size: 10.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .cowart-agent-approval > div {
@@ -600,7 +716,7 @@ body {
   align-items: center;
   color: #5f5960;
   font: inherit;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
   background: #fff;
   border: 1px solid #ded7c1;
@@ -616,16 +732,16 @@ body {
 
 .cowart-agent-approval small {
   display: block;
-  color: #786d3c;
+  color: #78513a;
   font-size: 10px;
   line-height: 1.4;
 }
 
 .cowart-agent-elicitation {
-  margin-top: 8px;
+  margin-top: 12px;
   padding: 12px;
-  background: #f7f6ff;
-  border: 1px solid #d9d6f4;
+  background: var(--cowart-panel-card);
+  border: 1px solid #d0ccef;
   border-radius: 10px;
 }
 
@@ -980,6 +1096,35 @@ body {
   cursor: pointer;
 }
 
+.cowart-agent-panel-launcher[data-attention="reply"] {
+  color: var(--cowart-panel-accent-strong);
+  border-color: #cbc8f6;
+  box-shadow: 0 7px 22px rgb(91 87 209 / 18%);
+}
+
+.cowart-agent-panel-launcher[data-attention="blocking"] {
+  color: #93431f;
+  background: #fff8f1;
+  border-color: #e9ad73;
+  box-shadow: 0 7px 24px rgb(126 66 27 / 19%);
+}
+
+.cowart-agent-launcher-notice {
+  display: inline-flex;
+  min-height: 21px;
+  padding: 2px 7px;
+  align-items: center;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 750;
+  background: var(--cowart-panel-accent-strong);
+  border-radius: 999px;
+}
+
+.cowart-agent-panel-launcher[data-attention="blocking"] .cowart-agent-launcher-notice {
+  background: #c35a2b;
+}
+
 @media (prefers-color-scheme: dark) {
   .cowart-workbench {
     --cowart-panel-accent: #aaa6ff;
@@ -1010,6 +1155,12 @@ body {
     border-color: #5c5126;
   }
 
+  .cowart-agent-connection[data-tone="attention"] {
+    color: #f1b28f;
+    background: #492f25;
+    border-color: #71452f;
+  }
+
   .cowart-agent-connection[data-tone="error"],
   .cowart-agent-connection[data-tone="offline"] {
     color: #b5acac;
@@ -1032,6 +1183,41 @@ body {
   .cowart-agent-activity-item[data-kind="error"] > span {
     color: #efa9a2;
     background: #482e31;
+  }
+
+  .cowart-agent-activity-item[data-kind="complete"] > span {
+    color: #a7dec0;
+    background: #263d32;
+  }
+
+  .cowart-agent-activity-item[data-kind="error"] .cowart-agent-activity-copy > header small,
+  .cowart-agent-activity-item[data-kind="approval"] .cowart-agent-activity-copy > header small {
+    color: #efa9a2;
+    background: #482e31;
+  }
+
+  .cowart-agent-blocking {
+    background: #392b25;
+    border-color: #71452f;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+  }
+
+  .cowart-agent-blocking-header > span,
+  .cowart-agent-blocking-header > small {
+    color: #f1b28f;
+    background: #563428;
+  }
+
+  .cowart-agent-blocking-header strong {
+    color: #ffd1b7;
+  }
+
+  .cowart-agent-blocking-header p {
+    color: #d7ad96;
+  }
+
+  .cowart-agent-activity[data-blocked="true"] .cowart-agent-section-heading {
+    color: #f1b28f;
   }
 
   .cowart-agent-approval {
@@ -1083,6 +1269,16 @@ body {
   .cowart-agent-setup-card code {
     background: rgb(255 255 255 / 7%);
     border-color: rgb(255 255 255 / 10%);
+  }
+
+  .cowart-agent-panel-launcher[data-attention="reply"] {
+    border-color: #5f5a96;
+  }
+
+  .cowart-agent-panel-launcher[data-attention="blocking"] {
+    color: #f1b28f;
+    background: #392b25;
+    border-color: #71452f;
   }
 }
 

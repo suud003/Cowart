@@ -160,6 +160,7 @@ The abbreviated SVG illustrates the envelope, not a complete visual style. A dir
 - Source-grounded elements: data-cowart-source-ids containing stable Yogurt shape IDs separated by spaces.
 - Every visible stroked primitive: data-cowart-stroke, with CSS or an attribute applying vector-effect non-scaling-stroke.
 - Title and description: unique IDs referenced together by aria-labelledby.
+- Visible geometry uses coordinates baked directly into the SVG coordinate system. Do not put `transform` on visible groups, paths, nodes, or labels; the validator must be able to compare their real bounds with the root viewBox.
 
 Prefix all document IDs with the diagram ID or a collision-resistant derivative. Repeating a diagram on one page must not duplicate title, description, marker, clip-path, or other IDs.
 
@@ -186,7 +187,7 @@ Supported layout profiles are hierarchy, flow, comparison, board-to-peers, conta
 
 1. Lay out group boundaries, containment label zones, separators, and relation lanes before placing objects.
 2. Align three or more peers to a declared common anchor. Default center deviation must stay within 0.5% of viewBox height unless the specification states a stricter rule.
-3. Keep objects, text, markers, and strokes at least 2% of viewBox width from unrelated group boundaries and separators. Increase the gap when labels or arrowheads need more room.
+3. Keep every visible object, text label, stroke, marker, and the true extrema of each line or Bezier route inside the root viewBox. Reserve an outer safe inset of at least 2% of the shorter viewBox dimension, then keep the same elements at least 2% of viewBox width from unrelated group boundaries and separators. Increase either gap when labels or arrowheads need more room.
 4. Use rectangle ports on the actual left, right, top, or bottom boundary. Choose the side consistent with the reading direction and relative object position.
 5. Set a marker's reference point so its visible tip, rather than the path's hidden endpoint, reaches the target boundary. The relation tail begins on the source boundary.
 6. Give parallel relations separate lanes. Unless the specification defines a scale-aware alternative, separate route centerlines by at least the greater of 12 viewBox units or 1.5 marker widths.
@@ -195,7 +196,7 @@ Supported layout profiles are hierarchy, flow, comparison, board-to-peers, conta
 9. Multiple edges may share a segment only when a visible, semantically explicit branch or merge node owns that segment.
 10. If these constraints cannot be satisfied at the real Yogurt display size, split the diagram or switch to a native or hybrid representation.
 
-Responsive HTML uses width 100%, min-width 0, height auto, and an explicit viewBox. Do not replace responsive CSS with fixed root SVG width and height. Verify the actual Yogurt card size and any narrow layout used by the host.
+Responsive HTML uses width 100%, min-width 0, height auto, and an explicit viewBox. Do not replace responsive CSS with fixed root SVG width and height. Yogurt derives a semantic HTML holder's minimum height from the viewBox aspect ratio, but the author must still keep all geometry inside that viewBox and verify the actual Yogurt card size and any narrow layout used by the host.
 
 ## 5. Accessibility and security
 
@@ -203,7 +204,7 @@ The title states what the diagram is. The description names the important object
 
 HTML diagrams are static, self-contained documents. They must not contain scripts, event-handler attributes, foreignObject, image, filters, remote fonts, external styles, network URLs, external href or xlink:href, iframes, embedded objects, or active form controls. Internal fragment references such as url(#product-intake-arrow) are permitted only when the target ID exists in the same document.
 
-Run scripts/validate-semantic-svg.mjs before insertion and after material changes. The validator is not a sanitizer and does not prove visual correctness; only generated or otherwise trusted markup should reach insert_cowart_html_draft.
+Run scripts/validate-semantic-svg.mjs before insertion and after material changes. The validator checks the static envelope and visible geometry, including path extrema, labels, stroke/marker allowance, and outer safe padding. It is not a sanitizer and does not prove collision-free or semantically correct routing; only generated or otherwise trusted markup should reach insert_cowart_html_draft.
 
 ## 6. Trace and return lifecycle
 

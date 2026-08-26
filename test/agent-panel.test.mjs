@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 import * as React from 'react'
@@ -6,12 +7,16 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 
 let CowartAgentPanel
+let AGENT_ACTIVITY_MAX_ITEMS
 let buildAgentPanelMessage
 let buildElicitationContent
 let createElicitationInitialValues
 let approvalStatusForRequest
+let approvalCanRespond
 let codexLoginButtonLabel
 let connectionPresentation
+let mergeAgentActivityItems
+let normalizeActivityEvent
 let normalizeElicitationRequest
 let safeElicitationDomain
 let taskStatusPresentation
@@ -29,13 +34,17 @@ test.before(async () => {
     server: { middlewareMode: true }
   })
   ;({
+    AGENT_ACTIVITY_MAX_ITEMS,
     CowartAgentPanel,
     buildAgentPanelMessage,
     buildElicitationContent,
     createElicitationInitialValues,
     approvalStatusForRequest,
+    approvalCanRespond,
     codexLoginButtonLabel,
     connectionPresentation,
+    mergeAgentActivityItems,
+    normalizeActivityEvent,
     normalizeElicitationRequest,
     safeElicitationDomain,
     taskStatusPresentation
@@ -136,6 +145,203 @@ test('Agent panel presents desktop onboarding before generic connection state', 
   assert.equal(codexLoginButtonLabel('login-required'), '登录 Codex')
   assert.equal(codexLoginButtonLabel('login-pending'), '重新打开登录页')
   assert.equal(codexLoginButtonLabel('login-pending', true), '正在打开…')
+})
+
+test('Agent panel removes redundant diagram generation shortcuts from Agent surfaces', async () => {
+  const state = {
+    status: 'ready',
+    capabilities: { available: true, provider: 'desktop' },
+    pendingTaskIds: [],
+    activity: { phase: 'idle' },
+    lastTask: null,
+    lastEvent: null
+  }
+  const markup = renderToStaticMarkup(React.createElement(CowartAgentPanel, {
+    bridge: {
+      getState: () => state,
+      refreshCapabilities: () => state.capabilities
+    },
+    contextProvider: () => ({ projectName: 'Test', pageShapeCount: 0 }),
+    isOpen: true,
+    onOpenChange: () => {}
+  }))
+  const actionMenuSource = await readFile('src/ExcalidrawWorkspace.jsx', 'utf8')
+
+  assert.match(markup, /整理选区/)
+  assert.match(markup, /生成 PRD/)
+  assert.doesNotMatch(markup, /生成框线图/)
+  assert.doesNotMatch(actionMenuSource, /生成画布框线图/)
+})
+
+test('Agent activity normalization preserves complete replies and line breaks', () => {
+  const longReply = `${'第一段\n'.repeat(90)}最后一句 `
+  const item = normalizeActivityEvent({
+    type: 'agent.delta',
+    at: '2026-08-26T10:00:00.000Z',
+    turnId: 'turn:one',
+    text: longReply
+  })
+
+  assert.equal(item.label, 'Codex Agent')
+  assert.equal(item.metaLabel, '回复')
+  assert.equal(item.text, longReply)
+  assert.match(item.text, /最后一句 $/)
+})
+
+test('Agent activity keeps complete card text while bounding retained card count', () => {
+  let items = []
+  for (let index = 0; index < AGENT_ACTIVITY_MAX_ITEMS + 2; index += 1) {
+    items = mergeAgentActivityItems(items, {
+      id: `item:${index}`,
+      kind: 'complete',
+      type: 'turn.completed',
+      text: `完整内容 ${index}`
+    })
+  }
+
+  assert.equal(items.length, AGENT_ACTIVITY_MAX_ITEMS)
+  assert.equal(items[0].text, '完整内容 2')
+  assert.equal(items.at(-1).text, `完整内容 ${AGENT_ACTIVITY_MAX_ITEMS + 1}`)
+
+  const streamed = mergeAgentActivityItems([], {
+    id: 'delta:one', type: 'agent.delta', turnId: 'turn:one', text: '前半段 '
+  })
+  const merged = mergeAgentActivityItems(streamed, {
+    id: 'delta:two', type: 'agent.delta', turnId: 'turn:one', text: '后半段'
+  })
+  assert.equal(merged[0].text, '前半段 后半段')
+
+  const first = normalizeActivityEvent({
+    type: 'agent.delta',
+    at: '2026-08-26T10:00:00.000Z',
+    turnId: 'turn:collision',
+    itemId: 'item:collision',
+    text: '第一段'
+  })
+  const whitespace = normalizeActivityEvent({
+    type: 'agent.delta',
+    at: '2026-08-26T10:00:00.000Z',
+    turnId: 'turn:collision',
+    itemId: 'item:collision',
+    text: '\n\n'
+  })
+  const final = normalizeActivityEvent({
+    type: 'agent.delta',
+    at: '2026-08-26T10:00:00.000Z',
+    turnId: 'turn:collision',
+    itemId: 'item:collision',
+    text: '第二段'
+  })
+  const collisionSafe = [first, whitespace, final].reduce(mergeAgentActivityItems, [])
+  assert.equal(collisionSafe.length, 1)
+  assert.equal(collisionSafe[0].text, '第一段\n\n第二段')
+
+  const separateItems = mergeAgentActivityItems([first], {
+    ...final,
+    id: 'agent.delta:item:second:2026-08-26T10:00:00.000Z',
+    itemId: 'item:second'
+  })
+  assert.equal(separateItems.length, 2)
+  assert.equal(separateItems[0].text, '第一段')
+  assert.equal(separateItems[1].text, '第二段')
+
+  const identifiedAfterLegacy = mergeAgentActivityItems(streamed, {
+    id: 'delta:identified',
+    type: 'agent.delta',
+    turnId: 'turn:one',
+    itemId: 'item:identified',
+    text: '独立回复'
+  })
+  assert.equal(identifiedAfterLegacy.length, 2)
+
+  const prefixLikeDelta = [
+    { id: 'prefix:1', sourceEventId: 'source:1', type: 'agent.delta', turnId: 'turn:prefix', itemId: 'item:prefix', text: 'A' },
+    { id: 'prefix:2', sourceEventId: 'source:2', type: 'agent.delta', turnId: 'turn:prefix', itemId: 'item:prefix', text: 'Apple' }
+  ].reduce(mergeAgentActivityItems, [])
+  assert.equal(prefixLikeDelta[0].text, 'AApple', 'delta chunks must append even when one begins with the previous text')
+
+  const replayedEvent = mergeAgentActivityItems(prefixLikeDelta, {
+    id: 'prefix:2',
+    sourceEventId: 'source:2',
+    type: 'agent.delta',
+    turnId: 'turn:prefix',
+    itemId: 'item:prefix',
+    text: 'Apple'
+  })
+  assert.equal(replayedEvent[0].text, 'AApple', 'the same transported event must not be appended twice')
+
+  const replayedEarlierEvent = mergeAgentActivityItems(prefixLikeDelta, {
+    id: 'prefix:1',
+    sourceEventId: 'source:1',
+    type: 'agent.delta',
+    turnId: 'turn:prefix',
+    itemId: 'item:prefix',
+    text: 'A'
+  })
+  assert.equal(replayedEarlierEvent[0].text, 'AApple', 'an earlier chunk replay must remain deduplicated after later chunks merge')
+})
+
+test('failed approval submissions remain actionable for retry', () => {
+  assert.equal(approvalCanRespond('idle'), true)
+  assert.equal(approvalCanRespond('error'), true)
+  assert.equal(approvalCanRespond('sending'), false)
+  assert.equal(approvalCanRespond('accept'), false)
+  assert.equal(approvalCanRespond('decline'), false)
+})
+
+test('Agent activity messages are not visually line-clamped', async () => {
+  const styles = await readFile('src/styles.css', 'utf8')
+  const messageRule = styles.match(/\.cowart-agent-activity-copy p\s*\{([\s\S]*?)\}/)?.[1] || ''
+
+  assert.match(messageRule, /white-space:\s*pre-wrap/)
+  assert.match(messageRule, /overflow-wrap:\s*anywhere/)
+  assert.doesNotMatch(messageRule, /line-clamp|overflow:\s*hidden/)
+})
+
+test('collapsed Agent launcher distinguishes unread replies from blocking requests', () => {
+  const baseState = {
+    status: 'sending',
+    capabilities: { available: true, provider: 'desktop', streaming: true, elicitation: true },
+    pendingTaskIds: [],
+    lastTask: null
+  }
+  const unreadState = {
+    ...baseState,
+    activity: { phase: 'running' },
+    lastEvent: { type: 'agent.delta', text: '有新结果' }
+  }
+  const unreadMarkup = renderToStaticMarkup(React.createElement(CowartAgentPanel, {
+    bridge: { getState: () => unreadState, refreshCapabilities: () => unreadState.capabilities },
+    contextProvider: () => ({}),
+    isOpen: false,
+    onOpenChange: () => {}
+  }))
+  const blockingState = {
+    ...baseState,
+    activity: {
+      phase: 'waiting_elicitation',
+      elicitation: {
+        requestId: 'request:one',
+        mode: 'form',
+        requestedSchema: { type: 'object', properties: {} }
+      }
+    },
+    lastEvent: { type: 'elicitation.requested', requestId: 'request:one' }
+  }
+  const blockingMarkup = renderToStaticMarkup(React.createElement(CowartAgentPanel, {
+    bridge: { getState: () => blockingState, refreshCapabilities: () => blockingState.capabilities },
+    contextProvider: () => ({}),
+    isOpen: false,
+    onOpenChange: () => {}
+  }))
+
+  assert.match(unreadMarkup, /data-attention="reply"/)
+  assert.match(unreadMarkup, /有新回复/)
+  assert.match(unreadMarkup, />新回复</)
+  assert.match(blockingMarkup, /data-attention="blocking"/)
+  assert.match(blockingMarkup, /有任务等待你的操作/)
+  assert.match(blockingMarkup, />待处理</)
+  assert.deepEqual(connectionPresentation(blockingState), { label: '等待你', tone: 'attention' })
 })
 
 test('elicitation forms preserve supported primitive and multi-select values', () => {

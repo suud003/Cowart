@@ -116,6 +116,8 @@ export function normalizeAgentEvent(rawEvent, at = Date.now()) {
   }
   const threadId = valueAt(payload, [['threadId'], ['thread', 'id']]) ?? eventObject?.threadId ?? null
   const turnId = valueAt(payload, [['turnId'], ['turn', 'id']]) ?? eventObject?.turnId ?? null
+  const itemId = valueAt(payload, [['itemId'], ['item', 'id']]) ?? eventObject?.itemId ?? null
+  const eventId = eventObject?.eventId ?? valueAt(payload, [['eventId']]) ?? null
   const requestId = eventObject?.requestId ?? rawEvent?.id ?? valueAt(payload, [['requestId'], ['id']])
   const text = valueAt(payload, [
     ['delta'],
@@ -145,6 +147,8 @@ export function normalizeAgentEvent(rawEvent, at = Date.now()) {
     sourceType,
     threadId,
     turnId,
+    itemId,
+    eventId,
     requestId: requestId ?? null,
     text: typeof text === 'string' ? text : null,
     plan,

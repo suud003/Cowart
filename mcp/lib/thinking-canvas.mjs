@@ -34,6 +34,9 @@ const DEFAULT_ZONE_HEIGHT = 640;
 const DEFAULT_ZONE_PADDING = 40;
 const DEFAULT_ZONE_CARD_GAP = 28;
 const DEFAULT_GAP = 48;
+const MAX_ZONE_SIZE = 8_192;
+const RELATION_VISUAL_PADDING = 18;
+const SEMANTIC_ZONE_ROUTE_PADDING = DEFAULT_ZONE_PADDING;
 const MAX_CONTEXT_SHAPES = 250;
 const MAX_CONTEXT_TEXT = 4_000;
 const EMPTY_PAGE_ID = "page:cowart-thinking";
@@ -404,13 +407,17 @@ function localBounds(shape) {
   if (shape?.type === "arrow") {
     const start = shape.props?.start ?? { x: 0, y: 0 };
     const end = shape.props?.end ?? { x: 0, y: 0 };
-    const minX = Math.min(finiteNumber(start.x, 0), finiteNumber(end.x, 0));
-    const minY = Math.min(finiteNumber(start.y, 0), finiteNumber(end.y, 0));
+    const points = sampledArcPoints(
+      { x: finiteNumber(start.x, 0), y: finiteNumber(start.y, 0) },
+      { x: finiteNumber(end.x, 0), y: finiteNumber(end.y, 0) },
+      finiteNumber(shape.props?.bend, 0),
+    );
+    const visualBounds = relationVisualBoundsFromPoints(points, textForShape(shape));
     return {
-      x: finiteNumber(shape.x, 0) + minX,
-      y: finiteNumber(shape.y, 0) + minY,
-      w: Math.max(1, Math.abs(finiteNumber(end.x, 0) - finiteNumber(start.x, 0))),
-      h: Math.max(1, Math.abs(finiteNumber(end.y, 0) - finiteNumber(start.y, 0))),
+      x: finiteNumber(shape.x, 0) + visualBounds.x,
+      y: finiteNumber(shape.y, 0) + visualBounds.y,
+      w: Math.max(1, visualBounds.w),
+      h: Math.max(1, visualBounds.h),
     };
   }
 
@@ -1643,6 +1650,42 @@ function sampledArcPoints(start, end, bend, sampleCount = 48) {
   });
 }
 
+function boundsFromPoints(points) {
+  const safePoints = Array.isArray(points) && points.length > 0 ? points : [{ x: 0, y: 0 }];
+  const minX = Math.min(...safePoints.map((point) => finiteNumber(point?.x, 0)));
+  const minY = Math.min(...safePoints.map((point) => finiteNumber(point?.y, 0)));
+  const maxX = Math.max(...safePoints.map((point) => finiteNumber(point?.x, 0)));
+  const maxY = Math.max(...safePoints.map((point) => finiteNumber(point?.y, 0)));
+  return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
+}
+
+function relationLabelBounds(points, label) {
+  const text = String(label || "").trim();
+  if (!text) return null;
+  const units = Array.from(text).reduce(
+    (total, character) => total + (/[^\u0000-\u00ff]/u.test(character) ? 1 : 0.58),
+    0,
+  );
+  const width = Math.max(48, Math.min(560, 28 + units * 16));
+  const height = 34 + Math.max(0, text.split(/\r?\n/u).length - 1) * 22;
+  const midpoint = points[Math.floor(points.length / 2)] ?? points[0] ?? { x: 0, y: 0 };
+  return {
+    x: midpoint.x - width / 2,
+    y: midpoint.y - height / 2,
+    w: width,
+    h: height,
+  };
+}
+
+function relationVisualBoundsFromPoints(points, label = "") {
+  const pathBounds = boundsFromPoints(points);
+  const labelBounds = relationLabelBounds(points, label);
+  return expandedBounds(
+    unionBounds(labelBounds ? [pathBounds, labelBounds] : [pathBounds]),
+    RELATION_VISUAL_PADDING,
+  );
+}
+
 function pathIntersectsBounds(points, bounds) {
   for (let index = 1; index < points.length; index += 1) {
     if (segmentIntersectsBounds(points[index - 1], points[index], bounds)) return true;
@@ -1684,6 +1727,48 @@ function requiredOutsideBend(start, end, blockers, sign) {
   return required;
 }
 
+function semanticZoneAncestors(store, shape, diagramId) {
+  const zones = [];
+  const visited = new Set([shape?.id]);
+  let parentId = shape?.parentId;
+  while (typeof parentId === "string" && parentId.startsWith(SHAPE_PREFIX) && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parent = store[parentId];
+    if (!parent) break;
+    if (
+      isManagedZone(parent) &&
+      parent.meta?.cowartSemanticZone === true &&
+      parent.meta?.cowartSemanticDiagram?.diagramId === diagramId
+    ) {
+      zones.push(parent);
+    }
+    parentId = parent.parentId;
+  }
+  return zones;
+}
+
+function commonSemanticContainingZone(store, first, second, diagramId) {
+  const secondZoneIds = new Set(
+    semanticZoneAncestors(store, second, diagramId).map((zone) => zone.id),
+  );
+  return semanticZoneAncestors(store, first, diagramId)
+    .find((zone) => secondZoneIds.has(zone.id)) ?? null;
+}
+
+function boundsOverflowDistance(bounds, container, padding = 0) {
+  if (!bounds || !container) return 0;
+  const left = container.x + padding;
+  const top = container.y + padding;
+  const right = container.x + container.w - padding;
+  const bottom = container.y + container.h - padding;
+  return (
+    Math.max(0, left - bounds.x) +
+    Math.max(0, bounds.x + bounds.w - right) +
+    Math.max(0, top - bounds.y) +
+    Math.max(0, bounds.y + bounds.h - bottom)
+  );
+}
+
 function semanticRelationRoute(store, arrow, from, to, baseLane) {
   const selfLoop = from.id === to.id;
   const baseBend = selfLoop ? 96 + Math.abs(baseLane) * 24 : baseLane * 36;
@@ -1701,6 +1786,9 @@ function semanticRelationRoute(store, arrow, from, to, baseLane) {
   );
   if (blockers.length === 0) return { lane: baseLane, bend: baseBend, obstacleIds: [] };
 
+  const diagramId = arrow.meta?.cowartSemanticDiagram?.diagramId;
+  const commonZone = commonSemanticContainingZone(store, from, to, diagramId);
+  const commonZoneBounds = commonZone ? pageBounds(store, commonZone) : null;
   const usedLanes = parallelRelationLanes(store, from.id, to.id, arrow.id);
   const candidates = [];
   for (const sign of [1, -1]) {
@@ -1728,13 +1816,26 @@ function semanticRelationRoute(store, arrow, from, to, baseLane) {
         pathIntersectsBounds(points, expandedRouteBounds(pageBounds(store, shape))),
       );
       if (!collides) {
-        candidates.push({ lane, bend, obstacleIds: blockers.map((shape) => shape.id) });
+        const visualBounds = relationVisualBoundsFromPoints(points, textForShape(arrow));
+        candidates.push({
+          lane,
+          bend,
+          obstacleIds: blockers.map((shape) => shape.id),
+          containmentOverflow: boundsOverflowDistance(
+            visualBounds,
+            commonZoneBounds,
+            SEMANTIC_ZONE_ROUTE_PADDING,
+          ),
+        });
         break;
       }
       bendMagnitude += Math.max(24, bendMagnitude * 0.18);
     }
   }
-  return candidates.sort((first, second) => Math.abs(first.bend) - Math.abs(second.bend))[0] ?? {
+  return candidates.sort((first, second) =>
+    first.containmentOverflow - second.containmentOverflow ||
+    Math.abs(first.bend) - Math.abs(second.bend)
+  )[0] ?? {
     lane: baseLane,
     bend: baseBend,
     obstacleIds: blockers.map((shape) => shape.id),
@@ -1896,6 +1997,144 @@ function refreshRelationGeometryAndBindings(store, relationId) {
     binding.props.normalizedAnchor = bindingAnchors[terminal];
   }
   return true;
+}
+
+function shapeIsDescendantOf(store, shape, ancestorId) {
+  const visited = new Set([shape?.id]);
+  let parentId = shape?.parentId;
+  while (typeof parentId === "string" && parentId.startsWith(SHAPE_PREFIX) && !visited.has(parentId)) {
+    if (parentId === ancestorId) return true;
+    visited.add(parentId);
+    parentId = store[parentId]?.parentId;
+  }
+  return false;
+}
+
+function shapeNestingDepth(store, shape) {
+  let depth = 0;
+  const visited = new Set([shape?.id]);
+  let parentId = shape?.parentId;
+  while (typeof parentId === "string" && parentId.startsWith(SHAPE_PREFIX) && !visited.has(parentId)) {
+    visited.add(parentId);
+    depth += 1;
+    parentId = store[parentId]?.parentId;
+  }
+  return depth;
+}
+
+function semanticRelationPageVisualBounds(store, relation) {
+  const fallbackBounds = pageBounds(store, relation);
+  const { from, to } = boundThinkingRelationEndpoints(store, relation);
+  if (!from || !to) return fallbackBounds;
+  const fromBounds = pageBounds(store, from);
+  const toBounds = pageBounds(store, to);
+  const lane = storedRelationLane(relation);
+  const anchors = relationBindingAnchors(fromBounds, toBounds, lane, from.id === to.id);
+  const start = normalizedAnchorPoint(fromBounds, anchors.start);
+  const end = normalizedAnchorPoint(toBounds, anchors.end);
+  const exactBounds = relationVisualBoundsFromPoints(
+    sampledArcPoints(start, end, finiteNumber(relation.props?.bend, 0)),
+    textForShape(relation),
+  );
+  return unionBounds([fallbackBounds, exactBounds]);
+}
+
+function expandSemanticZoneToBounds(store, zone, requiredBounds) {
+  const current = pageBounds(store, zone);
+  const desiredLeft = Math.min(current.x, requiredBounds.x - SEMANTIC_ZONE_ROUTE_PADDING);
+  const desiredTop = Math.min(current.y, requiredBounds.y - SEMANTIC_ZONE_ROUTE_PADDING);
+  const desiredRight = Math.max(
+    current.x + current.w,
+    requiredBounds.x + requiredBounds.w + SEMANTIC_ZONE_ROUTE_PADDING,
+  );
+  const desiredBottom = Math.max(
+    current.y + current.h,
+    requiredBounds.y + requiredBounds.h + SEMANTIC_ZONE_ROUTE_PADDING,
+  );
+  const desiredWidth = Math.ceil(desiredRight - desiredLeft);
+  const desiredHeight = Math.ceil(desiredBottom - desiredTop);
+  if (desiredWidth > MAX_ZONE_SIZE || desiredHeight > MAX_ZONE_SIZE) {
+    throw new Error(
+      `Semantic diagram ${zone.meta?.cowartSemanticDiagram?.diagramId ?? zone.id} exceeds the maximum ` +
+      `${MAX_ZONE_SIZE} × ${MAX_ZONE_SIZE} canvas zone after routing; split the diagram into smaller sections.`,
+    );
+  }
+
+  const leftGrowth = current.x - desiredLeft;
+  const topGrowth = current.y - desiredTop;
+  const changed = (
+    leftGrowth > 0 ||
+    topGrowth > 0 ||
+    desiredWidth > finiteNumber(zone.props?.w, 0) ||
+    desiredHeight > finiteNumber(zone.props?.h, 0)
+  );
+  if (!changed) return false;
+
+  zone.x -= leftGrowth;
+  zone.y -= topGrowth;
+  zone.props.w = Math.max(finiteNumber(zone.props?.w, 0), desiredWidth);
+  zone.props.h = Math.max(finiteNumber(zone.props?.h, 0), desiredHeight);
+  // A frame's children use local coordinates. Compensating direct children keeps
+  // every descendant at the same page position while the frame grows left/up.
+  for (const child of Object.values(store)) {
+    if (child?.typeName !== "shape" || child.parentId !== zone.id) continue;
+    child.x = finiteNumber(child.x, 0) + leftGrowth;
+    child.y = finiteNumber(child.y, 0) + topGrowth;
+  }
+  return true;
+}
+
+function fitSemanticZonesToContents(store, pageId) {
+  const shapes = pageShapes(store, pageId);
+  const zones = shapes
+    .filter((shape) =>
+      isManagedZone(shape) &&
+      shape.meta?.cowartSemanticZone === true &&
+      shape.meta?.cowartSemanticDiagram?.diagramId,
+    )
+    .sort((first, second) => shapeNestingDepth(store, second) - shapeNestingDepth(store, first));
+  if (zones.length === 0) return;
+
+  for (let pass = 0; pass < 8; pass += 1) {
+    let changed = false;
+    for (const zone of zones) {
+      const diagramId = zone.meta.cowartSemanticDiagram.diagramId;
+      const containedShapes = shapes.filter((shape) =>
+        shape.id !== zone.id &&
+        shape.type !== "arrow" &&
+        shapeIsDescendantOf(store, shape, zone.id),
+      );
+      const containedRelations = shapes.filter((shape) => {
+        if (
+          shape.type !== "arrow" ||
+          shape.meta?.cowartSemanticDiagram?.diagramId !== diagramId
+        ) {
+          return false;
+        }
+        const endpoints = boundThinkingRelationEndpoints(store, shape);
+        return (
+          endpoints.complete &&
+          shapeIsDescendantOf(store, endpoints.from, zone.id) &&
+          shapeIsDescendantOf(store, endpoints.to, zone.id)
+        );
+      });
+      const requiredBounds = unionBounds([
+        ...containedShapes.map((shape) => pageBounds(store, shape)),
+        ...containedRelations.map((relation) => semanticRelationPageVisualBounds(store, relation)),
+      ]);
+      if (requiredBounds && expandSemanticZoneToBounds(store, zone, requiredBounds)) changed = true;
+    }
+    if (!changed) return;
+    for (const relation of shapes) {
+      if (
+        relation.type === "arrow" &&
+        relation.meta?.cowartThinkingGenerated === true &&
+        relation.meta?.cowartSemanticRelation
+      ) {
+        refreshRelationGeometryAndBindings(store, relation.id);
+      }
+    }
+  }
 }
 
 function layoutCreatedThinkingGraph(store, pageId, createdCards, createdRelations, semanticDiagram = null) {
@@ -2436,6 +2675,7 @@ export function applyThinkingOperationsToSnapshot({
       refreshRelationGeometryAndBindings(store, record.id);
     }
   }
+  fitSemanticZonesToContents(store, pageId);
 
   return {
     snapshot: nextSnapshot,

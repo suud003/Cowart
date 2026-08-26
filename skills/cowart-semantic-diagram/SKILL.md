@@ -61,7 +61,7 @@ Create a self-contained HTML document containing exactly one semantic SVG. The d
 
 The real templates must contain the complete contract described in the reference. JSON-escape the less-than character as \u003c before embedding so source text cannot close a template. Keep the prompt synchronized with the final diagram rather than preserving abandoned layout attempts.
 
-Apply the relation grammar and route every directional line between explicit object-boundary ports. Allocate group boundaries, label zones, and relation lanes before drawing objects. Do not use a visually detached arrow as though it were a connected edge.
+Apply the relation grammar and route every directional line between explicit object-boundary ports. Allocate group boundaries, label zones, and relation lanes before drawing objects. Bake visible coordinates into the SVG instead of using `transform`. Size the root viewBox from all nodes, labels, strokes, markers, and true line/Bezier extrema, with an outer inset of at least 2% of the shorter viewBox dimension. Do not use a visually detached arrow as though it were a connected edge.
 
 Validate the finished HTML with:
 
@@ -69,7 +69,7 @@ Validate the finished HTML with:
 node "<skill-dir>/scripts/validate-semantic-svg.mjs" --root "<artifact-root>" "<diagram.html>"
 ~~~
 
-The validator also supports --stdin when the caller can safely stream markup without creating a file. It is a structural and security check, not a substitute for real-canvas geometry or screenshot review.
+The validator also supports --stdin when the caller can safely stream markup without creating a file. It rejects static geometry that exceeds the padded viewBox, but it is not a substitute for collision checks, real-canvas geometry, or screenshot review.
 
 Call insert_cowart_html_draft with dryRun true, an anchor shape when the source is local, and dimensions appropriate to the existing canvas region. Review the planned placement, then repeat the exact content, placement, and semanticDiagram payload with dryRun false and the returned baseRevision. If the revision changed, re-read context and recompute instead of forcing the insertion. To revise an existing artifact, target its draftShapeId and set updateExistingDraft true; do not create a duplicate beside it.
 

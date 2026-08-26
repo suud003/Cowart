@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createAgentBridge } from '../src/agentBridge.js'
+import { createAgentBridge, normalizeAgentEvent } from '../src/agentBridge.js'
 import { createCodexHostAgentAdapter } from '../src/codexHostAgentAdapter.js'
 
 function eventWindow(initial = {}) {
@@ -21,6 +21,20 @@ function eventWindow(initial = {}) {
     }
   }
 }
+
+test('Agent event normalization preserves transport event and item identities', () => {
+  const event = normalizeAgentEvent({
+    type: 'agent.delta',
+    eventId: 'desktop-event:42',
+    threadId: 'thread:one',
+    turnId: 'turn:one',
+    itemId: 'item:one',
+    text: 'hello'
+  }, '2026-08-26T12:00:00.000Z')
+
+  assert.equal(event.eventId, 'desktop-event:42')
+  assert.equal(event.itemId, 'item:one')
+})
 
 test('Codex host adapter prefers the Electron preload bridge', async () => {
   const calls = []

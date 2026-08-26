@@ -73,8 +73,16 @@ function approvalSummary(kind, params) {
   return 'Codex requested an unsupported client response.'
 }
 
+let normalizedEventSequence = 0
+
 function normalizedEvent(type, fields = {}) {
-  return Object.freeze({ type, at: new Date().toISOString(), ...fields })
+  normalizedEventSequence += 1
+  return Object.freeze({
+    type,
+    eventId: `desktop-event:${normalizedEventSequence}`,
+    at: new Date().toISOString(),
+    ...fields
+  })
 }
 
 function compactModels(result) {

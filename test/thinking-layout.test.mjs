@@ -528,6 +528,117 @@ test("routes a semantic skip edge outside unrelated cards", () => {
   assert.deepEqual(skip.meta.cowartThinkingObstacleRoute.obstacleShapeIds, [middle.id]);
 });
 
+test("expands a semantic zone around obstacle-routed arcs and relation labels", () => {
+  const initialZone = { x: 100, y: 100, w: 340, h: 1_500 };
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({
+      diagramId: "native:contained-skip-edge",
+      readingOrder: "top-to-bottom",
+    }),
+    operations: [
+      {
+        type: "create_zone",
+        key: "zone",
+        title: "Contained flow",
+        purpose: "semantic",
+        ...initialZone,
+        semantic: { id: "object:zone" },
+      },
+      ...["a", "b", "c", "d"].map((key, index) => ({
+        type: "create_card",
+        key,
+        title: key.toUpperCase(),
+        parentZoneId: "zone",
+        x: 160,
+        y: 200 + index * 300,
+        semantic: { id: `object:${key}`, order: index + 1 },
+      })),
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+      { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
+      { type: "create_relation", key: "c-d", semanticId: "relation:c-d", from: "c", to: "d" },
+      {
+        type: "create_relation",
+        key: "a-d",
+        semanticId: "relation:a-d",
+        from: "a",
+        to: "d",
+        label: "跨层风险回流",
+      },
+    ],
+  });
+  const zone = result.snapshot.store[result.references.zone];
+  const context = summarizeThinkingContext({ snapshot: result.snapshot, pageId: "page:test" });
+  const skip = context.shapes.find(({ id }) => id === result.references["a-d"]);
+  const initialRight = initialZone.x + initialZone.w;
+  const relationRight = skip.bounds.x + skip.bounds.w;
+  const fittedRight = zone.x + zone.props.w;
+
+  assert.ok(relationRight > initialRight, "the regression fixture must exceed the requested frame");
+  assert.ok(fittedRight - relationRight >= 40, "the fitted frame must retain a relation-safe right gap");
+  assert.ok(zone.props.w > initialZone.w);
+});
+
+test("grows a semantic zone leftward without moving its cards on the page", () => {
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({
+      diagramId: "native:left-contained-edge",
+      readingOrder: "top-to-bottom",
+    }),
+    operations: [
+      {
+        type: "create_zone",
+        key: "zone",
+        title: "Left route",
+        purpose: "semantic",
+        x: 100,
+        y: 100,
+        w: 400,
+        h: 800,
+        semantic: { id: "object:zone" },
+      },
+      {
+        type: "create_card",
+        key: "a",
+        title: "A",
+        parentZoneId: "zone",
+        x: 180,
+        y: 200,
+        semantic: { id: "object:a" },
+      },
+      {
+        type: "create_card",
+        key: "b",
+        title: "B",
+        parentZoneId: "zone",
+        x: 180,
+        y: 600,
+        semantic: { id: "object:b" },
+      },
+      {
+        type: "create_relation",
+        key: "a-b",
+        semanticId: "relation:a-b",
+        from: "a",
+        to: "b",
+        lane: -8,
+        label: "左侧回流",
+      },
+    ],
+  });
+  const zone = result.snapshot.store[result.references.zone];
+  const first = result.snapshot.store[result.references.a];
+  const context = summarizeThinkingContext({ snapshot: result.snapshot, pageId: "page:test" });
+  const relation = context.shapes.find(({ id }) => id === result.references["a-b"]);
+
+  assert.ok(zone.x < 100);
+  assert.equal(zone.x + first.x, 180, "leftward frame growth must not move child content");
+  assert.ok(relation.bounds.x - zone.x >= 40, "the fitted frame must retain a relation-safe left gap");
+});
+
 test("keeps parallel base lanes unique after a skip-edge obstacle is removed", () => {
   const created = applyThinkingOperationsToSnapshot({
     snapshot: emptySnapshot(),

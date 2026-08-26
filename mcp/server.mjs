@@ -61,6 +61,8 @@ const execFileAsync = promisify(execFile);
 const PAGE_ID_PREFIX = "page:";
 const COWART_WIDGET_URI = "ui://widget/cowart/canvas.html";
 const COWART_HTML_DRAFT_URL_ORIGIN = "http://cowart.local";
+const MAX_HTML_DRAFT_DIMENSION = 8_192;
+const SEMANTIC_SVG_VERTICAL_ALLOWANCE = 24;
 const DEFAULT_DISPLAY_MODE = "fullscreen";
 const COWART_GOOGLE_DOMAINS = [
   "https://www.google-analytics.com",
@@ -851,19 +853,35 @@ async function insertCowartHtmlDraft(args = {}) {
   if (semanticInput && !semanticDiagram) {
     throw new Error("semanticDiagram metadata is invalid or exceeds its supported limits.");
   }
+  let semanticValidation = null;
   if (semanticDiagram) {
-    const validation = validateSemanticSvg(finalHtml, { filename: nonEmptyString(args.fileName) || "semantic-diagram.html" });
-    if (validation.errors.length > 0) {
-      throw new Error(`Semantic diagram validation failed: ${validation.errors.slice(0, 8).join("; ")}`);
+    semanticValidation = validateSemanticSvg(finalHtml, {
+      filename: nonEmptyString(args.fileName) || "semantic-diagram.html",
+    });
+    if (semanticValidation.errors.length > 0) {
+      throw new Error(`Semantic diagram validation failed: ${semanticValidation.errors.slice(0, 8).join("; ")}`);
     }
   }
   const matchAnchor = args.matchAnchor !== false && anchorBounds;
   const width = shouldUpdateExistingDraft || shouldTargetDraftHolder
     ? anchorBounds.w
     : finiteNumber(args.displayWidth, shouldTargetAiSlides ? 1024 : matchAnchor ? anchorBounds.w : 512);
-  const height = shouldUpdateExistingDraft || shouldTargetDraftHolder
+  let height = shouldUpdateExistingDraft || shouldTargetDraftHolder
     ? anchorBounds.h
     : finiteNumber(args.displayHeight, shouldTargetAiSlides ? 576 : matchAnchor ? anchorBounds.h : 683);
+  if (semanticValidation?.viewBox) {
+    const minimumHeight = Math.ceil(
+      width * semanticValidation.viewBox.height / semanticValidation.viewBox.width +
+      SEMANTIC_SVG_VERTICAL_ALLOWANCE,
+    );
+    if (minimumHeight > MAX_HTML_DRAFT_DIMENSION) {
+      throw new Error(
+        `Semantic diagram requires a ${minimumHeight}px-tall canvas block at the requested width; ` +
+        `split it into smaller diagrams instead of clipping the SVG.`,
+      );
+    }
+    height = Math.max(height, minimumHeight);
+  }
   const margin = Math.max(0, finiteNumber(args.margin, 40));
   const placement = ["right", "left", "below"].includes(args.placement) ? args.placement : "right";
   let parentId = draftShape?.parentId && store[draftShape.parentId] ? draftShape.parentId : pageId;
