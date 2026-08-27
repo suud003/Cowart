@@ -13,6 +13,7 @@ import {
   applyThinkingOperationsToSnapshot,
   getThinkingContext,
   importThinkingMaterial,
+  normalizeAutoComposeImageMetadata,
   snapshotRevision,
   summarizeThinkingContext,
   undoThinkingOperation,
@@ -638,6 +639,401 @@ test("thinking context exposes a constrained semantic diagram summary for round 
   assert.equal(diagram.visual.semanticDiagram.teachingClaim, "用户想法先被整理成需求，再生成可评审原型。");
   assert.deepEqual(diagram.visual.semanticDiagram.sourceShapeIds, sourceShapeIds);
   assert.equal("ignoredRawMarkup" in diagram.visual.semanticDiagram, false);
+});
+
+test("thinking context exposes bounded auto-compose image trace for reference-led resume", () => {
+  const snapshot = emptySnapshot();
+  const addImage = (name, { index, parentId = "page:test", assetPage = "test", meta = {} } = {}) => {
+    const assetId = `asset:${name}`;
+    const shapeId = `shape:${name}`;
+    snapshot.store[assetId] = {
+      id: assetId,
+      typeName: "asset",
+      type: "image",
+      props: { name: `${name}.png`, src: `/page-assets/${assetPage}/${name}.png`, w: 800, h: 450, mimeType: "image/png", fileSize: 42, isAnimated: false },
+      meta: {},
+    };
+    snapshot.store[shapeId] = {
+      id: shapeId,
+      typeName: "shape",
+      type: "image",
+      parentId,
+      index,
+      x: 80,
+      y: 560,
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      props: { w: 400, h: 225, assetId, playing: true, url: "", crop: null, flipX: false, flipY: false, altText: name },
+      meta,
+    };
+    return shapeId;
+  };
+  snapshot.store["shape:brief"] = {
+    id: "shape:brief",
+    typeName: "shape",
+    type: "geo",
+    parentId: "page:test",
+    index: "a0",
+    x: 0,
+    y: 0,
+    rotation: 0,
+    isLocked: false,
+    opacity: 1,
+    props: { w: 320, h: 180, geo: "rectangle", color: "black", fill: "none", dash: "draw", size: "m", font: "draw", align: "middle", verticalAlign: "middle", growY: 0, url: "", scale: 1, richText: toRichText("Mixed brief") },
+    meta: {},
+  };
+  snapshot.store["asset:reference"] = {
+    id: "asset:reference",
+    typeName: "asset",
+    type: "image",
+    props: {
+      name: "visual-reference.png",
+      src: "/page-assets/test/visual-reference.png",
+      w: 1600,
+      h: 900,
+      mimeType: "image/png",
+      fileSize: 42,
+      isAnimated: false,
+    },
+    meta: {},
+  };
+  snapshot.store["shape:reference"] = {
+    id: "shape:reference",
+    typeName: "shape",
+    type: "image",
+    parentId: "page:test",
+    index: "a1",
+    x: 80,
+    y: 80,
+    rotation: 0,
+    isLocked: false,
+    opacity: 1,
+    props: {
+      w: 800,
+      h: 450,
+      assetId: "asset:reference",
+      playing: true,
+      url: "",
+      crop: null,
+      flipX: false,
+      flipY: false,
+      altText: "Overall visual reference",
+    },
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeRole: "reference",
+      cowartAutoComposeSourceShapeIds: ["shape:brief"],
+      ignoredPrompt: "must not leak into compact context",
+    },
+  };
+  snapshot.store["shape:spoofed-reference"] = {
+    id: "shape:spoofed-reference",
+    typeName: "shape",
+    type: "image",
+    parentId: "page:test",
+    index: "a2",
+    x: 920,
+    y: 80,
+    rotation: 0,
+    isLocked: false,
+    opacity: 1,
+    props: { w: 320, h: 180, assetId: "asset:missing", playing: true, url: "", crop: null, flipX: false, flipY: false, altText: "Spoofed reference" },
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeRole: "reference",
+    },
+  };
+  addImage("visual-part", {
+    index: "a3",
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeBlockId: "block:rainy-alley",
+      cowartAutoComposeRole: "visual-part",
+      cowartAutoComposeReferenceShapeId: "shape:reference",
+      cowartAutoComposeSourceShapeIds: ["shape:brief"],
+    },
+  });
+  addImage("wrong-composition-part", {
+    index: "a4",
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:other",
+      cowartAutoComposeBlockId: "block:rainy-alley",
+      cowartAutoComposeRole: "visual-part",
+      cowartAutoComposeReferenceShapeId: "shape:reference",
+    },
+  });
+  addImage("cross-url-reference", {
+    index: "a5",
+    assetPage: "other",
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeRole: "reference",
+    },
+  });
+  addImage("invalid-role", {
+    index: "a6",
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeRole: "diagram",
+    },
+  });
+  addImage("oversized-id", {
+    index: "a7",
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: `compose:${"x".repeat(200)}`,
+      cowartAutoComposeRole: "reference",
+    },
+  });
+  snapshot.store["page:other"] = { id: "page:other", typeName: "page", name: "Other", index: "a1", meta: {} };
+  const otherReferenceId = addImage("other-reference", {
+    index: "a1",
+    parentId: "page:other",
+    assetPage: "other",
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeRole: "reference",
+    },
+  });
+  addImage("cross-page-part", {
+    index: "a8",
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeBlockId: "block:cross-page",
+      cowartAutoComposeRole: "visual-part",
+      cowartAutoComposeReferenceShapeId: otherReferenceId,
+    },
+  });
+  snapshot.store["shape:non-image-lineage"] = {
+    ...snapshot.store["shape:brief"],
+    id: "shape:non-image-lineage",
+    index: "a9",
+    x: 400,
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeRole: "reference",
+    },
+  };
+
+  const context = summarizeThinkingContext({ snapshot, pageId: "page:test" });
+  const reference = context.shapes.find((shape) => shape.id === "shape:reference");
+  const spoofed = context.shapes.find((shape) => shape.id === "shape:spoofed-reference");
+  const visualPart = context.shapes.find((shape) => shape.id === "shape:visual-part");
+
+  assert.deepEqual(reference.autoCompose, {
+    version: "1",
+    compositionId: "compose:interactive-film",
+    blockId: null,
+    role: "reference",
+    referenceShapeId: null,
+    sourceShapeIds: ["shape:brief"],
+  });
+  assert.equal(reference.asset.src, "/page-assets/test/visual-reference.png");
+  assert.equal("ignoredPrompt" in reference.autoCompose, false);
+  assert.equal(spoofed.autoCompose, null);
+  assert.deepEqual(visualPart.autoCompose, {
+    version: "1",
+    compositionId: "compose:interactive-film",
+    blockId: "block:rainy-alley",
+    role: "visual-part",
+    referenceShapeId: "shape:reference",
+    sourceShapeIds: ["shape:brief"],
+  });
+  for (const invalidId of [
+    "shape:wrong-composition-part",
+    "shape:cross-url-reference",
+    "shape:invalid-role",
+    "shape:oversized-id",
+    "shape:cross-page-part",
+    "shape:non-image-lineage",
+  ]) {
+    assert.equal(context.shapes.find(({ id }) => id === invalidId).autoCompose, null, `${invalidId} must not expose trusted lineage`);
+  }
+
+  const sourceOnly = summarizeThinkingContext({
+    snapshot,
+    pageId: "page:test",
+    scope: "selection",
+    shapeIds: ["shape:brief"],
+  });
+  assert.deepEqual(sourceOnly.shapes.map(({ id }) => id), ["shape:brief"]);
+
+  const resumed = summarizeThinkingContext({
+    snapshot,
+    pageId: "page:test",
+    scope: "selection",
+    shapeIds: ["shape:brief", "shape:reference"],
+  });
+  assert.deepEqual(resumed.shapes.map(({ id }) => id), ["shape:brief", "shape:reference"]);
+  assert.equal(resumed.shapes.find(({ id }) => id === "shape:reference").autoCompose.role, "reference");
+});
+
+test("a 250-shape frozen source scope resumes its later reference with a second exact read", () => {
+  const snapshot = emptySnapshot();
+  const sourceIds = [];
+  for (let index = 0; index < 250; index += 1) {
+    const id = `shape:source-${index}`;
+    sourceIds.push(id);
+    snapshot.store[id] = {
+      id,
+      typeName: "shape",
+      type: "geo",
+      parentId: "page:test",
+      index: `a${String(index).padStart(3, "0")}`,
+      x: index * 12,
+      y: 0,
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      props: { w: 10, h: 10, geo: "rectangle", color: "black", fill: "none", dash: "draw", size: "s", font: "draw", align: "middle", verticalAlign: "middle", growY: 0, url: "", scale: 1, richText: toRichText(String(index)) },
+      meta: {},
+    };
+  }
+  snapshot.store["asset:late-reference"] = {
+    id: "asset:late-reference",
+    typeName: "asset",
+    type: "image",
+    props: { name: "late-reference.png", src: "/page-assets/test/late-reference.png", w: 800, h: 450, mimeType: "image/png", fileSize: 42, isAnimated: false },
+    meta: {},
+  };
+  snapshot.store["shape:late-reference"] = {
+    id: "shape:late-reference",
+    typeName: "shape",
+    type: "image",
+    parentId: "page:test",
+    index: "z1",
+    x: 3200,
+    y: 0,
+    rotation: 0,
+    isLocked: false,
+    opacity: 1,
+    props: { w: 800, h: 450, assetId: "asset:late-reference", playing: true, url: "", crop: null, flipX: false, flipY: false, altText: "Late managed reference" },
+    meta: {
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "compose:limit-test",
+      cowartAutoComposeRole: "reference",
+      cowartAutoComposeSourceShapeIds: sourceIds,
+    },
+  };
+
+  const pageContext = summarizeThinkingContext({ snapshot, pageId: "page:test" });
+  assert.equal(pageContext.truncated, true);
+  assert.equal(pageContext.shapes.some(({ id }) => id === "shape:late-reference"), false);
+
+  const sourceContext = summarizeThinkingContext({ snapshot, pageId: "page:test", scope: "selection", shapeIds: sourceIds });
+  const referenceContext = summarizeThinkingContext({ snapshot, pageId: "page:test", scope: "selection", shapeIds: ["shape:late-reference"] });
+  assert.equal(sourceContext.shapes.length, 250);
+  assert.equal(referenceContext.shapes[0].autoCompose.role, "reference");
+  assert.equal(sourceContext.revision, referenceContext.revision);
+  assert.equal(sourceContext.pageId, referenceContext.pageId);
+});
+
+test("auto-compose evidence identity round-trips through supported card source fields", () => {
+  const compositionHash = "a1b2c3d4e5f6";
+  const blockHash = "0f1e2d3c4b5a";
+  const key = `ac-evidence:${compositionHash}:${blockHash}`;
+  const sourceId = `ac-source:${compositionHash}:${blockHash}`;
+  assert.ok(key.length <= 80);
+  assert.ok(sourceId.length <= 160);
+
+  const input = thinkingToolInputSchema(THINKING_TOOL_NAMES.applyOperations).parse({
+    pageId: "page:test",
+    dryRun: true,
+    operations: [{
+      type: "create_card",
+      key,
+      role: "evidence",
+      title: "Branch budget",
+      body: "Each decision point exposes no more than three branches.",
+      source: {
+        id: sourceId,
+        kind: "user-note",
+        yogurtShapeIds: ["shape:brief"],
+        provenance: { origin: "user" },
+      },
+      sourceRefs: ["source:brief", "constraint:branch-budget"],
+    }],
+  });
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: input.pageId,
+    operations: input.operations,
+  });
+  const context = summarizeThinkingContext({ snapshot: result.snapshot, pageId: "page:test" });
+  const card = context.shapes.find((shape) => shape.id === result.references[key]);
+
+  assert.equal(card.key, key);
+  assert.equal(card.source.id, sourceId);
+  assert.deepEqual(card.source.yogurtShapeIds, ["shape:brief"]);
+  assert.deepEqual(card.sourceRefs, ["source:brief", "constraint:branch-budget"]);
+  assert.equal(card.semantic, null);
+});
+
+test("auto-compose image metadata validates at the image insertion boundary", () => {
+  const normalized = normalizeAutoComposeImageMetadata({
+    unrelatedShapeField: true,
+    cowartAutoComposeVersion: "1",
+    cowartAutoComposeId: "  ac:composition  ",
+    cowartAutoComposeRole: "visual-part",
+    cowartAutoComposeBlockId: " ac:block ",
+    cowartAutoComposeReferenceShapeId: " shape:reference ",
+    cowartAutoComposeSourceShapeIds: [" shape:brief ", "shape:brief"],
+  });
+  assert.deepEqual(normalized, {
+    unrelatedShapeField: true,
+    cowartAutoComposeVersion: "1",
+    cowartAutoComposeId: "ac:composition",
+    cowartAutoComposeRole: "visual-part",
+    cowartAutoComposeBlockId: "ac:block",
+    cowartAutoComposeReferenceShapeId: "shape:reference",
+    cowartAutoComposeSourceShapeIds: ["shape:brief"],
+  });
+
+  assert.throws(
+    () => normalizeAutoComposeImageMetadata({
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "ac:composition",
+      cowartAutoComposeRole: "reference",
+      cowartAutoComposeUnexpected: true,
+    }),
+    /Unsupported auto-compose image metadata field/,
+  );
+  assert.throws(
+    () => normalizeAutoComposeImageMetadata({
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "ac:composition",
+      cowartAutoComposeRole: "visual-part",
+      cowartAutoComposeBlockId: "ac:block",
+    }),
+    /require both a block ID and a reference shape ID/,
+  );
+  assert.throws(
+    () => normalizeAutoComposeImageMetadata({
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "ac:composition",
+      cowartAutoComposeRole: "reference",
+    }, { allowLineage: false }),
+    /belongs on shapeMeta/,
+  );
+  assert.throws(
+    () => normalizeAutoComposeImageMetadata({
+      cowartAutoComposeVersion: "1",
+      cowartAutoComposeId: "ac:composition",
+      cowartAutoComposeRole: "reference",
+      cowartAutoComposeSourceShapeIds: Array.from({ length: 251 }, (_, index) => `shape:${index}`),
+    }),
+    /cannot exceed 250 items/,
+  );
 });
 
 test("creates source-aware cards and bound relations from local references", () => {

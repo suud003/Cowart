@@ -528,6 +528,37 @@ body {
   flex: 1 1 auto;
 }
 
+.cowart-agent-quick-copy {
+  display: flex;
+  min-width: 0;
+  gap: 2px;
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.cowart-agent-quick-copy strong {
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.cowart-agent-quick-copy small {
+  overflow: hidden;
+  color: var(--cowart-panel-text-muted);
+  font-size: 10.5px;
+  font-weight: 450;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="auto-compose"] {
+  min-height: 58px;
+  background: #f0f4ff;
+  border-color: #cbd8fa;
+}
+
 .cowart-agent-welcome .cowart-agent-quick-grid button > svg:last-child {
   color: #aaa8b5;
 }

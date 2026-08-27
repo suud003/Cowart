@@ -814,6 +814,18 @@ textarea {
   color: var(--yogurt-signal);
 }
 
+.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="auto-compose"] {
+  color: var(--yogurt-text);
+  background: linear-gradient(90deg, rgb(255 104 79 / 15%), rgb(8 10 15 / 82%) 44%);
+  border-color: rgb(255 104 79 / 45%);
+  border-left-color: var(--yogurt-signal);
+}
+
+.cowart-agent-quick-copy small {
+  color: var(--yogurt-text-3);
+  font-family: var(--yogurt-mono);
+}
+
 .cowart-agent-thread {
   padding: 22px 0 28px;
   gap: 32px;

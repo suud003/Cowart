@@ -87,6 +87,9 @@ test('Agent panel tasks include stable page and selection IDs instead of screens
   assert.match(message.prompt, /shape:ending/)
   assert.match(message.prompt, /不要依赖截图坐标/)
   assert.match(message.prompt, /当前选中的 2 个对象/)
+  assert.match(message.prompt, /\$cowart-auto-compose/)
+  assert.match(message.prompt, /整体参考图/)
+  assert.match(message.prompt, /原生可编辑画布对象/)
 })
 
 test('Agent panel bounds structured shape context to 250 IDs', () => {
@@ -183,6 +186,9 @@ test('Agent panel removes redundant diagram generation shortcuts from Agent surf
 
   assert.match(markup, /整理选区/)
   assert.match(markup, /生成 PRD/)
+  assert.match(markup, /智能编排/)
+  assert.match(markup, /自动分流，视觉任务先确认参考图/)
+  assert.match(markup, /识别到视觉内容时，先生成整体参考图供你确认/)
   assert.doesNotMatch(markup, /生成框线图/)
   assert.doesNotMatch(actionMenuSource, /生成画布框线图/)
 })

@@ -72,6 +72,7 @@ for (const [name, server] of Object.entries(mcpConfig.mcpServers)) {
 
 const resolvedRoot = await realpath(rootDir);
 for (const skillName of [
+  "cowart-auto-compose",
   "cowart-image-edit",
   "cowart-image-gen",
   "cowart-open-canvas",

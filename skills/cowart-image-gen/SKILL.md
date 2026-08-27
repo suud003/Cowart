@@ -127,6 +127,28 @@ meta flag. Support both shapes.
 
 8. Let the Yogurt AI widget refresh from MCP-backed storage, then confirm the inserted shape id, final dimensions, target aspect ratio, saved asset path, and replaced holder id when the holder replacement workflow was used.
 
+## Reference-anchored image families
+
+When another Yogurt skill supplies an approved master reference image, treat its verified local path as a hard visual-family contract rather than paraphrasing it into prompt text.
+
+1. Accept the exact local `assetFile` returned by a prior `insert_cowart_image`, a page-local `assetPath` returned by `read_cowart_page_asset`, or an explicit user-supplied local image path. Visually inspect it before use.
+2. Pass that path through `referenced_image_paths` for every derived image generation call. Keep the reference set as small as possible and reuse the same approved master for the whole family.
+3. State what must remain consistent—palette, lighting, materials, character identity, lens or illustration language—and what may change for the target block, crop, and aspect ratio.
+4. Do not silently substitute a stale generated image or fall back to prompt-only imitation when the approved local reference cannot be read. Stop and report the missing path.
+5. Preserve bounded lineage on insertion when the caller supplies it, such as `cowartAutoComposeId`, `cowartAutoComposeBlockId`, `cowartAutoComposeRole: "visual-part"`, `cowartAutoComposeReferenceShapeId`, and `cowartAutoComposeSourceShapeIds`.
+
+The reference image controls visual continuity only. Exact requirements, relationships, labels, and metrics still come from the user's text and source-aware canvas context.
+
+### Auto-compose caller mode
+
+When `$cowart-auto-compose` delegates an image, this skill owns the image exactly once from generation through insertion.
+
+1. Accept the bounded caller fields: composition ID, role (`reference` or `visual-part`), optional block ID, optional approved reference shape ID and local asset path, source shape IDs, page, and placement intent.
+2. Generate or reuse the requested image and visually inspect the exact bitmap that will be inserted. When a user-owned page image is supplied as the master, keep that original untouched and insert a managed copy carrying the new composition's `reference` metadata.
+3. Call `insert_cowart_image` with `dryRun: true`. Apply the identical insertion using the dry-run response's `baseRevision`; do not use an ambiguously named returned or result revision for compare-and-swap.
+4. Write only the supported bounded image metadata: `cowartAutoComposeVersion: "1"`, `cowartAutoComposeId`, `cowartAutoComposeRole`, optional `cowartAutoComposeBlockId`, optional `cowartAutoComposeReferenceShapeId`, and `cowartAutoComposeSourceShapeIds`.
+5. Return `assetFile`, image shape ID, page ID, dry-run `baseRevision`, result revision, dimensions, and placement to the caller. The caller must not call `insert_cowart_image` again for this result.
+
 ## Notes
 
 - If the holder is a legacy rotated `geo` rectangle, preserve the same `rotation` on the replacement image.

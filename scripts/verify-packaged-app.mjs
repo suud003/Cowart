@@ -1,6 +1,7 @@
-import { existsSync } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -11,6 +12,17 @@ const resourcesDir = path.join(packageDir, 'resources')
 const runtimeRoot = path.join(resourcesDir, 'app.asar.unpacked')
 const packagedExecutable = path.join(packageDir, 'Yogurt AI Beta.exe')
 const desktopSmokeTimeoutMs = 90_000
+const sourcePackage = JSON.parse(await readFile(path.join(rootDir, 'package.json'), 'utf8'))
+const releaseVersion = String(sourcePackage.version || '').split('+')[0]
+const installerPath = path.join(
+  rootDir,
+  'output',
+  'desktop',
+  `Yogurt-AI-Beta-Setup-${releaseVersion}-x64.exe`
+)
+const installerBlockmapPath = `${installerPath}.blockmap`
+const minimumInstallerBytes = 50 * 1024 * 1024
+const minimumBlockmapBytes = 10 * 1024
 
 const requiredPaths = [
   packagedExecutable,
@@ -26,6 +38,9 @@ const requiredPaths = [
   path.join(runtimeRoot, 'scripts', 'vite-build-once.mjs'),
   path.join(runtimeRoot, 'src', 'main.jsx'),
   path.join(runtimeRoot, 'public', 'cowart-logo.svg'),
+  path.join(runtimeRoot, 'skills', 'cowart-auto-compose', 'SKILL.md'),
+  path.join(runtimeRoot, 'skills', 'cowart-auto-compose', 'references', 'routing-contract.md'),
+  path.join(runtimeRoot, 'skills', 'cowart-auto-compose', 'agents', 'openai.yaml'),
   path.join(runtimeRoot, 'skills', 'cowart-thinking-agent', 'SKILL.md'),
   path.join(runtimeRoot, '.codex-plugin', 'plugin.json'),
   path.join(runtimeRoot, 'plugin.json'),
@@ -33,12 +48,124 @@ const requiredPaths = [
   path.join(runtimeRoot, 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json'),
   path.join(runtimeRoot, 'node_modules', '@openai', 'codex', 'bin', 'codex.js'),
   path.join(runtimeRoot, 'node_modules', '@openai', 'codex-win32-x64', 'package.json'),
-  path.join(runtimeRoot, 'node_modules', 'node-win-x64', 'bin', 'node.exe')
+  path.join(runtimeRoot, 'node_modules', 'node-win-x64', 'bin', 'node.exe'),
+  installerPath,
+  installerBlockmapPath
 ]
 
 const missingPaths = requiredPaths.filter((target) => !existsSync(target))
 if (missingPaths.length > 0) {
   throw new Error(`Packaged runtime is incomplete:\n${missingPaths.join('\n')}`)
+}
+
+const [installerStat, installerBlockmapStat, packagedExecutableStat, packagedAsarStat] = await Promise.all([
+  stat(installerPath),
+  stat(installerBlockmapPath),
+  stat(packagedExecutable),
+  stat(path.join(resourcesDir, 'app.asar'))
+])
+if (!installerStat.isFile() || installerStat.size < minimumInstallerBytes) {
+  throw new Error(
+    `Packaged installer is incomplete: expected at least ${minimumInstallerBytes} bytes, got ${installerStat.size}.`
+  )
+}
+if (!installerBlockmapStat.isFile() || installerBlockmapStat.size < minimumBlockmapBytes) {
+  throw new Error(
+    `Packaged installer blockmap is incomplete: expected at least ${minimumBlockmapBytes} bytes, got ${installerBlockmapStat.size}.`
+  )
+}
+const newestUnpackedRuntimeMtime = Math.max(packagedExecutableStat.mtimeMs, packagedAsarStat.mtimeMs)
+if (installerStat.mtimeMs < newestUnpackedRuntimeMtime) {
+  throw new Error('Packaged installer predates the unpacked runtime and may be stale.')
+}
+if (installerBlockmapStat.mtimeMs < installerStat.mtimeMs) {
+  throw new Error('Packaged installer blockmap predates the installer and may be stale.')
+}
+
+const sourceParityPaths = [
+  'plugin.json',
+  path.join('.codex-plugin', 'plugin.json'),
+  path.join('mcp', 'server.mjs'),
+  path.join('mcp', 'lib', 'thinking-canvas.mjs'),
+  path.join('src', 'AgentPanel.jsx'),
+  path.join('src', 'autoComposePrompt.js'),
+  path.join('skills', 'cowart-auto-compose', 'SKILL.md'),
+  path.join('skills', 'cowart-auto-compose', 'references', 'routing-contract.md'),
+  path.join('skills', 'cowart-auto-compose', 'agents', 'openai.yaml'),
+  path.join('skills', 'cowart-image-gen', 'SKILL.md'),
+  path.join('skills', 'cowart-semantic-diagram', 'SKILL.md'),
+  path.join('skills', 'cowart-thinking-agent', 'SKILL.md')
+]
+
+const packagedPackage = JSON.parse(await readFile(path.join(runtimeRoot, 'package.json'), 'utf8'))
+const runtimePackageFields = ['name', 'version', 'main', 'type', 'dependencies']
+for (const field of runtimePackageFields) {
+  if (JSON.stringify(sourcePackage[field]) !== JSON.stringify(packagedPackage[field])) {
+    throw new Error(`Packaged runtime is stale: package.json field ${field} differs from the current source tree.`)
+  }
+}
+
+async function listRelativeFiles(directory, relativeDirectory = '') {
+  const entries = await readdir(path.join(directory, relativeDirectory), { withFileTypes: true })
+  const files = []
+  for (const entry of entries) {
+    const relativePath = path.join(relativeDirectory, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...await listRelativeFiles(directory, relativePath))
+      continue
+    }
+    if (!entry.isFile()) {
+      throw new Error(`Packaged dist parity does not support non-file entry: ${relativePath}`)
+    }
+    files.push(relativePath)
+  }
+  return files.sort((left, right) => left.localeCompare(right))
+}
+
+const sourceDistDir = path.join(rootDir, 'dist')
+const packagedDistDir = path.join(runtimeRoot, 'dist')
+const [sourceDistFiles, packagedDistFiles] = await Promise.all([
+  listRelativeFiles(sourceDistDir),
+  listRelativeFiles(packagedDistDir)
+])
+if (JSON.stringify(sourceDistFiles) !== JSON.stringify(packagedDistFiles)) {
+  const sourceOnly = sourceDistFiles.filter((file) => !packagedDistFiles.includes(file))
+  const packagedOnly = packagedDistFiles.filter((file) => !sourceDistFiles.includes(file))
+  throw new Error(
+    `Packaged dist file set differs from the current build. Source-only: ${sourceOnly.join(', ') || '(none)'}; packaged-only: ${packagedOnly.join(', ') || '(none)'}.`
+  )
+}
+for (const relativePath of sourceDistFiles) {
+  const [source, packaged] = await Promise.all([
+    readFile(path.join(sourceDistDir, relativePath)),
+    readFile(path.join(packagedDistDir, relativePath))
+  ])
+  if (!source.equals(packaged)) {
+    throw new Error(`Packaged dist is stale: ${relativePath} differs from the current build.`)
+  }
+}
+
+async function sha256File(filePath) {
+  const hash = createHash('sha256')
+  await new Promise((resolve, reject) => {
+    const input = createReadStream(filePath)
+    input.on('data', (chunk) => hash.update(chunk))
+    input.once('error', reject)
+    input.once('end', resolve)
+  })
+  return hash.digest('hex').toUpperCase()
+}
+
+const installerSha256 = await sha256File(installerPath)
+
+for (const relativePath of sourceParityPaths) {
+  const [source, packaged] = await Promise.all([
+    readFile(path.join(rootDir, relativePath)),
+    readFile(path.join(runtimeRoot, relativePath))
+  ])
+  if (!source.equals(packaged)) {
+    throw new Error(`Packaged runtime is stale: ${relativePath} differs from the current source tree.`)
+  }
 }
 
 const bundledCodex = path.join(runtimeRoot, 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
@@ -82,7 +209,7 @@ const client = new CodexAppServerClient({
   clientInfo: {
     name: 'yogurt_ai_packaged_probe',
     title: 'Yogurt AI Packaged Probe',
-    version: '0.2.2'
+    version: sourcePackage.version
   },
   requestTimeoutMs: 60_000
 })
@@ -115,7 +242,7 @@ try {
   )
 
   sidecarResult = {
-    codexVersion: '0.144.3',
+    codexVersion: sourcePackage.dependencies['@openai/codex'],
     transport: 'stdio',
     cowartMcp: yogurtServer.name,
     canvasToolReturned: Boolean(canvas)
@@ -299,6 +426,11 @@ console.log(JSON.stringify({
   ok: true,
   packageDir,
   runtimeRoot,
+  sourceParityFiles: sourceParityPaths.length + sourceDistFiles.length + 1,
+  installerPath,
+  installerBytes: installerStat.size,
+  installerBlockmapBytes: installerBlockmapStat.size,
+  installerSha256,
   ...sidecarResult,
   ...desktopResult
 }, null, 2))

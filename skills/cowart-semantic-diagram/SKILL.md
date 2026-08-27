@@ -17,6 +17,8 @@ Use a **hybrid** only when both representations add distinct value. Keep a small
 
 Do not turn a semantic diagram into a bitmap. Route illustrative or decorative image requests to the Yogurt image skills.
 
+When `$cowart-auto-compose` delegates a block, stay in native-only mode: use editable cards, semantic zones, and bound relations even when the standalone skill would otherwise consider HTML + inline SVG. Split dense structures or ask for simplification instead of downgrading editability. If an approved master reference is supplied, use it only for composition rhythm, spacing, and visual adjacency. Diagram objects, labels, direction, state, and relations must still come from the user's request and traceable sources; never promote pixels or OCR from the reference into semantic claims.
+
 Before authoring or revising an HTML diagram, read [references/diagram-contract.md](references/diagram-contract.md). It defines the semantic model, relation grammar, HTML envelope, layout and port rules, trace fields, and validator contract.
 
 ## Capture context and write the semantic plan

@@ -9,6 +9,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { COWART_CARD_GEO } from "../../src/cowartGeoTypes.js";
 import {
   cowartSnapshotRevision,
+  pageDirName,
   readCowartCanvasState,
   readCowartSelectionState,
   resolveCanvasDir,
@@ -810,6 +811,138 @@ function compactNativeSemantic(shape) {
   };
 }
 
+const AUTO_COMPOSE_ROLES = new Set(["reference", "visual-part"]);
+const AUTO_COMPOSE_METADATA_KEYS = new Set([
+  "cowartAutoComposeVersion",
+  "cowartAutoComposeId",
+  "cowartAutoComposeRole",
+  "cowartAutoComposeBlockId",
+  "cowartAutoComposeReferenceShapeId",
+  "cowartAutoComposeSourceShapeIds",
+]);
+
+function exactBoundedMetadataString(value, maxLength) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength ? normalized : null;
+}
+
+export function normalizeAutoComposeImageMetadata(value, { allowLineage = true } = {}) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Image metadata must be an object.");
+  }
+
+  const normalized = { ...value };
+  const lineageKeys = Object.keys(normalized).filter((key) => key.startsWith("cowartAutoCompose"));
+  if (lineageKeys.length === 0) return normalized;
+  if (!allowLineage) {
+    throw new Error("Auto-compose lineage belongs on shapeMeta, not assetMeta.");
+  }
+
+  const unsupportedKey = lineageKeys.find((key) => !AUTO_COMPOSE_METADATA_KEYS.has(key));
+  if (unsupportedKey) {
+    throw new Error(`Unsupported auto-compose image metadata field: ${unsupportedKey}.`);
+  }
+
+  const compositionId = exactBoundedMetadataString(normalized.cowartAutoComposeId, 160);
+  const role = exactBoundedMetadataString(normalized.cowartAutoComposeRole, 40);
+  if (normalized.cowartAutoComposeVersion !== "1") {
+    throw new Error('cowartAutoComposeVersion must be exactly "1".');
+  }
+  if (!compositionId) {
+    throw new Error("cowartAutoComposeId must be a non-empty string of at most 160 characters.");
+  }
+  if (!AUTO_COMPOSE_ROLES.has(role)) {
+    throw new Error('cowartAutoComposeRole must be either "reference" or "visual-part".');
+  }
+
+  const blockId = exactBoundedMetadataString(normalized.cowartAutoComposeBlockId, 160);
+  const referenceShapeId = exactBoundedMetadataString(
+    normalized.cowartAutoComposeReferenceShapeId,
+    160,
+  );
+  const rawSourceShapeIds = normalized.cowartAutoComposeSourceShapeIds;
+  if (rawSourceShapeIds !== undefined && !Array.isArray(rawSourceShapeIds)) {
+    throw new Error("cowartAutoComposeSourceShapeIds must be an array.");
+  }
+  if (Array.isArray(rawSourceShapeIds) && rawSourceShapeIds.length > MAX_CONTEXT_SHAPES) {
+    throw new Error(`cowartAutoComposeSourceShapeIds cannot exceed ${MAX_CONTEXT_SHAPES} items.`);
+  }
+  const sourceShapeIds = [];
+  for (const sourceShapeId of rawSourceShapeIds ?? []) {
+    const exactId = exactBoundedMetadataString(sourceShapeId, 160);
+    if (!exactId) {
+      throw new Error("Every cowartAutoComposeSourceShapeIds item must be a non-empty string of at most 160 characters.");
+    }
+    if (!sourceShapeIds.includes(exactId)) sourceShapeIds.push(exactId);
+  }
+
+  if (role === "reference") {
+    if (blockId || referenceShapeId) {
+      throw new Error("Reference images cannot declare a block ID or reference shape ID.");
+    }
+    delete normalized.cowartAutoComposeBlockId;
+    delete normalized.cowartAutoComposeReferenceShapeId;
+  } else if (!blockId || !referenceShapeId) {
+    throw new Error("Visual-part images require both a block ID and a reference shape ID.");
+  }
+
+  normalized.cowartAutoComposeVersion = "1";
+  normalized.cowartAutoComposeId = compositionId;
+  normalized.cowartAutoComposeRole = role;
+  if (blockId) normalized.cowartAutoComposeBlockId = blockId;
+  if (referenceShapeId) normalized.cowartAutoComposeReferenceShapeId = referenceShapeId;
+  if (rawSourceShapeIds !== undefined) {
+    normalized.cowartAutoComposeSourceShapeIds = sourceShapeIds;
+  }
+  return normalized;
+}
+
+function isLocalCanvasImageAsset(store, shape) {
+  if (shape?.type !== "image") return false;
+  const asset = typeof shape.props?.assetId === "string" ? store[shape.props.assetId] : null;
+  const src = typeof asset?.props?.src === "string" ? asset.props.src : "";
+  const pageId = pageIdForShape(store, shape);
+  const pagePrefix = pageId ? `/page-assets/${pageDirName(pageId)}/` : null;
+  const isSafeCanvasUrl = src.startsWith("/assets/") || (pagePrefix && src.startsWith(pagePrefix));
+  return asset?.typeName === "asset" && asset.type === "image" && Boolean(isSafeCanvasUrl);
+}
+
+function compactAutoCompose(store, shape) {
+  if (shape?.type !== "image") return null;
+  if (!isLocalCanvasImageAsset(store, shape)) return null;
+  const meta = shape?.meta;
+  if (meta?.cowartAutoComposeVersion !== "1") return null;
+  const compositionId = exactBoundedMetadataString(meta.cowartAutoComposeId, 160);
+  const role = exactBoundedMetadataString(meta.cowartAutoComposeRole, 40);
+  if (!compositionId || !AUTO_COMPOSE_ROLES.has(role)) return null;
+  const blockId = exactBoundedMetadataString(meta.cowartAutoComposeBlockId, 160);
+  const referenceShapeId = exactBoundedMetadataString(meta.cowartAutoComposeReferenceShapeId, 160);
+  if (role === "visual-part") {
+    const reference = referenceShapeId ? store[referenceShapeId] : null;
+    if (
+      !blockId ||
+      !reference ||
+      pageIdForShape(store, reference) !== pageIdForShape(store, shape) ||
+      reference.meta?.cowartAutoComposeVersion !== "1" ||
+      exactBoundedMetadataString(reference.meta?.cowartAutoComposeId, 160) !== compositionId ||
+      reference.meta?.cowartAutoComposeRole !== "reference" ||
+      !isLocalCanvasImageAsset(store, reference)
+    ) {
+      return null;
+    }
+  }
+  return {
+    version: "1",
+    compositionId,
+    blockId,
+    role,
+    referenceShapeId: role === "visual-part" ? referenceShapeId : null,
+    sourceShapeIds: boundedStringList(meta.cowartAutoComposeSourceShapeIds, MAX_CONTEXT_SHAPES, 160),
+  };
+}
+
 function shapeContext(store, shape, selected, maxTextLength) {
   const asset = shape?.props?.assetId ? store[shape.props.assetId] : null;
   const parent = typeof shape?.parentId === "string" ? store[shape.parentId] : null;
@@ -857,6 +990,7 @@ function shapeContext(store, shape, selected, maxTextLength) {
         }
       : null,
     bridge: compactBridge(shape.meta),
+    autoCompose: compactAutoCompose(store, shape),
     visual: compactVisual(shape),
     semantic: nativeSemantic,
     relation: shape.meta?.cowartThinkingRelation === true

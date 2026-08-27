@@ -38,7 +38,10 @@ import {
   COWART_GA4_EVENT_NAMES,
   sendCowartGa4Event,
 } from "./lib/ga4-analytics.mjs";
-import { snapshotRevision } from "./lib/thinking-canvas.mjs";
+import {
+  normalizeAutoComposeImageMetadata,
+  snapshotRevision,
+} from "./lib/thinking-canvas.mjs";
 import { registerCowartThinkingTools } from "./lib/thinking-tools.mjs";
 import { validateSemanticSvg } from "../skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs";
 
@@ -161,7 +164,7 @@ const server = new McpServer(
   },
   {
     instructions:
-      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Build canvas line diagrams natively with a semanticDiagram batch plus semantic zones, cards, and relations so every object stays editable and traceable. Reuse insert_cowart_image and insert_cowart_html_draft only for visual assets or an explicitly requested precision inline-SVG fallback instead of hand-writing tldraw records.",
+      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Route a mixed brief first; when at least one visual block exists, establish one reviewable reference image before fanning out approved parts into reference-led images, native editable structures, and evidence cards. Build canvas line diagrams natively with a semanticDiagram batch plus semantic zones, cards, and relations so every object stays editable and traceable. Reuse insert_cowart_image and insert_cowart_html_draft only for visual assets or an explicitly requested precision inline-SVG fallback instead of hand-writing tldraw records.",
   },
 );
 
@@ -600,6 +603,8 @@ async function getImageDimensions(filePath) {
 async function insertCowartImage(args = {}) {
   const imagePath = nonEmptyString(args.imagePath);
   if (!imagePath) throw new Error("imagePath is required.");
+  const assetMeta = normalizeAutoComposeImageMetadata(args.assetMeta, { allowLineage: false });
+  const shapeMeta = normalizeAutoComposeImageMetadata(args.shapeMeta);
 
   const sourceImagePath = pathResolve(imagePath);
   const sourceStat = await stat(sourceImagePath);
@@ -700,10 +705,9 @@ async function insertCowartImage(args = {}) {
       mimeType,
       isAnimated: false,
     },
-    meta: args.assetMeta && typeof args.assetMeta === "object" ? args.assetMeta : {},
+    meta: assetMeta,
   };
 
-  const shapeMeta = args.shapeMeta && typeof args.shapeMeta === "object" ? { ...args.shapeMeta } : {};
   if (anchorShapeId && !shapeMeta.cowartAnnotationSourceShapeId) {
     shapeMeta.cowartAnnotationSourceShapeId = anchorShapeId;
   }

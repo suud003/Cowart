@@ -1038,6 +1038,18 @@ body {
 
 .cowart-agent-quick-grid button > svg:first-child { color: var(--atelier-blue); }
 
+.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="auto-compose"] {
+  color: var(--atelier-ink);
+  background: var(--atelier-blue-soft);
+  border-color: #b8caf1;
+  box-shadow: inset 3px 0 0 var(--atelier-blue);
+}
+
+.cowart-agent-quick-copy small {
+  color: var(--atelier-ink-faint);
+  font-family: var(--atelier-sans);
+}
+
 .cowart-agent-thread { padding: 22px 0 28px; gap: 28px; }
 .cowart-agent-turn { gap: 14px; }
 .cowart-agent-user-bubble {

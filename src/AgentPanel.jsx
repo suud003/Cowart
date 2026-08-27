@@ -20,6 +20,7 @@ import {
   Workflow
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { AUTO_COMPOSE_QUICK_PROMPT, AUTO_COMPOSE_ROUTING_HINT } from './autoComposePrompt.js'
 
 const EMPTY_BRIDGE_STATE = {
   status: 'unavailable',
@@ -56,8 +57,25 @@ const DEFAULT_TERMINAL_ACTIVITY_TEXT = new Set([
 ])
 
 const QUICK_TASKS = [
-  { icon: Sparkles, label: '整理选区', prompt: '整理当前画布选区；如果没有选中对象，则整理当前页面。找出主题、关系与待确认问题。' },
-  { icon: FileText, label: '生成 PRD', prompt: '根据当前画布与选区信息，生成可评审的产品 PRD 和交互原型。' }
+  {
+    icon: Workflow,
+    kind: 'auto-compose',
+    label: '智能编排',
+    description: '自动分流，视觉任务先确认参考图',
+    prompt: AUTO_COMPOSE_QUICK_PROMPT
+  },
+  {
+    icon: Sparkles,
+    label: '整理选区',
+    description: '梳理主题、关系与待确认问题',
+    prompt: '整理当前画布选区；如果没有选中对象，则整理当前页面。找出主题、关系与待确认问题。'
+  },
+  {
+    icon: FileText,
+    label: '生成 PRD',
+    description: '把当前材料变成可评审产品工作区',
+    prompt: '根据当前画布与选区信息，生成可评审的产品 PRD 和交互原型。'
+  }
 ]
 
 function stableContextKey(context) {
@@ -1173,6 +1191,8 @@ export function buildAgentPanelMessage(instruction, context = {}) {
       JSON.stringify(stableContext, null, 2),
       '```',
       '',
+      AUTO_COMPOSE_ROUTING_HINT,
+      '',
       '请使用已保存的 Yogurt AI 画布与选区上下文完成以下任务：',
       String(instruction || '').trim()
     ].join('\n')
@@ -2038,18 +2058,21 @@ export function CowartAgentPanel({
         {!hasConversation && (
           <section className="cowart-agent-welcome" aria-labelledby="cowart-agent-welcome-title">
             <span className="cowart-agent-welcome-icon" aria-hidden="true"><Sparkles size={19} /></span>
-            <h2 id="cowart-agent-welcome-title">和 Agent 一起整理这张画布</h2>
-            <p>直接描述你想完成的事。Agent 会读取当前页与选区，并把结果继续写回 Yogurt AI。</p>
+            <h2 id="cowart-agent-welcome-title">把一个需求，编排成一张画布</h2>
+            <p>描述完整需求。Agent 会先分流；识别到视觉内容时，先生成整体参考图供你确认，再生成图片与可编辑结构。</p>
             <div className="cowart-agent-welcome-context" aria-label="当前工作范围">
               <span><FileText aria-hidden="true" size={13} />{context?.pageName || '未命名页面'}</span>
               <span data-selection={selectedCount > 0 ? 'true' : 'false'}>{scopeLabel}</span>
             </div>
             {isAvailable && (
               <div className="cowart-agent-quick-grid" aria-label="快捷任务">
-                {QUICK_TASKS.map(({ icon: Icon, label, prompt }) => (
-                  <button key={label} onClick={() => applyQuickTask(prompt)} type="button">
+                {QUICK_TASKS.map(({ icon: Icon, kind, label, description, prompt }) => (
+                  <button data-kind={kind} key={label} onClick={() => applyQuickTask(prompt)} type="button">
                     <Icon aria-hidden="true" size={15} />
-                    <span>{label}</span>
+                    <span className="cowart-agent-quick-copy">
+                      <strong>{label}</strong>
+                      <small>{description}</small>
+                    </span>
                     <ChevronRight aria-hidden="true" size={13} />
                   </button>
                 ))}
@@ -2179,7 +2202,7 @@ export function CowartAgentPanel({
               : isAvailable
               ? isSending
                 ? 'Agent 执行期间，你可以先写下一条消息…'
-                : '例如：把这些想法整理成产品结构并补齐缺口…'
+                : '例如：把互动影游需求编排成参考图、场景图、玩法循环和约束卡片…'
               : workspaceSetup?.status === 'required'
                 ? '选择工作区后即可连接 Codex Agent'
                 : '按上方提示完成 Codex 设置'

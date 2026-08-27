@@ -1,0 +1,8 @@
+interface:
+  display_name: "Yogurt AI Auto Compose"
+  short_description: "Route one brief into visual and editable canvas outputs"
+  brand_color: "#2F63D7"
+  default_prompt: "Use $cowart-auto-compose to route my mixed requirement into images, native editable diagrams, and evidence cards; when visual blocks exist, create one reviewable visual reference before generating their parts."
+
+policy:
+  allow_implicit_invocation: true
