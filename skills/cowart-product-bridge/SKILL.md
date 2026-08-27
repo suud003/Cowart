@@ -1,6 +1,6 @@
 ---
 name: cowart-product-bridge
-description: Turn rough Yogurt AI canvas notes, selected shapes, product ideas, and TAPD references into a traceable PRD plus interactive prototype workspace, then preview and explicitly confirm a revision-safe return to Yogurt AI. Use when product thinking must move from Yogurt into reviewable product artifacts or be synchronized back without overwriting newer canvas work.
+description: Turn rough Yogurt AI canvas notes, selected shapes, product ideas, requirement excerpts, and source references into a traceable PRD plus interactive prototype workspace, then preview and explicitly confirm a revision-safe return to Yogurt AI. Use when product thinking must move from Yogurt into reviewable product artifacts or be synchronized back without overwriting newer canvas work.
 ---
 
 # Yogurt Product Bridge
@@ -30,7 +30,7 @@ Omit unavailable Yogurt identifiers rather than inventing them. If `interaction-
 1. Use `get_cowart_thinking_context` with `scope: selection` when the user selected or marked a local region; use `scope: page` for broader synthesis. When the Yogurt launcher supplies frozen shape IDs, pass that exact list through `shapeIds`; it is authoritative for this request and must not be replaced by a later shared-selection state. The launcher expands selected frames and groups before sending the list.
 2. Record the returned canvas/page identity, revision, scope, and selected shape IDs in `bridge/source-packet.json`.
 3. Separate direct source material, user-authored judgment, source-grounded synthesis, model inference, assumptions, and open questions. Keep the original Yogurt shape IDs for every captured item.
-4. Record TAPD URLs as references. Mark each URL with its real `accessStatus`; a pasted link is `unread` or `not-configured` until an authorized connector returns content. Never infer TAPD requirements from the URL or claim the page was read.
+4. Record external URLs as references. A pasted link stays unread unless its body is already present in the active context. Never infer requirements from a URL or claim the linked page was read; ask the user for pasted text or an export when the content is needed.
 5. Preserve concise excerpts and provenance. Do not copy entire copyrighted sources into the workspace.
 
 ## Build the PRD and prototype

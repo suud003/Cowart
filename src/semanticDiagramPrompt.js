@@ -67,7 +67,7 @@ export function buildSemanticDiagramPrompt({
     '',
     '语义与来源规则：',
     `1. 首先按上述参数调用 ${contextToolCall}。冻结 shapeIds 是用户点击菜单瞬间的权威范围，不得用之后变化的共享选区替换。`,
-    '2. 合并本次对话中的文字、产品想法和画布内容；TAPD URL 只有在确实读取正文后才能转成需求关系，未读取时只保留为待解析来源。',
+    '2. 合并本次对话中的文字、产品想法和画布内容；外部链接只有在当前上下文确实包含正文后才能转成需求关系，未读取时只保留为待补充来源。',
     '3. 先写唯一 teaching claim，再列出 objects、relations、states、visible labels、layout constraints 和 reading order。没有来源依据的关系不要画成箭头。',
     '4. 原始画布对象必须保持不动。新图保留 source shape IDs，并区分用户原话、事实、推断、假设与待确认问题。',
     '',

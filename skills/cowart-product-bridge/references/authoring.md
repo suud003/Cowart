@@ -64,7 +64,7 @@ The review container's page-relation view only summarizes prototype pages and wo
 | Source | Must agree with |
 |---|---|
 | Yogurt source packet | shaping facts, assumptions, and open questions |
-| TAPD access status | evidence claims and quoted content |
+| External source access status | evidence claims and quoted content |
 | Shaping scope | module plan and PRD scope |
 | Requirement IDs | annotations, prototype coverage, and trace map |
 | Rules and state machine | prototype behavior and messages |

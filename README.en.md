@@ -17,31 +17,31 @@
   <a href="#three-minute-quick-start">Quick start</a>
 </p>
 
-Yogurt AI is an installable AI product workspace, available as both a standalone desktop app and a Codex plugin. It puts a native tldraw infinite canvas and Codex Agent in the same interface. Bring in documents, notes, images, conversations, and authorized TAPD content; select real canvas objects; then ask the agent to organize material, complete a product structure, or generate a line diagram, PRD, or interactive prototype.
+Yogurt AI is an installable AI product workspace, available as both a standalone desktop app and a Codex plugin. It puts a native tldraw infinite canvas and Codex Agent in the same interface. Organize local documents, notes, images, conversations, and directly pasted requirement excerpts; select real canvas objects; then ask the agent to structure the material or generate a line diagram, PRD, or interactive prototype.
 
-The agent reads the active page and stable object IDs while streaming status, plans, and change summaries back into the workspace. Sensitive actions are approved in place. Results remain selectable, movable, editable, and open to follow-up questions instead of becoming a static image. The canvas is both the starting point for thought and the shared record after the agent finishes.
+The agent reads the active page and stable object IDs while streaming status, plans, and change summaries back into the workspace. Sensitive actions are approved in place. Diagrams and knowledge structures return as native selectable, movable, editable canvas objects; PRDs and prototypes remain in a reviewable project workspace and can return confirmed conclusions to the canvas.
 
 <p align="center">
   <img src="docs/images/yogurt-ai-workspace.png" width="100%" alt="Yogurt AI visual product workspace organizing world tone, player loop, evidence, and constraints">
 </p>
-<p align="center"><sub>Keep visual references, the core loop, user evidence, and engineering constraints on one editable canvas. Codex reports status from the lower-right corner and expands only when needed.</sub></p>
+<p align="center"><sub>An explicitly labeled interactive-film example appears on an empty canvas and disappears after the first real object is added. Codex reports status from the lower-right corner and expands only when needed.</sub></p>
 
 ## Windows Desktop App (Beta)
 
 Regular users do not need to install Node.js, Git, or a global Codex CLI. Start with the Windows x64 installer:
 
-1. Download `Yogurt-AI-Beta-Setup-<version>-x64.exe`. The installer is currently supplied by the maintainer or a local build; it is publicly available only when an attachment is actually present on GitHub Releases.
+1. Download `Yogurt-AI-Beta-Setup-0.2.5-x64.exe` from the [Yogurt AI Beta 0.2.5 GitHub Release](https://github.com/suud003/Cowart/releases/tag/v0.2.5%2Bcodex.20260827).
 2. Double-click the installer and follow the setup wizard. It creates Desktop and Start Menu shortcuts.
 3. On first launch, choose a product folder as the workspace. Canvas data, generated files, and the project session stay there. Cancelling the picker does not crash the app; you can choose a folder later from the Agent panel.
 4. After the canvas opens, the Codex entry in the lower-right corner connects through the bundled, compatibility-tested Codex and Node runtimes and reuses the current Codex sign-in on the computer. If sign-in is required, expand the workbench and click **Sign in to Codex**: Yogurt AI opens the official browser authorization flow and connects automatically after success—no terminal command is required.
 
-The current local Beta installer is unsigned, so Windows SmartScreen may display a “Windows protected your PC” warning. Run only an installer obtained from a trusted source whose filename and checksum match the maintainer's information. This notice does not imply that an installer has been uploaded to GitHub Releases.
+The current Beta installer is unsigned, so Windows SmartScreen may display a “Windows protected your PC” warning. Download it only from this repository's GitHub Releases and verify the SHA-256 published on the release page.
 
 ## One Complete Product Workflow
 
 ```mermaid
 flowchart LR
-  A["Documents / notes / images / TAPD"] --> B["Organize evidence, hypotheses, and questions on canvas"]
+  A["Local docs / notes / images / requirement excerpts"] --> B["Organize evidence, hypotheses, and questions on canvas"]
   B --> C["Select objects and hand a task to Codex Agent"]
   C --> D["Agent creates diagrams / PRDs / prototypes"]
   D --> E["Watch progress, add context, approve actions"]
@@ -62,7 +62,7 @@ flowchart LR
 
 The Codex entry stays in the lower-right corner and expands into an overlay workbench only when needed, so it never compresses or rearranges the canvas. It knows the active project, page, selected objects, and their stable IDs. Yogurt AI saves the latest canvas before sending a task, so the agent works from the real structure in front of you instead of a screenshot with drifting coordinates.
 
-Write any request or start with `Organize selection`, `Generate PRD`, or `Generate diagram`. While Codex works, the panel streams replies, plans, change summaries, and task status. When the agent needs a scope, choice, or parameter, a structured form appears directly in the activity stream. External authorization requests show only the destination domain and open through the desktop app after your explicit confirmation. You can also approve or reject controlled actions and interrupt an active turn. Reopening the same project resumes its saved agent session.
+Write any request or start with `Organize selection` or `Generate PRD`; when you want a diagram, ask for one directly in natural language. While Codex works, the panel streams replies, plans, change summaries, and task status. When the agent needs a scope, choice, or parameter, a structured form appears directly in the activity stream. External authorization requests show only the destination domain and open through the desktop app after your explicit confirmation. You can also approve or reject controlled actions and interrupt an active turn. Reopening the same project resumes its saved agent session.
 
 <p align="center">
   <img src="docs/images/yogurt-ai-codex-agent-workbench.png" width="100%" alt="Codex Agent opened as an overlay workbench over the Yogurt AI interactive-film canvas">
@@ -92,7 +92,7 @@ Layouts include horizontal, vertical, reversed, center-out, and board-to-peers s
 
 ### 3. Generate PRDs And Interactive Prototypes From Rough Ideas
 
-Select the product-related region of the canvas and choose `生成交互 PRD`. Yogurt AI combines the current conversation, selection or page, product hypotheses, and TAPD content that an authorized connector has successfully read. It produces traceable shaping documents, module PRDs, and self-contained interactive prototypes.
+Select the product-related region of the canvas and choose `Generate PRD`. Yogurt AI combines the current conversation, selection or page, product hypotheses, directly supplied requirement excerpts, and project documents. It produces traceable shaping documents, module PRDs, and self-contained interactive prototypes.
 
 Review no longer depends on fragile screenshot coordinates. Notes stay attached to real interface elements, so you can operate the prototype and compare it with its PRD in the same view. When review is complete, Yogurt AI shows a return preview first; after confirmation, it writes the conclusions back as product zones, cards, and relations on the source canvas.
 
@@ -211,7 +211,7 @@ hypotheses, and open questions, then build an editable panorama around
 Select the cards you want to advance, choose a quick task in the agent workbench, or state the goal directly:
 
 - `Turn this selection into a line diagram that explains the central takeaway.`
-- `Use these materials and accessible TAPD content to create a reviewable PRD and interactive prototype.`
+- `Use these materials and requirement excerpts to create a reviewable PRD and interactive prototype.`
 - `Return the confirmed review conclusions to the original canvas while preserving provenance.`
 
 ### 4. Review, Return, And Deliver
@@ -224,7 +224,7 @@ Follow the agent's plan and change summaries in the workbench, approving control
 
 - Canvas data lives in the current project's `canvas/pages/<page-id>/` directory; page images and HTML live in its matching `assets/` directory.
 - Source paths, verbatim excerpts, and agent summaries are stored separately, making it clear what came from the material and what came from analysis or inference.
-- External links such as TAPD count as read material only after an authorized connector in the user's environment returns their content. Yogurt AI never invents requirements from an inaccessible URL.
+- External links are stored only as source addresses and are never treated as read material automatically. Paste the body text or provide an export when linked requirements are needed.
 - Non-trivial changes show a preview first, write only after the canvas is still in the expected state, and retain guarded undo.
 - Precise SVG blocks pass structural and script-safety validation before entering the canvas.
 - Files outside the project are copied into canvas materials only with explicit user permission.

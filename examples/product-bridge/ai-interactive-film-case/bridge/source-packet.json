@@ -64,7 +64,7 @@
     {
       "id": "assumption-mvp-hybrid-generation",
       "statement": "MVP 使用混合生成：运行时生成叙事计划、对白和状态；视觉优先装配预生成镜头与短过渡，以控制一致性、延迟与成本。",
-      "basis": "产品与工程假设，尚无 TAPD 或技术评估支持。"
+      "basis": "产品与工程假设，尚无真实技术评估支持。"
     },
     {
       "id": "assumption-desktop-first",

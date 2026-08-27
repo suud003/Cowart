@@ -80,3 +80,25 @@ test('the visual atelier uses optimized bundled raster assets', async () => {
     assert.ok(asset.size < 500_000)
   }
 })
+
+test('the desktop shell and public copy advertise only implemented capabilities', async () => {
+  const [appSource, railSource, chromeSource, theme, readme, readmeEnglish, plugin] = await Promise.all([
+    readProjectFile('src/App.jsx'),
+    readProjectFile('src/YogurtSideRail.jsx'),
+    readProjectFile('src/YogurtAppChrome.jsx'),
+    readProjectFile('src/atelierTheme.css'),
+    readProjectFile('README.md'),
+    readProjectFile('README.en.md'),
+    readProjectFile('.codex-plugin/plugin.json')
+  ])
+
+  for (const publicSurface of [appSource, railSource, chromeSource, readme, readmeEnglish, plugin]) {
+    assert.doesNotMatch(publicSurface, /TAPD/i)
+  }
+  assert.match(appSource, /atelier-demo-label/)
+  assert.match(appSource, /atelier-constraint-card/)
+  assert.doesNotMatch(appSource, /atelier-tapd-card/)
+  assert.doesNotMatch(railSource, /LinkSimple|帮助文档即将接入/)
+  assert.doesNotMatch(chromeSource, /ShareNetwork|UserPlus|DotsThree|当前协作者|邀请协作者/)
+  assert.doesNotMatch(theme, /yogurt-app-share|yogurt-app-collaborators/)
+})

@@ -110,7 +110,7 @@ const sourceProvenanceSchema = z.object({
 
 const sourceMetadataSchema = z.object({
   id: z.string().trim().max(160).optional(),
-  kind: z.enum(["yogurt-shape", "user-note", "tapd-link", "document", "image", "code", "other"]).optional(),
+  kind: z.enum(["yogurt-shape", "user-note", "external-link", "tapd-link", "document", "image", "code", "other"]).optional(),
   title: z.string().trim().max(300).optional(),
   summary: z.string().max(12_000).nullable().optional(),
   excerpt: z.string().max(3_000).nullable().optional(),

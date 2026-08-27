@@ -1,6 +1,6 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.4+codex.20260826",
+  "version": "0.2.5+codex.20260827",
   "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
   "author": {
     "name": "ZHONG XIN",
@@ -15,7 +15,7 @@
     "tldraw",
     "whiteboard",
     "image-generation",
-    "visual-collaboration",
+    "visual-thinking",
     "codex-agent",
     "electron"
   ],
@@ -49,7 +49,7 @@
       "Open Yogurt AI for this project.",
       "Organize these documents into source-linked cards and relationships on the canvas.",
       "Turn my selected Yogurt notes into a traceable semantic line diagram directly on the current canvas.",
-      "Turn my selected notes and TAPD references into an interactive PRD, then preview a snapshot to sync back."
+      "Turn my selected notes and pasted requirement excerpts into an interactive PRD, then preview a snapshot to sync back."
     ]
   }
 }

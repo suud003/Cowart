@@ -63,14 +63,14 @@ export function buildProductBridgePrompt({
     `- 冻结上下文调用：${contextToolCall}`,
     '',
     '来源整理规则：',
-    '1. 合并本次对话里的文字叙述、零散产品想法、已粘贴的 TAPD 链接，以及已保存的 Yogurt AI 画布上下文；不要要求用户先整理成完整文档。',
+    '1. 合并本次对话里的文字叙述、零散产品想法、用户直接提供的需求摘录、项目文档，以及已保存的 Yogurt AI 画布上下文；不要要求用户先整理成完整文档。',
     `2. 首先按上述参数调用 ${contextToolCall}，并保留所有来源到画布对象的可追溯关系。`,
     ...(hasSelection
       ? [
           '   这些 shapeIds 是用户点击菜单瞬间冻结的权威范围；不要重新读取或依赖之后可能被轮询覆盖的共享选区。'
         ]
       : []),
-    '3. TAPD URL 只有在你确实能读取其正文时才算已解析；若缺少登录态或权限，把它标记为“待解析”，保留 URL，并请用户提供授权、正文或导出文件，绝不能猜测需求内容。',
+    '3. 外部链接本身只算来源地址；只有当前上下文确实包含其正文时才算已读取。否则标记为“待补充”，保留 URL，并请用户粘贴正文或提供导出文件，绝不能猜测链接内容。',
     '4. 对事实、用户原话、产品假设、推断、待确认问题和约束分别标注，不要把推断写成已确认需求。',
     '',
     '生成要求：',
@@ -78,7 +78,7 @@ export function buildProductBridgePrompt({
     '2. 基于来源生成画布分区、EARS 风格需求、模块 PRD，以及可直接评审的自包含交互 HTML 原型。',
     '3. 原型标注必须绑定稳定的 data-annotation-anchor 语义锚点；不得把截图像素坐标当作唯一定位依据。',
     '4. 维护 trace map：sourceId -> yogurtShapeId -> zoneId -> requirementId -> pageId#annotationId -> lastSyncedRevision。',
-    '5. 交付工作区/评审链接、生成内容摘要、来源覆盖情况、未解析 TAPD 与仍需确认的问题。',
+    '5. 交付工作区/评审链接、生成内容摘要、来源覆盖情况、待补充的外部材料与仍需确认的问题。',
     '6. Product Bridge 不生成语义框线图，也不把 SVG 加入 interaction-prd.json。画布框线图是另一项独立的 Yogurt 画布操作。',
     '',
     '回流 Yogurt AI 的要求：',

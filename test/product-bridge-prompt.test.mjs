@@ -13,7 +13,7 @@ function shapeIds(count) {
 
 test('product bridge prompt scopes generation and return flow to the selected Yogurt shapes', () => {
   const prompt = buildProductBridgePrompt({
-    selectedShapeIds: ['shape:idea', 'shape:tapd', 'shape:idea', ''],
+    selectedShapeIds: ['shape:idea', 'shape:requirement', 'shape:idea', ''],
     currentPageId: 'page:product',
     currentPageName: 'UGC AI 助手'
   })
@@ -21,14 +21,15 @@ test('product bridge prompt scopes generation and return flow to the selected Yo
   assert.match(prompt, /Use \$cowart-product-bridge/)
   assert.match(prompt, /UGC AI 助手 \(page:product\)/)
   assert.match(prompt, /当前选区，共 2 个对象/)
-  assert.match(prompt, /精确目标 shape IDs：shape:idea, shape:tapd/)
+  assert.match(prompt, /精确目标 shape IDs：shape:idea, shape:requirement/)
   assert.match(
     prompt,
-    /get_cowart_thinking_context\(scope: "selection", shapeIds: \["shape:idea","shape:tapd"\]\)/
+    /get_cowart_thinking_context\(scope: "selection", shapeIds: \["shape:idea","shape:requirement"\]\)/
   )
   assert.match(prompt, /点击菜单瞬间冻结的权威范围/)
   assert.match(prompt, /不要重新读取或依赖.*共享选区/)
-  assert.match(prompt, /文字叙述、零散产品想法、已粘贴的 TAPD 链接/)
+  assert.match(prompt, /文字叙述、零散产品想法、用户直接提供的需求摘录/)
+  assert.doesNotMatch(prompt, /TAPD/i)
   assert.match(prompt, /data-annotation-anchor/)
   assert.doesNotMatch(prompt, /\$cowart-semantic-diagram/)
   assert.match(prompt, /Product Bridge 不生成语义框线图/)
@@ -54,8 +55,8 @@ test('product bridge prompt uses the whole current page when the selection is em
     prompt,
     /get_cowart_thinking_context\(scope: "page", pageId: "page:whole"\)/
   )
-  assert.match(prompt, /缺少登录态或权限/)
-  assert.match(prompt, /标记为“待解析”/)
+  assert.match(prompt, /外部链接本身只算来源地址/)
+  assert.match(prompt, /标记为“待补充”/)
   assert.match(prompt, /当前页面的产品区域/)
 })
 

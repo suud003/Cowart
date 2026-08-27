@@ -30,13 +30,13 @@ This file records what was actually captured, its provenance, and whether linked
       "accessStatus": "available"
     },
     {
-      "id": "src-tapd-101",
-      "kind": "tapd-link",
-      "title": "TAPD requirement 101",
+      "id": "src-external-101",
+      "kind": "external-link",
+      "title": "External requirement reference",
       "summary": null,
       "excerpt": null,
       "yogurtShapeIds": ["shape:b"],
-      "provenance": { "origin": "linked-reference", "uri": "https://tapd.example/101" },
+      "provenance": { "origin": "linked-reference", "uri": "https://requirements.example/101" },
       "accessStatus": "unread"
     }
   ],
@@ -46,15 +46,15 @@ This file records what was actually captured, its provenance, and whether linked
 }
 ```
 
-Allowed `kind` values are `yogurt-shape`, `user-note`, `tapd-link`, `document`, `image`, `code`, and `other`. Allowed `accessStatus` values are:
+Allowed `kind` values are `yogurt-shape`, `user-note`, `external-link`, `document`, `image`, `code`, and `other`. The legacy `tapd-link` value remains accepted only so existing workspaces continue to validate. Allowed `accessStatus` values are:
 
 - `available`: content was actually returned by an authorized source or directly supplied by the user;
 - `unread`: a reference exists but has not been opened;
-- `not-configured`: no authorized TAPD or source connector is available;
+- `not-configured`: no source reader is configured;
 - `denied`: access was refused;
 - `error`: an attempted read failed.
 
-For TAPD, a URL alone is never `available`. Do not fill `summary` or `excerpt` as if linked content had been read. A user-pasted requirement body may be a separate `user-note` with `available` status and a relation to the TAPD reference.
+An external URL alone is never `available`. Do not fill `summary` or `excerpt` as if linked content had been read. A user-pasted requirement body may be a separate `user-note` with `available` status and a relation to the external reference.
 
 ## `bridge/trace-map.json`
 
@@ -67,7 +67,7 @@ This file connects evidence and Yogurt canvas structure to generated product art
   "mappings": [
     {
       "id": "map-intake-generate",
-      "sourceIds": ["src-yogurt-a", "src-tapd-101"],
+      "sourceIds": ["src-yogurt-a", "src-external-101"],
       "yogurtShapeIds": ["shape:a", "shape:b"],
       "zoneId": "zone-intake",
       "requirementIds": ["F-intake-01"],

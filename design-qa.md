@@ -7,6 +7,7 @@
 - Open Agent state: `qa/atelier-agent-case.png`, captured from the real Electron renderer with the visual project case still visible behind the overlay.
 - Minimum supported desktop window: `qa/atelier-min-1024x720-v2.png`, captured from a `1024×720` BrowserWindow.
 - Same-viewport comparison: `qa/atelier-comparison-final.png`, with the visual source and implementation rendered together at `1488×1058` per side.
+- Capability-alignment audit: `qa/capability-audit-before.png`, `qa/capability-audit-after.png`, and `qa/capability-audit-comparison.png`, captured at `1488×1058` during the same audit run.
 
 ## Fidelity surfaces checked
 
@@ -16,7 +17,7 @@
 - Imagery: the rainy-city hero, alley, interior, and hand-drawn branch diagram are bundled raster assets with intentional crops and optimized WebP delivery. No placeholder boxes or synthetic SVG stand-ins are used.
 - Icons: application navigation and actions use the Phosphor icon family; existing tldraw tools retain their native icon system.
 - Responsive behavior: the `1024×720` pass scales the showcase composition as one unit so the three-column case remains readable and no longer clips outside the visible canvas. Narrow browser/widget layouts retain the single-column and modal-Agent fallbacks.
-- State treatment: the source screenshot includes an actively selected research card. The shipped onboarding canvas uses a neutral state instead of baking a fake selection into non-interactive sample content; real tldraw selection and contextual tools remain functional above it.
+- State treatment: the source screenshot includes an actively selected research card. The shipped onboarding canvas uses a neutral state, carries a visible `空画布示例` label, and disappears after the first real canvas object is added; real tldraw selection and contextual tools remain functional above it.
 
 ## Comparison history
 
@@ -24,20 +25,21 @@
 2. The second pass replaced the improvised branch text with a real hand-drawn raster note, aligned the three evidence cards, and converted the Codex launcher into a persistent status surface.
 3. The Agent pass exposed a dark legacy setup card and an oversized empty gap. Specific light-theme overrides and a flexible welcome layout made the connection state, quick tasks, complete conversation area, and composer visible together.
 4. The final source-versus-implementation comparison aligned the palette, evidence stack, branch note, typography, and canvas margins. A separate `1024×720` pass found and fixed minimum-window clipping with a height-aware composition scale.
+5. The capability audit removed the unsupported TAPD entry and fake tracker card, disabled collaboration/help controls, fabricated avatars, local-only share action, inactive overflow menu, and false page-menu caret. The evidence card now represents a local product constraint with an explicit review state.
 
 ## Functional and accessibility verification
 
-- Side-rail navigation, canvas upload access, undo, redo, share, and Agent open/close controls remain real buttons with accessible names and visible focus treatment.
+- Side-rail Codex and canvas navigation, canvas upload access, undo, redo, notifications, and Agent open/close controls remain real buttons with accessible names and visible focus treatment.
 - The Agent launcher continues to distinguish unread replies from blocking requests; blocking interactions remain prominent in the expanded panel and background notifications remain supported.
 - Agent messages are not line-clamped, retain line breaks, and remain scrollable. Compact Agent mode retains dialog semantics, focus containment, Escape dismissal, and focus restoration.
 - Reduced-motion handling, keyboard focus indicators, semantic connection colors, and practical mobile tap targets remain present.
 - Renderer captures completed without logged console or load errors.
-- `npm run quality` passed: plugin metadata checks, syntax checks, 217 automated tests, production build, MCP probe, analytics probe, and GA4 probe.
+- `npm run quality` passed after the capability changes: plugin metadata and syntax checks, 218 automated tests, production build, MCP probe, analytics probe, and GA4 probe. Strict Product Bridge validation also completed with 0 errors and 0 warnings.
 
 ## Remaining findings
 
 - P0: none.
 - P1: none.
-- P2: none.
+- P2: production distribution still requires a valid tldraw license key to remove the SDK watermark, as documented in the README.
 
 final result: passed

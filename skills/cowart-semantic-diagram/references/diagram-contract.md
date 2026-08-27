@@ -215,7 +215,7 @@ Run scripts/validate-semantic-svg.mjs before insertion and after material change
 - Preview HTML insertion with `dryRun: true`, then apply the exact payload with the returned `baseRevision`. A stale revision invalidates the preview and requires a new context read.
 - Preview the smallest typed operation list with apply_cowart_thinking_operations. Preserve user-authored shapes unless the user explicitly approved their modification.
 - After a successful return, add operation IDs, returned shape IDs, and lastAppliedRevision to trace, then update the existing HTML draft through insert_cowart_html_draft with updateExistingDraft true.
-- Never infer TAPD content from a URL. Record it as unread unless an authorized connector returned the actual content.
+- Never infer external source content from a URL. Record it as unread unless the actual body is already present in the active context.
 - Never write raw tldraw records or replace a full canvas snapshot.
 
 ## 7. Validation commands

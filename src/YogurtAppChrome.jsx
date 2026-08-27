@@ -1,12 +1,8 @@
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
-  CaretDown,
-  DotsThree,
   Robot,
-  ShareNetwork,
-  SidebarSimple,
-  UserPlus
+  SidebarSimple
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
@@ -42,7 +38,6 @@ export function YogurtAppChrome({
   projectName
 }) {
   const [telemetry, setTelemetry] = useState(readCanvasTelemetry)
-  const [shareStatus, setShareStatus] = useState('idle')
 
   useEffect(() => {
     let previousKey = telemetryKey(telemetry)
@@ -79,21 +74,6 @@ export function YogurtAppChrome({
     globalThis.window?.__cowartEditor?.[command]?.()
   }
 
-  async function handleShare() {
-    const pageName = displayPageName || 'Yogurt AI 画布'
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: pageName, text: `Yogurt AI · ${pageName}` })
-      } else {
-        await navigator.clipboard.writeText(globalThis.location?.href || pageName)
-      }
-      setShareStatus('shared')
-      window.setTimeout(() => setShareStatus('idle'), 1800)
-    } catch (error) {
-      if (error?.name !== 'AbortError') setShareStatus('error')
-    }
-  }
-
   return (
     <header className="yogurt-app-chrome" aria-label="Yogurt AI 应用栏">
       <nav className="yogurt-app-breadcrumb" aria-label="当前画布位置">
@@ -102,7 +82,6 @@ export function YogurtAppChrome({
         <span>{projectName || '互动影游'}</span>
         <i aria-hidden="true">/</i>
         <strong title={displayPageName}>{displayPageName}</strong>
-        <CaretDown aria-hidden="true" size={12} weight="bold" />
       </nav>
 
       <div className="yogurt-app-actions" aria-label="画布操作">
@@ -111,22 +90,6 @@ export function YogurtAppChrome({
         </button>
         <button aria-label="重做" onClick={() => runEditorCommand('redo')} title="重做" type="button">
           <ArrowClockwise aria-hidden="true" size={18} />
-        </button>
-        <span className="yogurt-app-action-divider" aria-hidden="true" />
-        <button aria-label="邀请协作者" disabled title="协作能力即将接入" type="button">
-          <UserPlus aria-hidden="true" size={18} />
-        </button>
-        <span className="yogurt-app-collaborators" aria-label="当前协作者">
-          <i>林</i><i>顾</i><i>乔</i><small>+2</small>
-        </span>
-        <button
-          className="yogurt-app-share"
-          data-status={shareStatus}
-          onClick={handleShare}
-          type="button"
-        >
-          <ShareNetwork aria-hidden="true" size={16} />
-          <span>{shareStatus === 'shared' ? '已复制' : shareStatus === 'error' ? '重试' : '分享'}</span>
         </button>
         <button
           aria-controls="yogurt-codex-agent-panel"
@@ -147,9 +110,6 @@ export function YogurtAppChrome({
           )}
           <span>Codex</span>
           {attentionLabel && <b aria-hidden="true">{attentionLabel}</b>}
-        </button>
-        <button aria-label="更多操作" title="更多" type="button">
-          <DotsThree aria-hidden="true" size={20} weight="bold" />
         </button>
       </div>
     </header>

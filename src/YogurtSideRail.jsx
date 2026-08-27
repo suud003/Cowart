@@ -1,8 +1,6 @@
 import {
   BellSimple,
   ImageSquare,
-  LinkSimple,
-  Question,
   SquaresFour,
   Tray
 } from '@phosphor-icons/react'
@@ -31,11 +29,11 @@ export function YogurtSideRail({
           data-active={isAgentPanelOpen ? 'true' : 'false'}
           data-attention={agentAttention?.kind || 'none'}
           onClick={() => onAgentPanelOpenChange(true)}
-          title="打开 Codex 收件箱"
+          title="打开 Codex Agent"
           type="button"
         >
           <Tray aria-hidden="true" size={22} weight="regular" />
-          <span>收件箱</span>
+          <span>Codex</span>
           {inboxLabel && <b aria-hidden="true">{inboxLabel}</b>}
         </button>
         <button
@@ -46,14 +44,6 @@ export function YogurtSideRail({
         >
           <SquaresFour aria-hidden="true" size={22} weight="regular" />
           <span>画布</span>
-        </button>
-        <button
-          onClick={() => onAgentPanelOpenChange(true)}
-          title="打开 Agent，并粘贴 TAPD 链接"
-          type="button"
-        >
-          <LinkSimple aria-hidden="true" size={22} weight="regular" />
-          <span>TAPD</span>
         </button>
         <button onClick={triggerCanvasAssetPicker} title="向画布添加素材" type="button">
           <ImageSquare aria-hidden="true" size={22} weight="regular" />
@@ -70,9 +60,6 @@ export function YogurtSideRail({
           type="button"
         >
           <BellSimple aria-hidden="true" size={22} weight="regular" />
-        </button>
-        <button aria-label="帮助" disabled title="帮助文档即将接入" type="button">
-          <Question aria-hidden="true" size={22} weight="regular" />
         </button>
       </div>
     </aside>

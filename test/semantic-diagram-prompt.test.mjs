@@ -13,17 +13,17 @@ function shapeIds(count) {
 
 test('semantic diagram prompt freezes the selected Yogurt scope and requests a native canvas diagram', () => {
   const prompt = buildSemanticDiagramPrompt({
-    selectedShapeIds: ['shape:idea', 'shape:tapd', 'shape:idea', ''],
+    selectedShapeIds: ['shape:idea', 'shape:requirement', 'shape:idea', ''],
     currentPageId: 'page:product',
     currentPageName: 'UGC AI 助手'
   })
 
   assert.match(prompt, /Use \$cowart-semantic-diagram/)
   assert.match(prompt, /当前选区，共 2 个对象/)
-  assert.match(prompt, /冻结 shape IDs：shape:idea, shape:tapd/)
+  assert.match(prompt, /冻结 shape IDs：shape:idea, shape:requirement/)
   assert.match(
     prompt,
-    /get_cowart_thinking_context\(scope: "selection", shapeIds: \["shape:idea","shape:tapd"\]\)/
+    /get_cowart_thinking_context\(scope: "selection", shapeIds: \["shape:idea","shape:requirement"\]\)/
   )
   assert.match(prompt, /唯一 teaching claim/)
   assert.match(prompt, /直接在当前 Yogurt AI canvas/)
@@ -42,6 +42,7 @@ test('semantic diagram prompt freezes the selected Yogurt scope and requests a n
   assert.match(prompt, /返回的 baseRevision/)
   assert.match(prompt, /revision 已变化/)
   assert.match(prompt, /不要只返回代码而不落到画布/)
+  assert.doesNotMatch(prompt, /TAPD/i)
 })
 
 test('semantic diagram prompt uses the whole page when selection is empty', () => {
@@ -53,7 +54,7 @@ test('semantic diagram prompt uses the whole page when selection is empty', () =
   assert.match(prompt, /处理范围：当前整页/)
   assert.match(prompt, /get_cowart_thinking_context\(scope: "page", pageId: "page:whole"\)/)
   assert.doesNotMatch(prompt, /冻结 shape IDs/)
-  assert.match(prompt, /未读取时只保留为待解析来源/)
+  assert.match(prompt, /未读取时只保留为待补充来源/)
   assert.match(prompt, /当前页面.*空白位置/)
 })
 

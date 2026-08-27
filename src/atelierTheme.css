@@ -257,65 +257,6 @@ body {
   background: #efede7;
 }
 
-.yogurt-app-actions > button:disabled {
-  color: #a9aaa8;
-  cursor: default;
-}
-
-.yogurt-app-action-divider {
-  width: 1px;
-  height: 24px;
-  margin: 0 7px;
-  background: var(--atelier-line);
-}
-
-.yogurt-app-collaborators {
-  display: inline-flex;
-  height: 34px;
-  margin: 0 7px 0 2px;
-  align-items: center;
-}
-
-.yogurt-app-collaborators i {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  margin-left: -5px;
-  place-items: center;
-  color: #fff;
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 700;
-  background: #4e5b64;
-  border: 2px solid var(--atelier-paper);
-  border-radius: 50%;
-}
-
-.yogurt-app-collaborators i:nth-child(2) { background: #725f52; }
-.yogurt-app-collaborators i:nth-child(3) { background: #52665d; }
-
-.yogurt-app-collaborators small {
-  margin-left: 4px;
-  color: var(--atelier-ink-soft);
-  font-size: 11px;
-}
-
-.yogurt-app-actions > .yogurt-app-share {
-  display: inline-flex;
-  width: auto;
-  min-width: 64px;
-  padding: 0 11px;
-  gap: 6px;
-  color: var(--atelier-ink);
-  background: var(--atelier-paper);
-  border: 1px solid var(--atelier-line);
-}
-
-.yogurt-app-share[data-status="shared"] {
-  color: var(--atelier-green);
-  border-color: rgb(47 155 102 / 36%);
-}
-
 .yogurt-app-actions > .yogurt-app-agent-toggle {
   display: none;
 }
@@ -396,6 +337,20 @@ body {
   color: var(--atelier-ink);
   pointer-events: none;
   user-select: none;
+}
+
+.atelier-demo-label {
+  padding: 4px 8px;
+  margin-left: 2px;
+  align-self: center;
+  color: var(--atelier-ink-soft);
+  font-family: var(--atelier-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background: rgb(255 254 250 / 78%);
+  border: 1px solid var(--atelier-line);
+  border-radius: 999px;
 }
 
 .atelier-zone {
@@ -515,7 +470,7 @@ body {
 }
 
 .atelier-loop-brief,
-.atelier-tapd-card,
+.atelier-constraint-card,
 .atelier-research-card,
 .atelier-video-card {
   background: var(--atelier-paper);
@@ -645,14 +600,14 @@ body {
   accent-color: #6b7b72;
 }
 
-.atelier-tapd-card {
+.atelier-constraint-card {
   position: relative;
   width: 77%;
   min-height: 226px;
   padding: 18px 19px;
 }
 
-.atelier-tapd-card > b {
+.atelier-constraint-card > b {
   display: inline-block;
   padding: 2px 5px;
   margin-bottom: 10px;
@@ -661,18 +616,18 @@ body {
   background: var(--atelier-blue-soft);
 }
 
-.atelier-tapd-card > strong {
+.atelier-constraint-card > strong {
   display: block;
   margin-bottom: 14px;
   font-size: 13px;
   line-height: 1.45;
 }
 
-.atelier-tapd-card dl { margin: 0; }
-.atelier-tapd-card dl div { display: flex; margin: 7px 0; gap: 12px; font-size: 10px; }
-.atelier-tapd-card dt { width: 42px; color: var(--atelier-ink-faint); }
-.atelier-tapd-card dd { margin: 0; font-weight: 600; }
-.atelier-tapd-card small { position: absolute; right: 18px; bottom: 15px; color: var(--atelier-ink-faint); font-size: 9px; }
+.atelier-constraint-card dl { margin: 0; }
+.atelier-constraint-card dl div { display: flex; margin: 7px 0; gap: 12px; font-size: 10px; }
+.atelier-constraint-card dt { width: 42px; color: var(--atelier-ink-faint); }
+.atelier-constraint-card dd { margin: 0; font-weight: 600; }
+.atelier-constraint-card small { position: absolute; right: 18px; bottom: 15px; color: var(--atelier-ink-faint); font-size: 9px; }
 
 .atelier-constraint {
   position: absolute;
@@ -1324,8 +1279,6 @@ body {
 
 @media (max-width: 940px) {
   .yogurt-app-chrome { padding-inline: 18px; }
-  .yogurt-app-collaborators,
-  .yogurt-app-actions > button[aria-label="邀请协作者"] { display: none; }
   .cowart-canvas-editorial-empty { grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px; overflow: auto hidden; }
   .atelier-zone h2 { font-size: 25px; }
   .atelier-loop-brief > strong { font-size: 20px; }
@@ -1346,8 +1299,7 @@ body {
   .yogurt-app-breadcrumb i:nth-of-type(2) { display: none; }
   .yogurt-app-breadcrumb span,
   .yogurt-app-breadcrumb strong { max-width: 120px; }
-  .yogurt-app-actions > button:not(.yogurt-app-share):not(.yogurt-app-agent-toggle):not(:last-child),
-  .yogurt-app-action-divider { display: none; }
+  .yogurt-app-actions > button:not(.yogurt-app-agent-toggle) { display: none; }
   .yogurt-app-actions > .yogurt-app-agent-toggle { display: inline-grid; width: 34px; min-width: 34px; height: 34px; padding: 0; }
   .yogurt-app-agent-toggle > span,
   .yogurt-app-agent-toggle b { display: none; }
@@ -1362,8 +1314,6 @@ body {
 }
 
 @media (max-width: 520px) {
-  .yogurt-app-actions > .yogurt-app-share span { display: none; }
-  .yogurt-app-actions > .yogurt-app-share { width: 34px; min-width: 34px; padding: 0; justify-content: center; }
   .cowart-agent-panel-body { padding-inline: 13px; }
 }
 

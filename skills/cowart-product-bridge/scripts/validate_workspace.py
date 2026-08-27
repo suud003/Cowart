@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 ACCESS_STATUSES = {"available", "unread", "not-configured", "denied", "error"}
-SOURCE_KINDS = {"yogurt-shape", "user-note", "tapd-link", "document", "image", "code", "other"}
+SOURCE_KINDS = {"yogurt-shape", "user-note", "external-link", "tapd-link", "document", "image", "code", "other"}
 SYNC_STATUSES = {"idle", "previewed", "awaiting-confirmation", "confirmed", "applied", "stale", "conflict", "undone"}
 TRANSITION_TYPES = {"flow", "dispatch", "claim", "sync", "association", "compare"}
 TRANSITION_DIRECTIONS = {"forward", "bidirectional", "none"}
@@ -173,15 +173,15 @@ def validate_source_packet(packet: dict[str, Any] | None, errors: list[str]) -> 
             errors.append(f"{label}: unsupported accessStatus '{status}'")
         string_list(source.get("yogurtShapeIds"), f"{label}: yogurtShapeIds", errors)
         provenance = object_value(source.get("provenance"), f"{label}: provenance", errors)
-        if kind == "tapd-link":
+        if kind in {"external-link", "tapd-link"}:
             uri = provenance.get("uri") if provenance is not None else None
             if not isinstance(uri, str) or not uri:
-                errors.append(f"{label}: TAPD reference requires provenance.uri")
+                errors.append(f"{label}: external reference requires provenance.uri")
             has_content = bool(source.get("summary") or source.get("excerpt"))
             if status == "available" and not has_content:
-                errors.append(f"{label}: available TAPD content requires a summary or excerpt")
+                errors.append(f"{label}: available external content requires a summary or excerpt")
             if status in {"unread", "not-configured", "denied", "error"} and has_content:
-                errors.append(f"{label}: inaccessible TAPD reference must not claim linked summary or excerpt content")
+                errors.append(f"{label}: unread external reference must not claim linked summary or excerpt content")
     return source_ids, workspace_id
 
 

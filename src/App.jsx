@@ -7046,7 +7046,7 @@ function CowartCanvasEditorialEmptyState() {
     <>
       <section aria-hidden="true" className="cowart-canvas-editorial-empty">
         <article className="atelier-zone atelier-zone-world">
-          <h2><span>1</span> 世界语气</h2>
+          <h2><span>1</span> 世界语气 <small className="atelier-demo-label">空画布示例</small></h2>
           <div className="atelier-world-collage">
             <img alt="" className="atelier-world-hero" src={atelierCityHeroUrl} />
             <blockquote>雨一直下，<br />但每个人都在<br />等天亮。</blockquote>
@@ -7088,16 +7088,16 @@ function CowartCanvasEditorialEmptyState() {
 
         <article className="atelier-zone atelier-zone-evidence">
           <h2><span>3</span> 证据与约束</h2>
-          <section className="atelier-tapd-card">
-            <b>#INTE-2312</b>
-            <strong>时间回溯在关键剧情节点异常跳转</strong>
+          <section className="atelier-constraint-card">
+            <b>产品约束</b>
+            <strong>时间回溯只在关键剧情节点开放</strong>
             <dl>
-              <div><dt>状态</dt><dd>进行中</dd></div>
-              <div><dt>优先级</dt><dd>高</dd></div>
-              <div><dt>负责人</dt><dd>林翌</dd></div>
-              <div><dt>迭代</dt><dd>Sprint 23</dd></div>
+              <div><dt>目标</dt><dd>减少分支迷失</dd></div>
+              <div><dt>规则</dt><dd>每章最多 3 次</dd></div>
+              <div><dt>反馈</dt><dd>显示因果变化</dd></div>
+              <div><dt>待验证</dt><dd>玩家是否理解代价</dd></div>
             </dl>
-            <small>12 条评论 · 3 个附件 · 更新于 14:37</small>
+            <small>来自本地需求摘录 · 待评审</small>
           </section>
           <em className="atelier-constraint">约束：<br />性能预算 16.6ms<br />（目标机型）</em>
           <section className="atelier-research-card">
