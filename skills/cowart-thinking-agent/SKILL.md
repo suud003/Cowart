@@ -40,7 +40,7 @@ Never write tldraw records or replace a raw snapshot directly.
 - Use `$cowart-semantic-diagram` when the user needs an architecture, flow, state, comparison, GUI/LUI, swimlane, or other relation-dense diagram. Generate editable native cards, semantic zones, and bound relations on the current Yogurt canvas by default. Use a traceable inline-SVG canvas block only when the user explicitly requests SVG or the native canvas cannot express the required ports, lanes, or obstacle routing unambiguously.
 - Use existing `insert_cowart_html_draft` for an editable comparison table, timeline, matrix, quantitative chart, or interactive explanation that cards cannot express well. When the HTML is a semantic diagram, pass its constrained `semanticDiagram` summary so its teaching claim, reading order, source IDs, and counts survive a later Yogurt context read.
 - Use existing image generation and insertion only when a bitmap materially aids understanding.
-- Use `$cowart-auto-compose` when one request mixes visual scenes or assets with flows, relationships, evidence, or constraints and the user expects Yogurt AI to decide the representation. Let it establish one reviewable master reference before fanning out into images and native editable structure.
+- Use `$cowart-auto-compose` when one request mixes visual scenes or assets with flows, relationships, evidence, or constraints and the user expects Yogurt AI to decide the representation. Let it establish one reviewable full-canvas layout blueprint, then place images, native editable structure, and evidence into the approved structured slots.
 - Anchor new content beside the material or idea it explains. Do not dump every result at the page edge.
 
 ## Interpret visual annotations

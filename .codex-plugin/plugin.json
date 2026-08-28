@@ -1,6 +1,6 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.6+codex.20260827",
+  "version": "0.2.7+codex.20260828",
   "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
   "author": {
     "name": "ZHONG XIN",
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "Yogurt AI",
     "shortDescription": "Think on an editable canvas, hand work to Codex Agent, and bring the result back.",
-    "longDescription": "Yogurt AI is an installable AI product workspace that combines a tldraw-powered native canvas with a canvas-aware Codex Agent workbench. Organize source material, send the active page or exact selection to the agent, follow plans and changes, approve controlled actions, and return editable semantic diagrams, PRDs, prototypes, images, HTML, and presentations to one persistent project canvas. For mixed briefs, Agent routes the content first and, when visual blocks exist, establishes one reviewable visual reference before creating consistent images, native editable structures, and source-linked evidence.",
+    "longDescription": "Yogurt AI is an installable AI product workspace that combines a tldraw-powered native canvas with a canvas-aware Codex Agent workbench. Organize source material, send the active page or exact selection to the agent, follow plans and changes, approve controlled actions, and return editable semantic diagrams, PRDs, prototypes, images, HTML, and presentations to one persistent project canvas. For mixed briefs, Agent first creates a reviewable full-canvas layout blueprint, then generates images, native editable structures, and source-linked evidence into the approved page regions.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -36,7 +36,7 @@
       "Interactive canvas",
       "Desktop Codex Agent workbench",
       "Canvas-aware Agent tasks and approvals",
-      "Conditional reference-first mixed-output orchestration",
+      "Layout-blueprint-first mixed-output orchestration",
       "Native Codex widget",
       "Source-grounded reasoning",
       "Atomic reversible edits",
@@ -49,7 +49,7 @@
     ],
     "defaultPrompt": [
       "Open Yogurt AI for this project.",
-      "Route one mixed requirement into images, native editable diagrams, and evidence cards; when visual blocks exist, create one reference image for approval before generating their parts.",
+      "Route one mixed requirement into a full-canvas layout blueprint for approval, then place images, native editable diagrams, and evidence cards into its approved regions.",
       "Organize these documents into source-linked cards and relationships on the canvas.",
       "Turn my selected Yogurt notes into a traceable semantic line diagram directly on the current canvas.",
       "Turn my selected notes and pasted requirement excerpts into an interactive PRD, then preview a snapshot to sync back."

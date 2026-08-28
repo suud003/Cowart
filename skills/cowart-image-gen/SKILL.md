@@ -129,25 +129,32 @@ meta flag. Support both shapes.
 
 ## Reference-anchored image families
 
-When another Yogurt skill supplies an approved master reference image, treat its verified local path as a hard visual-family contract rather than paraphrasing it into prompt text.
+For ordinary image families outside auto-compose, an approved visual reference can still control palette, lighting, materials, character identity, lens, or illustration language. Resolve and inspect its exact local path, pass it through `referenced_image_paths`, keep the reference set small, and never substitute a stale image or prompt-only imitation when the file is missing. Exact requirements, relationships, labels, and metrics still come from the user's text and source-aware canvas context.
 
-1. Accept the exact local `assetFile` returned by a prior `insert_cowart_image`, a page-local `assetPath` returned by `read_cowart_page_asset`, or an explicit user-supplied local image path. Visually inspect it before use.
-2. Pass that path through `referenced_image_paths` for every derived image generation call. Keep the reference set as small as possible and reuse the same approved master for the whole family.
-3. State what must remain consistent—palette, lighting, materials, character identity, lens or illustration language—and what may change for the target block, crop, and aspect ratio.
-4. Do not silently substitute a stale generated image or fall back to prompt-only imitation when the approved local reference cannot be read. Stop and report the missing path.
-5. Preserve bounded lineage on insertion when the caller supplies it, such as `cowartAutoComposeId`, `cowartAutoComposeBlockId`, `cowartAutoComposeRole: "visual-part"`, `cowartAutoComposeReferenceShapeId`, and `cowartAutoComposeSourceShapeIds`.
+## Auto-compose layout-blueprint mode
 
-The reference image controls visual continuity only. Exact requirements, relationships, labels, and metrics still come from the user's text and source-aware canvas context.
+When `$cowart-auto-compose` delegates an image, this skill owns it exactly once from generation through insertion. Auto-compose has two distinct roles.
 
-### Auto-compose caller mode
+### `layout-reference`
 
-When `$cowart-auto-compose` delegates an image, this skill owns the image exactly once from generation through insertion.
+1. Accept the composition ID, complete structured `layoutPlan`, exact 64-character `layoutPlanDigest`, source shape IDs, page, and placement intent.
+2. Generate a low-text, full-page layout mock in the plan's frame ratio. It must show the complete page boundary and every planned image, native-diagram, and evidence slot with matching relative bounds, hierarchy, whitespace, and reading order.
+3. Never return a single cinematic concept image, scene, character sheet, moodboard, key art, or poster as the layout reference. A user-supplied concept image is optional visual material for an image slot, not a substitute for the page mock. Reuse an existing image only when visual inspection proves it is already a whole-page mock matching the current plan.
+4. Inspect the generated bitmap against every slot before insertion. If required regions or the overall page boundary are missing, regenerate once. If the second attempt still fails, stop without insertion and report the mismatch.
 
-1. Accept the bounded caller fields: composition ID, role (`reference` or `visual-part`), optional block ID, optional approved reference shape ID and local asset path, source shape IDs, page, and placement intent.
-2. Generate or reuse the requested image and visually inspect the exact bitmap that will be inserted. When a user-owned page image is supplied as the master, keep that original untouched and insert a managed copy carrying the new composition's `reference` metadata.
-3. Call `insert_cowart_image` with `dryRun: true`. Apply the identical insertion using the dry-run response's `baseRevision`; do not use an ambiguously named returned or result revision for compare-and-swap.
-4. Write only the supported bounded image metadata: `cowartAutoComposeVersion: "1"`, `cowartAutoComposeId`, `cowartAutoComposeRole`, optional `cowartAutoComposeBlockId`, optional `cowartAutoComposeReferenceShapeId`, and `cowartAutoComposeSourceShapeIds`.
-5. Return `assetFile`, image shape ID, page ID, dry-run `baseRevision`, result revision, dimensions, and placement to the caller. The caller must not call `insert_cowart_image` again for this result.
+### `visual-part`
+
+1. Accept the composition ID, block ID, approved layout-reference shape ID and local asset path, matching layout digest, exact target slot bounds, source shape IDs, page, and placement intent.
+2. Use the target slot's `w:h` as the generation and placement aspect-ratio contract. Pass the verified layout blueprint through `referenced_image_paths` so the model can expand the corresponding region, but explicitly instruct it to generate only the slot's finished visual and not copy page borders, placeholder boxes, region labels, diagram arrows, cards, or other board chrome.
+3. Take subject matter and product meaning from the routed block and original sources. Take visual art direction from explicit user material or the original brief; the layout blueprint controls slot, crop, relative weight, and composition rhythm, not product facts.
+4. Do not silently substitute a stale blueprint or fall back to prompt-only imitation when the approved local path cannot be read.
+
+### Shared insertion contract
+
+1. Call `insert_cowart_image` with `dryRun: true`. Apply the identical insertion using the dry-run response's `baseRevision`; do not use an ambiguously named result revision for compare-and-swap.
+2. Write only the supported bounded image metadata: `cowartAutoComposeVersion: "2"`, `cowartAutoComposeId`, `cowartAutoComposeRole` (`layout-reference` or `visual-part`), `cowartAutoComposeLayoutPlanDigest`, optional `cowartAutoComposeBlockId`, optional `cowartAutoComposeReferenceShapeId`, and `cowartAutoComposeSourceShapeIds`.
+3. A `layout-reference` must not carry a block ID or reference shape ID. A `visual-part` must carry both and must match the same-page reference's composition ID and digest.
+4. Return `assetFile`, image shape ID, page ID, dry-run `baseRevision`, result revision, dimensions, and placement to the caller. The caller must not call `insert_cowart_image` again for this result.
 
 ## Notes
 

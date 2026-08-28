@@ -1,68 +1,78 @@
 ---
 name: cowart-auto-compose
-description: Orchestrate one mixed Yogurt AI requirement into a reference-first canvas composition. Use when a request combines scenes or visual assets with flows, relationships, systems, constraints, evidence, or questions; when the user wants Yogurt AI to decide what becomes an image versus an editable line diagram; or when the user wants one master reference image followed by visually consistent parts and native editable canvas structure.
+description: Orchestrate one mixed Yogurt AI requirement into a layout-blueprint-first canvas composition. Use when a request combines visual assets with flows, relationships, systems, constraints, evidence, or questions; when the user wants Yogurt AI to decide what becomes an image versus an editable line diagram; or when the user wants one full-canvas page layout approved before each part is generated and placed.
 ---
 
 # Yogurt AI Auto Compose
 
-Turn one mixed requirement into a coherent Yogurt AI canvas without forcing every idea into the same representation. Generate one overall visual reference first when pixels add value, then use that approved reference to guide the separate image assets while rebuilding structure as native editable canvas objects.
+Turn one mixed requirement into a coherent Yogurt AI page without forcing every idea into the same representation. First create a structured page layout plan and a human-reviewable whole-page layout blueprint. After approval, generate each image, native editable diagram, and evidence card into its planned slot.
 
-Before routing or executing, read [references/routing-contract.md](references/routing-contract.md). It defines the block schema, routing tests, reference-image contract, layout zones, trace fields, and completion checks.
+Before acting, read [references/routing-contract.md](references/routing-contract.md). It defines block routing, layout-plan invariants, the blueprint contract, confirmation binding, trace fields, and completion checks.
 
 ## Preserve the source scope
 
-1. Call `get_cowart_thinking_context` with the frozen page or selection supplied by the Agent task. Use `scope: selection` when objects are selected and `scope: page` otherwise.
-2. Keep the user's request, source-shape IDs, source IDs, page ID, revision, and any selected image asset metadata. Do not rely on screenshot coordinates.
+1. Call `get_cowart_thinking_context` with the frozen page or selection from the Agent task. Use `scope: selection` when objects are selected and `scope: page` otherwise.
+2. Keep the user's request, source-shape IDs, source IDs, page ID, revision, and selected image asset metadata. Do not rely on screenshot coordinates.
 3. Separate direct material, user judgment, source-grounded synthesis, model inference, assumptions, and open questions before routing.
-4. Assign one stable, bounded `compositionId` and one stable, bounded block ID to every routed requirement fragment using the deterministic canonical-JSON hash rules in the routing contract. Preserve those IDs through preview, reference generation, execution, revision, and reporting.
+4. Assign one stable bounded `compositionId` and one stable bounded block ID to every routed fragment with the canonical-JSON hash rules in the routing contract. Preserve them through preview, blueprint generation, execution, revision, and reporting.
 
-## Build the route plan
+## Build the route and layout plan
 
 Route every meaningful block to exactly one primary output:
 
-- `visual`: a scene, character, environment, mood, illustration, texture, or other asset where pixels carry the intended value;
-- `diagram`: a flow, hierarchy, state, dependency, architecture, decision, comparison, or relationship that must remain editable;
-- `evidence`: an exact requirement, constraint, quote, citation, metric, risk, or assumption that should stay readable and traceable;
+- `visual`: scene, character, environment, mood, illustration, texture, or another asset where pixels carry the value;
+- `diagram`: flow, hierarchy, state, dependency, architecture, decision, comparison, or relationship that must remain editable;
+- `evidence`: exact requirement, constraint, quote, citation, metric, risk, or assumption that must stay readable and traceable;
 - `question`: missing information whose answer would materially change the route or result.
 
-Do not infer a diagram's facts from visual style. Do not put precise requirements into generated image text. Do not create a PRD workspace unless the user explicitly asks for one.
+Do not infer diagram facts from visual style. Do not put precise requirements into generated image text. Do not create a PRD workspace unless the user explicitly asks for one.
 
-Present a concise route preview with block ID, source, route, planned output, target zone, and any inference. If ambiguity would materially change a block's primary route, ask one short question before generating.
+Then create the structured `layoutPlan` before generating any bitmap:
 
-## Phase 1: create the reference
+1. Use the contract's 1600 x 1000 local page frame.
+2. Assign every executable block exactly one non-overflowing slot with block ID, route, region, integer bounds, order, and fit mode.
+3. Plan the whole page: relative size, hierarchy, whitespace, reading order, and how image, diagram, and evidence regions work together.
+4. Canonicalize the complete plan and compute the 64-character `layoutPlanDigest`.
+5. Present a concise route-and-layout preview with block ID, source, route, slot bounds, order, planned output, and any inference. Ask one short question only when ambiguity would materially change a route or page structure.
 
-Only create a master reference when at least one block routes to `visual`.
+## Phase 1: create the full-canvas layout blueprint
 
-1. When the user selects or supplies an existing reference image, resolve its verified local path with `get_cowart_selection` and `read_cowart_page_asset`, then delegate `$cowart-image-gen` in auto-compose caller mode to insert one managed reference copy carrying this composition's bounded `reference` metadata. Preserve the user's original image unchanged. The managed copy, not the unmodified source image, becomes the approved `referenceShapeId` used by derived images.
-2. Otherwise delegate the reference to `$cowart-image-gen` in auto-compose caller mode. Supply the composition ID, `role: "reference"`, source shape IDs, page, placement intent, and reference brief. That skill is the only owner of generation, visual inspection, dry-run insertion, and final insertion; do not call `insert_cowart_image` a second time here. The reference should establish art direction, palette, lighting, composition rhythm, and approximate placement of the routed regions. Keep it low-text: no long copy, exact requirements, labels that must be correct, or final diagram semantics.
-3. Require `$cowart-image-gen` to return the verified `assetFile`, inserted image shape ID, page ID, `baseRevision`, and result revision. Confirm that the returned shape carries bounded `reference` trace metadata and is not a stale asset.
-4. Require the returned managed reference to be placed near the source scope as a normal image, not as a substitute for the final editable content.
-5. Mark the plan as `reference-review`, then always stop after reporting the route preview and managed reference. Ask the user to approve it or request a revision before generating the derived parts. Use the host's confirmation surface when available; otherwise end the turn with one clear confirmation request. Never fan out a newly inserted reference in the same turn, even when the user previously asked to skip review. Approval is valid only when a user message or elicitation response arrives after this `reference-review` in the same Agent thread and identifies the current composition ID plus the exact managed reference shape/path. A prior request to “use this image,” silence, or a generic earlier approval is not approval of the inserted reference.
+Every mixed auto-compose task gets one blueprint, including diagram-plus-evidence tasks with no visual asset.
 
-If there is no `visual` block, skip the bitmap reference rather than inventing one. Show the route preview and proceed with the native structure only when that is already authorized.
+1. Delegate `$cowart-image-gen` in auto-compose caller mode with the full structured layout plan, digest, composition ID, `role: "layout-reference"`, source shape IDs, page, placement intent, and a blueprint brief.
+2. Require a whole-page layout mock that visibly includes the page boundary and every planned slot. It should show region hierarchy, relative sizes, whitespace, and reading order with minimal placeholder text. It must not be a single concept image, cinematic scene, character sheet, moodboard, key art, or poster.
+3. A user-supplied concept image may be passed as optional style material for a visual slot, but it cannot be copied and relabeled as the blueprint. Reuse an existing image as the managed blueprint only when visual inspection proves it is a whole-page mock matching every current slot.
+4. `$cowart-image-gen` owns generation, visual validation, dry-run insertion, and final insertion. Do not call `insert_cowart_image` again. Require it to compare the bitmap with the structured plan, retry at most once when regions are missing, and return the verified `assetFile`, shape ID, page ID, dry-run `baseRevision`, result revision, dimensions, and placement.
+5. Confirm that the returned shape carries version 2 `layout-reference` lineage with the exact layout digest and is not stale.
+6. Mark the plan `layout-reference-review`, show the route-and-layout preview, and stop. Ask the user to approve the page partition, proportions, hierarchy, and reading order or request a revision.
 
-## Phase 2: fan out from the approved reference
+Approval is valid only when a user message or elicitation response arrives after this review in the same Agent thread and identifies the current `compositionId + layoutPlanDigest + exact shapeId + assetFile`. A prior request, silence, or generic earlier approval is not approval. Never fan out a newly inserted blueprint in the same turn.
 
-After the user approves the reference:
+## Phase 2: generate and place the approved parts
 
-1. Re-read the Yogurt context and confirm the managed reference shape, page, composition ID, and revision are still current. When `frozenSourceShapeIds.length + 1 <= 250`, request one exact `scope: "selection"` read with `shapeIds: [...frozenSourceShapeIds, referenceShapeId]`. At the 250-source boundary, keep the exact frozen-source read and issue a second exact selection read with `shapeIds: [referenceShapeId]`; require both reads to report the same revision and page. If they differ, repeat both exact reads once. If the retry still differs, mark the plan `stale`, stop without writing, report that the canvas changed during resume, and ask the user to retry from the fresh canvas state. Never loop and never fall back to a truncated page scan to find the later reference. A source-only frozen selection will not automatically include it. Treat compact auto-compose metadata only as a candidate index: resolve the exact image again with `read_cowart_page_asset`, confirm the asset is a readable page-local image on the same page, and never accept a metadata-only or cross-page match. If explicit approval of the current composition and exact managed shape/path is not recorded after its `reference-review` in the same Agent thread, ask again. If the reference changed or disappeared, stop and ask whether to use the revised image.
-2. Reconstruct the deterministic route plan from the original task, the prior route preview, and the frozen source context. Preserve unchanged block IDs. If the original preview is unavailable or cannot be matched without guessing, show the reconstructed preview and ask for confirmation before applying it.
-3. Delegate each `visual` block once to `$cowart-image-gen` in auto-compose caller mode. Pass the verified master `assetFile`, composition ID, block ID, `role: "visual-part"`, reference shape ID, source shape IDs, page, and placement intent. `$cowart-image-gen` remains the only insertion owner and must return the created shape and revision trace; do not insert the same result again.
-4. Build every `diagram` block through `$cowart-semantic-diagram` in native-only mode, using editable cards, semantic zones, and bound relations. Do not use that skill's HTML + inline-SVG fallback inside auto-compose. If one dense structure cannot be expressed safely with native objects, split it into multiple native diagrams or ask the user to choose a simplification; never silently downgrade editability. Use the contract's bounded `semanticDiagram.diagramId` and retain source shape IDs and source IDs through the semantic contract. The approved reference may guide placement, spacing, and visual rhythm only. The user's request and traceable sources remain the semantic source of truth. Never rasterize the diagram or trace generated pixels into unsupported facts.
-5. Build `evidence` and resolved `question` blocks through `$cowart-thinking-agent` as source-linked cards. Use the contract's bounded evidence operation `key`. Map provenance only through fields accepted by `create_card`: put the stable primary identity in `source.id`, at most 100 canvas sources in `source.yogurtShapeIds`, and at most 50 external/source identifiers in `sourceRefs`. Apply the routing contract's deterministic ordering and overflow digest before calling the tool; never rely on schema rejection or silent truncation. Do not send unsupported top-level `sourceShapeIds` or `sourceIds`. Keep exact constraints beside the visual or diagram block they govern.
-6. Arrange the result as one composition with distinct `视觉参考`, `视觉素材`, `结构与流程`, and `证据与约束` regions when those regions exist. Anchor the composition beside the original scope and preserve unrelated or user-authored shapes.
+After explicit approval:
 
-Do not use one broad raw tldraw snapshot write. Use the typed Yogurt operations, preview revisions, and atomic apply contracts of the delegated skills.
+1. Re-read the frozen sources and exact blueprint shape. When `frozenSourceShapeIds.length + 1 <= 250`, use one exact selection read with `shapeIds: [...frozenSourceShapeIds, referenceShapeId]`. At the 250-source boundary, read frozen sources and `[referenceShapeId]` separately and require the same page and revision. If they differ, repeat both exact reads once. If the retry still differs, mark `stale`, stop without writing, and ask the user to retry. Never loop or fall back to a truncated page scan.
+2. Treat compact lineage only as a candidate index. Resolve the exact image with `read_cowart_page_asset`, require a readable same-page local `layout-reference`, and verify composition ID and layout digest.
+3. Reconstruct the deterministic route and layout plan from the original task, prior preview, and frozen context. Recompute the digest. If the preview is unavailable, IDs cannot be matched, or the digest differs, show a fresh layout preview and return to Phase 1; never infer slots from blueprint pixels or OCR.
+4. Delegate each `visual` block once to `$cowart-image-gen` in auto-compose caller mode. Pass the approved blueprint path, digest, block ID, exact slot bounds/aspect ratio, `role: "visual-part"`, reference shape ID, source IDs, page, and placement intent. The blueprint controls target slot and crop only: do not reproduce its placeholder borders, labels, or page chrome. Use the original brief or explicit user style material for visual art direction.
+5. Build each `diagram` block through `$cowart-semantic-diagram` in native-only mode. Pass its approved slot bounds and reading order. Use editable cards, semantic zones, and bound relations. If a dense structure cannot fit safely, stop and ask for a plan revision; never overflow or silently rasterize it. The request and traceable sources are the semantic truth.
+6. Build `evidence` and resolved `question` blocks through `$cowart-thinking-agent` as source-linked cards inside their approved slots. Use the bounded evidence key, `source.id`, up to 100 `source.yogurtShapeIds`, and up to 50 `sourceRefs`, with deterministic overflow reporting from the contract.
+7. Map the approved 1600 x 1000 local frame beside the original scope. Use typed create/move/resize operations and delegated placement contracts so every result lands in its slot. Preserve unrelated and user-authored shapes.
+8. Keep the blueprint in a distinct `布局参考` region beside the generated `视觉素材`, `结构与流程`, and `证据与约束` regions required by the plan.
+
+Do not use one broad raw tldraw snapshot write. Use typed Yogurt operations, preview revisions, and atomic apply contracts.
 
 ## Finish and report
 
 Verify that:
 
-- every planned block has one primary route and a visible result or explicit pending state;
-- every derived visual used the approved reference path rather than prompt-only imitation;
-- every semantic object is individually editable and every non-root diagram object has the intended bound relation;
-- exact facts remain in cards or native text, not baked into the reference image;
+- every executable block has exactly one approved slot and one visible result or explicit pending state;
+- the final geometry follows the structured plan rather than the blueprint pixels;
+- every derived image uses the planned slot ratio and carries matching version 2 composition/digest lineage;
+- every semantic object remains individually editable and every non-root diagram object has its intended bound relation;
+- exact facts remain in native text or cards, never baked into or inferred from the blueprint;
 - source material and unrelated canvas regions remain intact;
-- image results preserve bounded auto-compose metadata; native diagrams preserve their bounded semantic diagram/object/relation IDs; evidence cards preserve bounded operation keys plus `source.id`, `source.yogurtShapeIds`, and `sourceRefs` trace.
+- the result stays within the approved page frame with readable text and no clipped overflow.
 
-Report the composition ID, approved reference shape and asset path, route summary, created image shape IDs, semantic operation IDs, source scope, inference introduced, and any block still awaiting confirmation.
+Report the composition ID, layout digest, approved blueprint shape and asset path, route-and-slot summary, created image shape IDs, semantic operation IDs, source scope, inference introduced, and any block still awaiting confirmation.

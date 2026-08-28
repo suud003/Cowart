@@ -1,6 +1,6 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.6+codex.20260827",
+  "version": "0.2.7+codex.20260828",
   "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
   "author": "Twox",
   "main": "packaging/desktop-bootstrap.cjs",

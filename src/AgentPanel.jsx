@@ -61,7 +61,7 @@ const QUICK_TASKS = [
     icon: Workflow,
     kind: 'auto-compose',
     label: '智能编排',
-    description: '自动分流，视觉任务先确认参考图',
+    description: '自动分流，先确认整页布局蓝图',
     prompt: AUTO_COMPOSE_QUICK_PROMPT
   },
   {
@@ -2059,7 +2059,7 @@ export function CowartAgentPanel({
           <section className="cowart-agent-welcome" aria-labelledby="cowart-agent-welcome-title">
             <span className="cowart-agent-welcome-icon" aria-hidden="true"><Sparkles size={19} /></span>
             <h2 id="cowart-agent-welcome-title">把一个需求，编排成一张画布</h2>
-            <p>描述完整需求。Agent 会先分流；识别到视觉内容时，先生成整体参考图供你确认，再生成图片与可编辑结构。</p>
+            <p>描述完整需求。Agent 会先生成整张画布的页面布局蓝图供你确认，再按分区生成图片、可编辑结构与证据卡片。</p>
             <div className="cowart-agent-welcome-context" aria-label="当前工作范围">
               <span><FileText aria-hidden="true" size={13} />{context?.pageName || '未命名页面'}</span>
               <span data-selection={selectedCount > 0 ? 'true' : 'false'}>{scopeLabel}</span>
@@ -2202,7 +2202,7 @@ export function CowartAgentPanel({
               : isAvailable
               ? isSending
                 ? 'Agent 执行期间，你可以先写下一条消息…'
-                : '例如：把互动影游需求编排成参考图、场景图、玩法循环和约束卡片…'
+                : '例如：把互动影游需求编排成整页布局蓝图、场景图、玩法循环和约束卡片…'
               : workspaceSetup?.status === 'required'
                 ? '选择工作区后即可连接 Codex Agent'
                 : '按上方提示完成 Codex 设置'

@@ -8,14 +8,18 @@ import {
   AUTO_COMPOSE_SKILL_NAME
 } from '../src/autoComposePrompt.js'
 
-test('auto-compose quick prompt defines reference-first routing and a hard review gate', () => {
+test('auto-compose quick prompt defines layout-blueprint-first routing and a hard review gate', () => {
   assert.equal(AUTO_COMPOSE_SKILL_NAME, '$cowart-auto-compose')
   assert.match(AUTO_COMPOSE_QUICK_PROMPT, /视觉图片/)
   assert.match(AUTO_COMPOSE_QUICK_PROMPT, /原生可编辑框线图/)
   assert.match(AUTO_COMPOSE_QUICK_PROMPT, /证据与约束卡片/)
-  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /先生成一张低文字的整体参考图/)
+  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /结构化页面布局计划/)
+  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /整页画布布局蓝图/)
+  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /页面边界/)
+  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /不能生成单张概念图、场景图或海报来代替/)
   assert.match(AUTO_COMPOSE_QUICK_PROMPT, /停下来等我确认/)
-  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /以这张参考图为统一视觉锚点/)
+  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /按已批准的布局槽位/)
+  assert.match(AUTO_COMPOSE_QUICK_PROMPT, /不能从蓝图像素推断/)
   assert.match(AUTO_COMPOSE_QUICK_PROMPT, /不能栅格化/)
   assert.match(AUTO_COMPOSE_QUICK_PROMPT, /不要创建 PRD/)
 })
@@ -23,28 +27,38 @@ test('auto-compose quick prompt defines reference-first routing and a hard revie
 test('ordinary Agent tasks receive the mixed-output routing rule without forcing it on single tasks', () => {
   assert.match(AUTO_COMPOSE_ROUTING_HINT, /至少两类/)
   assert.match(AUTO_COMPOSE_ROUTING_HINT, /\$cowart-auto-compose/)
-  assert.match(AUTO_COMPOSE_ROUTING_HINT, /参考图只负责视觉风格与构图/)
+  assert.match(AUTO_COMPOSE_ROUTING_HINT, /整页画布布局蓝图/)
+  assert.match(AUTO_COMPOSE_ROUTING_HINT, /布局蓝图不是概念图/)
+  assert.match(AUTO_COMPOSE_ROUTING_HINT, /不能从蓝图像素或 OCR 反推/)
   assert.match(AUTO_COMPOSE_ROUTING_HINT, /语义必须来自用户需求和可追溯材料/)
   assert.match(AUTO_COMPOSE_ROUTING_HINT, /单一明确任务继续使用最匹配的现有能力/)
 })
 
-test('auto-compose skill keeps the approved asset path and original semantics separate', async () => {
+test('auto-compose skill keeps the approved layout plan and original semantics separate', async () => {
   const [skill, contract, imageSkill] = await Promise.all([
     readFile('skills/cowart-auto-compose/SKILL.md', 'utf8'),
     readFile('skills/cowart-auto-compose/references/routing-contract.md', 'utf8'),
     readFile('skills/cowart-image-gen/SKILL.md', 'utf8')
   ])
 
-  assert.match(skill, /reference-review/)
-  assert.match(skill, /always stop after reporting the route preview and managed reference/i)
+  assert.match(skill, /layout-reference-review/)
+  assert.match(skill, /Never fan out a newly inserted blueprint in the same turn/i)
   assert.match(skill, /assetFile/)
   assert.match(skill, /referenceShapeId/i)
-  assert.match(skill, /Never rasterize the diagram/)
-  assert.match(contract, /visual anchor, not the final canvas and not a semantic source/)
+  assert.match(skill, /layoutPlanDigest/)
+  assert.match(skill, /structured plan rather than the blueprint pixels/i)
+  assert.match(skill, /never overflow or silently rasterize it/i)
+  assert.match(contract, /page-layout blueprint derived from `layoutPlan`/)
+  assert.match(contract, /including diagram-plus-evidence tasks without a visual block/)
+  assert.match(contract, /whole page boundary and every planned slot/)
+  assert.match(contract, /one cinematic scene, character sheet, key art, poster, or moodboard/)
+  assert.match(contract, /The structured plan, not the bitmap, controls final coordinates/)
   assert.match(contract, /Do not interpret silence/)
+  assert.match(contract, /cowartAutoComposeVersion`: `"2"/)
+  assert.match(contract, /legacy concept references/)
   assert.match(contract, /cowartAutoComposeSourceShapeIds/)
   assert.match(contract, /semanticDiagram\.diagramId/)
-  assert.match(contract, /Source-only selection context does not include it/)
+  assert.match(contract, /Source-only selection context does not include the later blueprint/)
   assert.match(contract, /two exact selection reads/)
   assert.match(contract, /repeat both exact reads once/)
   assert.match(contract, /Unicode NFC/)
@@ -58,8 +72,8 @@ test('auto-compose skill keeps the approved asset path and original semantics se
   assert.match(contract, /Provenance overflow:/)
   assert.doesNotMatch(contract, /cowartAutoComposeRole.*diagram.*evidence/)
   assert.match(imageSkill, /referenced_image_paths/)
-  assert.match(imageSkill, /Do not silently substitute a stale generated image/)
+  assert.match(imageSkill, /not copy page borders, placeholder boxes/)
   assert.match(imageSkill, /dry-run response's `baseRevision`/)
   assert.match(imageSkill, /caller must not call `insert_cowart_image` again/)
-  assert.match(imageSkill, /insert a managed copy/)
+  assert.match(imageSkill, /layout-reference/)
 })

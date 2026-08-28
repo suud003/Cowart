@@ -811,13 +811,14 @@ function compactNativeSemantic(shape) {
   };
 }
 
-const AUTO_COMPOSE_ROLES = new Set(["reference", "visual-part"]);
+const AUTO_COMPOSE_ROLES = new Set(["layout-reference", "visual-part"]);
 const AUTO_COMPOSE_METADATA_KEYS = new Set([
   "cowartAutoComposeVersion",
   "cowartAutoComposeId",
   "cowartAutoComposeRole",
   "cowartAutoComposeBlockId",
   "cowartAutoComposeReferenceShapeId",
+  "cowartAutoComposeLayoutPlanDigest",
   "cowartAutoComposeSourceShapeIds",
 ]);
 
@@ -847,14 +848,21 @@ export function normalizeAutoComposeImageMetadata(value, { allowLineage = true }
 
   const compositionId = exactBoundedMetadataString(normalized.cowartAutoComposeId, 160);
   const role = exactBoundedMetadataString(normalized.cowartAutoComposeRole, 40);
-  if (normalized.cowartAutoComposeVersion !== "1") {
-    throw new Error('cowartAutoComposeVersion must be exactly "1".');
+  const layoutPlanDigest = exactBoundedMetadataString(
+    normalized.cowartAutoComposeLayoutPlanDigest,
+    64,
+  );
+  if (normalized.cowartAutoComposeVersion !== "2") {
+    throw new Error('cowartAutoComposeVersion must be exactly "2".');
   }
   if (!compositionId) {
     throw new Error("cowartAutoComposeId must be a non-empty string of at most 160 characters.");
   }
   if (!AUTO_COMPOSE_ROLES.has(role)) {
-    throw new Error('cowartAutoComposeRole must be either "reference" or "visual-part".');
+    throw new Error('cowartAutoComposeRole must be either "layout-reference" or "visual-part".');
+  }
+  if (!layoutPlanDigest || !/^[0-9a-f]{64}$/.test(layoutPlanDigest)) {
+    throw new Error("cowartAutoComposeLayoutPlanDigest must be exactly 64 lowercase hexadecimal characters.");
   }
 
   const blockId = exactBoundedMetadataString(normalized.cowartAutoComposeBlockId, 160);
@@ -878,9 +886,9 @@ export function normalizeAutoComposeImageMetadata(value, { allowLineage = true }
     if (!sourceShapeIds.includes(exactId)) sourceShapeIds.push(exactId);
   }
 
-  if (role === "reference") {
+  if (role === "layout-reference") {
     if (blockId || referenceShapeId) {
-      throw new Error("Reference images cannot declare a block ID or reference shape ID.");
+      throw new Error("Layout-reference images cannot declare a block ID or reference shape ID.");
     }
     delete normalized.cowartAutoComposeBlockId;
     delete normalized.cowartAutoComposeReferenceShapeId;
@@ -888,9 +896,10 @@ export function normalizeAutoComposeImageMetadata(value, { allowLineage = true }
     throw new Error("Visual-part images require both a block ID and a reference shape ID.");
   }
 
-  normalized.cowartAutoComposeVersion = "1";
+  normalized.cowartAutoComposeVersion = "2";
   normalized.cowartAutoComposeId = compositionId;
   normalized.cowartAutoComposeRole = role;
+  normalized.cowartAutoComposeLayoutPlanDigest = layoutPlanDigest;
   if (blockId) normalized.cowartAutoComposeBlockId = blockId;
   if (referenceShapeId) normalized.cowartAutoComposeReferenceShapeId = referenceShapeId;
   if (rawSourceShapeIds !== undefined) {
@@ -913,10 +922,16 @@ function compactAutoCompose(store, shape) {
   if (shape?.type !== "image") return null;
   if (!isLocalCanvasImageAsset(store, shape)) return null;
   const meta = shape?.meta;
-  if (meta?.cowartAutoComposeVersion !== "1") return null;
+  if (meta?.cowartAutoComposeVersion !== "2") return null;
   const compositionId = exactBoundedMetadataString(meta.cowartAutoComposeId, 160);
   const role = exactBoundedMetadataString(meta.cowartAutoComposeRole, 40);
-  if (!compositionId || !AUTO_COMPOSE_ROLES.has(role)) return null;
+  const layoutPlanDigest = exactBoundedMetadataString(meta.cowartAutoComposeLayoutPlanDigest, 64);
+  if (
+    !compositionId ||
+    !AUTO_COMPOSE_ROLES.has(role) ||
+    !layoutPlanDigest ||
+    !/^[0-9a-f]{64}$/.test(layoutPlanDigest)
+  ) return null;
   const blockId = exactBoundedMetadataString(meta.cowartAutoComposeBlockId, 160);
   const referenceShapeId = exactBoundedMetadataString(meta.cowartAutoComposeReferenceShapeId, 160);
   if (role === "visual-part") {
@@ -925,19 +940,21 @@ function compactAutoCompose(store, shape) {
       !blockId ||
       !reference ||
       pageIdForShape(store, reference) !== pageIdForShape(store, shape) ||
-      reference.meta?.cowartAutoComposeVersion !== "1" ||
+      reference.meta?.cowartAutoComposeVersion !== "2" ||
       exactBoundedMetadataString(reference.meta?.cowartAutoComposeId, 160) !== compositionId ||
-      reference.meta?.cowartAutoComposeRole !== "reference" ||
+      reference.meta?.cowartAutoComposeRole !== "layout-reference" ||
+      reference.meta?.cowartAutoComposeLayoutPlanDigest !== layoutPlanDigest ||
       !isLocalCanvasImageAsset(store, reference)
     ) {
       return null;
     }
   }
   return {
-    version: "1",
+    version: "2",
     compositionId,
     blockId,
     role,
+    layoutPlanDigest,
     referenceShapeId: role === "visual-part" ? referenceShapeId : null,
     sourceShapeIds: boundedStringList(meta.cowartAutoComposeSourceShapeIds, MAX_CONTEXT_SHAPES, 160),
   };
