@@ -30,7 +30,7 @@ For a brief that mixes visuals, flows, and constraints, the agent first creates 
 
 Regular users do not need to install Node.js, Git, or a global Codex CLI. Start with the Windows x64 installer:
 
-1. Download `Yogurt-AI-Beta-Setup-0.2.10-x64.exe` from the [Yogurt AI Beta 0.2.10 GitHub Release](https://github.com/suud003/Cowart/releases/tag/v0.2.10%2Bcodex.20260829).
+1. Download `Yogurt-AI-Beta-Setup-0.2.11-x64.exe` from the [Yogurt AI Beta 0.2.11 GitHub Release](https://github.com/suud003/Cowart/releases/tag/v0.2.11%2Bcodex.20260829).
 2. Double-click the installer and follow the setup wizard. It creates Desktop and Start Menu shortcuts.
 3. On first launch, choose a product folder as the workspace. Canvas data, generated files, and the project session stay there. Cancelling the picker does not crash the app; you can choose a folder later from the Agent panel.
 4. After the canvas opens, the Codex entry in the lower-right corner connects through the bundled, compatibility-tested Codex and Node runtimes and reuses the current Codex sign-in on the computer. If sign-in is required, expand the workbench and click **Sign in to Codex**: Yogurt AI opens the official browser authorization flow and connects automatically after success—no terminal command is required.
@@ -69,7 +69,7 @@ flowchart LR
 
 The Codex entry stays in the lower-right corner and expands into an overlay workbench only when needed, so it never compresses or rearranges the canvas. It knows the active project, page, selected objects, and their stable IDs. Yogurt AI saves the latest canvas before sending a task, so the agent works from the real structure in front of you instead of a screenshot with drifting coordinates.
 
-Write any request or start with `Auto compose`, `Organize selection`, or `Generate PRD`; when you want a diagram, ask for one directly in natural language. A shortcut appears in the conversation only as its user-facing intent plus any text you add; the internal task template travels as hidden runtime context. The workbench preserves complete replies, plans, change summaries, and task status. Guided mode can surface necessary decisions. Auto mode continues reversible workspace work and reports protected boundaries instead of opening a blocking prompt. Reopening the same project resumes its saved agent session.
+Write any request or start with `Auto compose`, `Organize selection`, or `Generate PRD`; when you want a diagram, ask for one directly in natural language. A shortcut appears in the conversation only as its user-facing intent plus any text you add; the internal task template travels as hidden runtime context. The workbench preserves complete replies, plans, change summaries, and task status. Short connection interruptions remain visible recovery progress inside the original task instead of becoming premature failures or duplicate runs. Guided mode can surface necessary decisions. Auto mode continues reversible workspace work and reports protected boundaries instead of opening a blocking prompt. Reopening a project on the same app version resumes its saved agent session; upgrading starts a clean agent session while preserving the project canvas and files.
 
 After you import documents, images, and notes, Yogurt AI preserves source paths and verbatim excerpts while recording agent summaries and inference separately. Work with cards, relations, zones, and freehand annotations as you would on a whiteboard, or ask the agent to build a panorama around one question.
 
@@ -90,7 +90,7 @@ Phase one builds a structured page plan with real content specifications, then r
 
 Phase two follows the exact same slots. Visuals use their preview region for composition and style; gameplay loops and system relationships are rebuilt from source material as native editable objects; constraints become source-linked cards. Before apply, Yogurt AI checks the real node, text, and connector bounds and repacks crowded results instead of writing overlap to the canvas. The preview controls visual direction, never product semantics.
 
-Guided mode remains the default and pauses once after the full-page preview. When **Auto-advance canvas** is enabled, reversible canvas work inside the current workspace runs with a `never` approval policy. Protected actions—including out-of-workspace writes, external authorization, credentials, payments, and deletion of user-authored content—remain undone and are reported instead of opening another blocking prompt.
+Guided mode remains the default and pauses once after the full-page preview. When **Auto-advance canvas** is enabled, Codex auto-reviews approval requests so reversible canvas work inside the current workspace can continue without repeatedly interrupting the user. Protected actions—including out-of-workspace writes, external authorization, credentials, payments, and deletion of user-authored content—remain undone and are reported instead of opening another blocking prompt.
 
 ```mermaid
 flowchart LR
@@ -255,7 +255,7 @@ Follow the agent's plan and change summaries in the workbench, approving control
 - The desktop app connects to Codex App Server over local stdio. The web renderer cannot issue arbitrary RPC calls, shell commands, process-spawn requests, or MCP tool calls outside the allowlist.
 - Yogurt AI does not call private `chatgpt.com/backend-api/...` endpoints. The desktop agent uses the local stdio Codex App Server bridge. Any future direct model API integration must use the public `https://api.openai.com/v1/responses` endpoint with API Key authentication.
 - Guided mode surfaces command, file, and information requests that need a user decision.
-- **Auto-advance canvas** runs reversible workspace work with a `never` approval policy. Protected actions are declined and reported rather than shown as blocking prompts, and Codex permissions are never expanded.
+- **Auto-advance canvas** lets Codex auto-review approval requests for reversible workspace work. Protected actions are declined and reported rather than shown as blocking prompts, and Codex permissions are never expanded.
 
 ## Technical Information
 

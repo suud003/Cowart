@@ -1,12 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { YogurtAgentService } from './agent-service.mjs'
 import { createAgentAttentionController } from './agent-attention.mjs'
+import { persistThreadId, readPersistedThreadId } from './agent-session.mjs'
 import { CodexAppServerClient } from './codex-app-server-client.mjs'
 import { registerYogurtAgentIpc, YogurtDesktopRuntime } from './ipc-bridge.mjs'
 import {
@@ -31,24 +31,6 @@ function rendererDevUrl(value) {
     throw new Error('YOGURT_VITE_DEV_URL must use HTTP on a loopback host.')
   }
   return url.toString()
-}
-
-function readPersistedThreadId(sessionFile) {
-  try {
-    const state = JSON.parse(readFileSync(sessionFile, 'utf8'))
-    return typeof state?.threadId === 'string' && state.threadId.trim()
-      ? state.threadId.trim()
-      : null
-  } catch (_error) {
-    return null
-  }
-}
-
-async function persistThreadId(sessionFile, canvasDir, threadId) {
-  await mkdir(canvasDir, { recursive: true })
-  const temporaryFile = `${sessionFile}.${process.pid}.${randomUUID()}.tmp`
-  await writeFile(temporaryFile, `${JSON.stringify({ version: 1, threadId }, null, 2)}\n`)
-  await rename(temporaryFile, sessionFile)
 }
 
 let mainWindow = null
@@ -151,6 +133,8 @@ async function initializeDesktopRuntime() {
         isPackaged: app.isPackaged,
         execPath: process.execPath
       })
+      const appVersion = app.getVersion()
+      const clientVersion = process.env.YOGURT_DESKTOP_VERSION || appVersion
       const codexClient = new CodexAppServerClient({
         command: codexLaunch.command,
         commandPrefixArgs: codexLaunch.commandPrefixArgs,
@@ -160,7 +144,7 @@ async function initializeDesktopRuntime() {
         clientInfo: {
           name: 'yogurt_ai_desktop',
           title: 'Yogurt AI Desktop',
-          version: process.env.YOGURT_DESKTOP_VERSION || '0.1.0'
+          version: clientVersion
         },
         experimentalApi: true
       })
@@ -169,8 +153,8 @@ async function initializeDesktopRuntime() {
         client: codexClient,
         projectDir,
         canvasDir,
-        initialThreadId: readPersistedThreadId(sessionFile),
-        onThreadChanged: (threadId) => persistThreadId(sessionFile, canvasDir, threadId)
+        initialThreadId: readPersistedThreadId(sessionFile, appVersion),
+        onThreadChanged: (threadId) => persistThreadId(sessionFile, canvasDir, threadId, appVersion)
       })
     } catch (error) {
       agentStartError = error

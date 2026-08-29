@@ -323,6 +323,41 @@ test('Agent activity normalization preserves complete replies and line breaks', 
   assert.match(item.text, /最后一句 $/)
 })
 
+test('retry notifications are visible progress and do not terminalize the conversation', () => {
+  const retryItem = normalizeActivityEvent({
+    type: 'turn.retrying',
+    at: '2026-08-29T12:08:00.000Z',
+    turnId: 'turn:retry',
+    text: 'Reconnecting... 5/5'
+  })
+  assert.equal(retryItem.kind, 'progress')
+  assert.equal(retryItem.metaLabel, '重试中')
+
+  let state = createAgentConversationState()
+  state = reduceAgentConversation(state, {
+    type: 'task.started',
+    task: { id: 'task:retry', status: 'sending' },
+    at: '2026-08-29T12:07:59.000Z'
+  })
+  state = reduceAgentConversation(state, {
+    type: 'turn.retrying',
+    taskId: 'task:retry',
+    turnId: 'turn:retry',
+    text: 'Reconnecting... 5/5',
+    at: '2026-08-29T12:08:00.000Z'
+  })
+  assert.equal(state.turns[0].status, 'retrying')
+  assert.equal(conversationTurnParts(state.turns[0]).errorText, '')
+
+  state = reduceAgentConversation(state, {
+    type: 'turn.completed',
+    taskId: 'task:retry',
+    turnId: 'turn:retry',
+    at: '2026-08-29T12:10:00.000Z'
+  })
+  assert.equal(state.turns[0].status, 'completed')
+})
+
 test('Agent activity keeps complete card text while bounding retained card count', () => {
   let items = []
   for (let index = 0; index < AGENT_ACTIVITY_MAX_ITEMS + 2; index += 1) {

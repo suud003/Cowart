@@ -89,6 +89,8 @@ npm run dist:win
 
 NSIS 安装包输出到 `output/desktop/`，文件名为 `Yogurt-AI-Beta-Setup-<version>-x64.exe`。这是本地构建产物；构建完成不等于已经上传到 GitHub Releases。
 
+桌面端会按应用版本保存 Codex Agent 会话。升级后首次执行会自动创建干净的新会话，避免旧版本 Skill 路径、历史上下文或协议状态污染新任务；同一版本内仍会继续当前项目会话。
+
 验证未打包与打包运行时：
 
 ```powershell

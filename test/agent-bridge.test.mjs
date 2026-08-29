@@ -492,6 +492,51 @@ test('failed App Server completions and service errors become turn failures', as
   assert.equal(bridge.getState().activity.message, 'Codex failed.')
 })
 
+test('retryable App Server errors stay active and allow a later successful completion', async () => {
+  let emitAgentEvent
+  const bridge = createAgentBridge({
+    getCapabilities: () => ({ available: true, provider: 'desktop', sendTask: true, streaming: true }),
+    sendTask: async () => ({ threadId: 'thread:retry', turnId: 'turn:retry' }),
+    subscribe(listener) {
+      emitAgentEvent = listener
+      return () => {}
+    }
+  }, { taskIdFactory: () => 'task:retry' })
+
+  await bridge.sendTask('recover the stream')
+  emitAgentEvent({
+    type: 'error',
+    threadId: 'thread:retry',
+    turnId: 'turn:retry',
+    message: 'Reconnecting... 5/5',
+    willRetry: true
+  })
+
+  assert.equal(bridge.getState().lastEvent.type, 'turn.retrying')
+  assert.equal(bridge.getState().lastTask.status, 'accepted')
+  assert.equal(bridge.getState().activity.phase, 'retrying')
+  assert.equal(bridge.getState().status, 'idle')
+
+  emitAgentEvent({
+    type: 'turn.warning',
+    threadId: 'thread:retry',
+    turnId: 'turn:retry',
+    message: 'Falling back from WebSockets to HTTPS transport.'
+  })
+  assert.equal(bridge.getState().lastTask.status, 'accepted')
+  assert.equal(bridge.getState().activity.phase, 'running')
+
+  emitAgentEvent({
+    type: 'turn.completed',
+    threadId: 'thread:retry',
+    turnId: 'turn:retry',
+    status: 'completed'
+  })
+  assert.equal(bridge.getState().lastTask.status, 'succeeded')
+  assert.equal(bridge.getState().activity.phase, 'completed')
+  assert.equal(bridge.getState().status, 'idle')
+})
+
 test('AgentBridge terminal turn states absorb late activity and interaction events', async () => {
   const terminalCases = [
     { type: 'turn.completed', taskStatus: 'succeeded', phase: 'completed' },

@@ -3,6 +3,7 @@ import { EventEmitter, once } from 'node:events'
 import test from 'node:test'
 
 import {
+  approvalsReviewerForExecutionMode,
   executionModeEnvelope,
   taskExecutionMode,
   YOGURT_DESKTOP_CAPABILITY_CONTRACT,
@@ -181,8 +182,10 @@ test('YogurtAgentService sends execution guidance as hidden application context 
   assert.equal(taskExecutionMode({ executionMode: 'autonomous' }), 'autonomous')
   assert.equal(taskExecutionMode({ executionMode: 'invalid' }), 'guided')
   assert.equal(taskExecutionMode('plain task'), 'guided')
+  assert.equal(approvalsReviewerForExecutionMode('autonomous'), 'auto_review')
+  assert.equal(approvalsReviewerForExecutionMode('guided'), 'user')
   assert.match(executionModeEnvelope('autonomous'), /non-interactive execution/)
-  assert.match(executionModeEnvelope('autonomous'), /approvalPolicy=never/)
+  assert.match(executionModeEnvelope('autonomous'), /approvalsReviewer=auto_review/)
 
   await service.sendTask({
     prompt: 'Compose this page.',
@@ -191,7 +194,8 @@ test('YogurtAgentService sends execution guidance as hidden application context 
   })
   const startTurnCall = client.calls.find(([name]) => name === 'startTurn')
   assert.equal(startTurnCall[2], 'Compose this page.')
-  assert.equal(startTurnCall[3].approvalPolicy, 'never')
+  assert.equal(startTurnCall[3].approvalPolicy, 'on-request')
+  assert.equal(startTurnCall[3].approvalsReviewer, 'auto_review')
   assert.deepEqual(Object.keys(startTurnCall[3].additionalContext), ['yogurt_ai_canvas'])
   assert.equal(startTurnCall[3].additionalContext.yogurt_ai_canvas.kind, 'application')
   assert.match(
@@ -219,6 +223,7 @@ test('YogurtAgentService sends execution guidance as hidden application context 
   const guidedTurnCall = client.calls.filter(([name]) => name === 'startTurn').at(-1)
   assert.equal(guidedTurnCall[2], 'Continue.')
   assert.equal(guidedTurnCall[3].approvalPolicy, 'on-request')
+  assert.equal(guidedTurnCall[3].approvalsReviewer, 'user')
   assert.equal(guidedTurnCall[3].additionalContext.yogurt_ai_canvas.kind, 'application')
   assert.match(
     guidedTurnCall[3].additionalContext.yogurt_ai_canvas.value,
@@ -454,6 +459,14 @@ test('YogurtAgentService normalizes agent, approval, diff, plan, turn, and error
   })
   client.emit('notification', {
     method: 'error',
+    params: { threadId: 'thr_1', turnId: 'turn_1', error: { message: 'Reconnecting... 5/5' }, willRetry: true }
+  })
+  client.emit('notification', {
+    method: 'warning',
+    params: { threadId: 'thr_1', message: 'Falling back from WebSockets to HTTPS transport.' }
+  })
+  client.emit('notification', {
+    method: 'error',
     params: { threadId: 'thr_1', turnId: 'turn_1', error: { message: 'Failed' }, willRetry: false }
   })
   client.emit('notification', {
@@ -469,6 +482,8 @@ test('YogurtAgentService normalizes agent, approval, diff, plan, turn, and error
     'turn.started',
     'approval.requested',
     'approval.resolved',
+    'turn.retrying',
+    'turn.warning',
     'turn.completed',
     'error'
   ]) {
@@ -478,6 +493,43 @@ test('YogurtAgentService normalizes agent, approval, diff, plan, turn, and error
   assert.equal(approval.requestId, 'approval-1')
   assert.equal(approval.kind, 'fileChange')
   assert.deepEqual(approval.availableDecisions, ['accept', 'acceptForSession', 'decline', 'cancel'])
+})
+
+test('retryable response-stream errors remain non-terminal until the authoritative completion', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  const events = []
+  service.on('event', (event) => events.push(event))
+  await service.sendTask({ prompt: 'Keep working.', executionMode: 'autonomous' })
+
+  client.emit('notification', {
+    method: 'error',
+    params: {
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      error: { message: 'Reconnecting... 5/5' },
+      willRetry: true
+    }
+  })
+
+  assert.equal(service.getState().turnId, 'turn_1')
+  assert.equal(events.at(-1).type, 'turn.retrying')
+  assert.equal(events.at(-1).willRetry, true)
+
+  client.emit('notification', {
+    method: 'warning',
+    params: { threadId: 'thr_1', message: 'Falling back from WebSockets to HTTPS transport.' }
+  })
+  client.emit('notification', {
+    method: 'turn/completed',
+    params: { threadId: 'thr_1', turn: { id: 'turn_1', status: 'completed' } }
+  })
+
+  assert.equal(service.getState().turnId, null)
+  assert.deepEqual(
+    events.map((event) => event.type).filter((type) => type.startsWith('turn.')),
+    ['turn.retrying', 'turn.warning', 'turn.completed']
+  )
 })
 
 test('YogurtAgentService publishes standard MCP forms and validates the structured reply', async () => {
@@ -664,6 +716,30 @@ test('YogurtAgentService rejects unsupported server requests instead of leaving 
   assert.equal(errors.at(-1).requestId, 'permission-1')
 })
 
+test('autonomous execution rejects unsupported interaction requests without terminalizing the turn', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  const events = []
+  service.on('event', (event) => events.push(event))
+  await service.sendTask({ prompt: 'Continue without blocking.', executionMode: 'autonomous' })
+
+  client.emit('serverRequest', {
+    requestId: 'tool-input-1',
+    method: 'item/tool/requestUserInput',
+    params: { threadId: 'thr_1', turnId: 'turn_1' }
+  })
+  await Promise.resolve()
+
+  assert.equal(events.some((event) => event.type === 'error'), false)
+  const warning = events.find((event) => event.type === 'turn.warning')
+  assert.equal(warning.requestId, 'tool-input-1')
+  assert.equal(warning.turnId, 'turn_1')
+  const rejection = client.calls.find(
+    ([name, requestId]) => name === 'rejectServerRequest' && requestId === 'tool-input-1'
+  )
+  assert.equal(rejection[2].code, -32601)
+})
+
 test('Cowart tool bridge uses a fixed server, fixed paths, and a strict tool allowlist', async () => {
   const client = new FakeCodexClient()
   const service = new YogurtAgentService({
@@ -685,6 +761,8 @@ test('Cowart tool bridge uses a fixed server, fixed paths, and a strict tool all
     /not exposed/
   )
   assert.equal(YOGURT_DESKTOP_CAPABILITY_CONTRACT.cowartToolNames.includes('command/exec'), false)
+  assert.equal(YOGURT_DESKTOP_CAPABILITY_CONTRACT.eventTypes.includes('turn.retrying'), true)
+  assert.equal(YOGURT_DESKTOP_CAPABILITY_CONTRACT.eventTypes.includes('turn.warning'), true)
 })
 
 test('desktop bridge exposes the widget analytics tool without adding canvas paths', async () => {

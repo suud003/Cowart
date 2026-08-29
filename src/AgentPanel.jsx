@@ -673,6 +673,12 @@ export function normalizeActivityEvent(event) {
   if (type === 'turn.started') {
     return { ...common, kind: 'progress', label: 'Codex 开始执行', metaLabel: '进度', text: event.text || '正在读取画布上下文…' }
   }
+  if (type === 'turn.retrying') {
+    return { ...common, kind: 'progress', label: '连接波动，正在恢复', metaLabel: '重试中', text: event.text || 'Agent 正在恢复响应流，任务仍会继续。' }
+  }
+  if (type === 'turn.warning') {
+    return { ...common, kind: 'progress', label: '执行提示', metaLabel: '继续执行', text: event.text || 'Agent 遇到临时问题，正在继续。' }
+  }
   if (type === 'turn.completed') {
     return { ...common, kind: 'complete', label: '任务完成', metaLabel: '已完成', text: event.text || '结果已返回 Yogurt AI。' }
   }
@@ -859,6 +865,10 @@ function conversationStatusFromEvent(event, currentStatus = 'submitting') {
     case 'agent.diff':
     case 'approval.resolved':
     case 'elicitation.resolved':
+      return 'running'
+    case 'turn.retrying':
+      return 'retrying'
+    case 'turn.warning':
       return 'running'
     case 'approval.requested':
       return 'waiting_approval'
@@ -1113,6 +1123,7 @@ function conversationStatusPresentation(status) {
     return { label: '等待你的操作', tone: 'attention', Icon: AlertCircle }
   }
   if (status === 'submitting') return { label: '正在准备', tone: 'working', Icon: LoaderCircle }
+  if (status === 'retrying') return { label: '正在重连', tone: 'working', Icon: LoaderCircle }
   return { label: '正在执行', tone: 'working', Icon: LoaderCircle }
 }
 

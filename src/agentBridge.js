@@ -96,6 +96,8 @@ function canonicalAgentEventType(sourceType) {
     return 'approval.resolved'
   }
   if (compact.includes('turn') && compact.includes('start')) return 'turn.started'
+  if (compact.includes('turn') && compact.includes('retry')) return 'turn.retrying'
+  if (compact.includes('turn') && /(warn|warning)/.test(compact)) return 'turn.warning'
   if (compact.includes('turn') && /(cancel|interrupt)/.test(compact)) return 'turn.cancelled'
   if (compact.includes('turn') && /(fail|error)/.test(compact)) return 'turn.failed'
   if (compact.includes('turn') && /(complete|finish)/.test(compact)) return 'turn.completed'
@@ -118,6 +120,8 @@ export function normalizeAgentEvent(rawEvent, at = Date.now()) {
   )
   const payload = eventObject?.params ?? eventObject?.payload ?? rawEvent?.params ?? eventObject ?? {}
   let type = canonicalAgentEventType(sourceType)
+  const willRetry = valueAt(payload, [['willRetry']]) === true || eventObject?.willRetry === true
+  if (type === 'turn.failed' && willRetry) type = 'turn.retrying'
   if (type === 'turn.completed') {
     const turnStatus = String(valueAt(payload, [['status'], ['turn', 'status']]) || '').toLowerCase()
     if (turnStatus === 'failed' || turnStatus === 'error') type = 'turn.failed'
@@ -167,6 +171,7 @@ export function normalizeAgentEvent(rawEvent, at = Date.now()) {
     itemId,
     eventId,
     requestId: requestId ?? null,
+    willRetry,
     text: typeof text === 'string' ? text : null,
     plan,
     diff,
@@ -289,6 +294,14 @@ function activityFromEvent(previous, event) {
       diff = null
       approval = null
       elicitation = null
+      break
+    case 'turn.retrying':
+      phase = 'retrying'
+      if (event.text) message = event.text
+      break
+    case 'turn.warning':
+      if (!['waiting_approval', 'waiting_elicitation'].includes(phase)) phase = 'running'
+      if (event.text) message = event.text
       break
     case 'agent.delta':
       phase = 'running'

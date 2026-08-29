@@ -42,7 +42,11 @@ export function taskExecutionMode(task) {
 }
 
 export function approvalPolicyForExecutionMode(mode) {
-  return mode === 'autonomous' ? 'never' : 'on-request'
+  return 'on-request'
+}
+
+export function approvalsReviewerForExecutionMode(mode) {
+  return mode === 'autonomous' ? 'auto_review' : 'user'
 }
 
 export function executionModeEnvelope(mode) {
@@ -50,7 +54,7 @@ export function executionModeEnvelope(mode) {
     return [
       '[Yogurt AI execution mode: autonomous]',
       'The user enabled non-interactive execution for this Yogurt AI task. Continue through planning, preview, workspace-local commands, reversible canvas edits, and slot execution without asking for confirmations or MCP forms.',
-      'The turn uses approvalPolicy=never inside the existing workspace-write sandbox. Do not attempt to escape the workspace, obtain credentials, authorize an external account, make a payment, or delete user-authored content. If a protected action is required, leave it undone and report the boundary instead of blocking the user.'
+      'The turn uses approvalPolicy=on-request with approvalsReviewer=auto_review inside the existing workspace-write sandbox. Do not attempt to escape the workspace, obtain credentials, authorize an external account, make a payment, or delete user-authored content. If a protected action is required, leave it undone and report the boundary instead of blocking the user.'
     ].join('\n')
   }
   return [
@@ -95,6 +99,7 @@ function taskTurnOverrides(task) {
   const mode = taskExecutionMode(task)
   return {
     approvalPolicy: approvalPolicyForExecutionMode(mode),
+    approvalsReviewer: approvalsReviewerForExecutionMode(mode),
     additionalContext: {
       yogurt_ai_canvas: {
         kind: 'application',
@@ -782,13 +787,26 @@ export class YogurtAgentService extends EventEmitter {
       }
       return
     }
+    if (method === 'warning') {
+      this.#emitEvent(normalizedEvent('turn.warning', {
+        source: 'transport',
+        message: params.message || 'Codex adjusted its connection and is continuing.',
+        threadId: params.threadId || this.#activeThreadId,
+        turnId: this.#activeTurnId
+      }))
+      return
+    }
     if (method === 'error') {
-      this.#emitError(new Error(params.error?.message || 'Codex turn failed.'), 'turn', {
+      const willRetry = params.willRetry === true
+      this.#emitEvent(normalizedEvent(willRetry ? 'turn.retrying' : 'turn.warning', {
+        source: 'transport',
+        message: params.error?.message || 'Codex encountered a response-stream error.',
         threadId: params.threadId,
         turnId: params.turnId,
-        willRetry: params.willRetry === true,
+        willRetry,
         details: params.error ?? null
-      })
+      }))
+      return
     }
   }
 
@@ -832,9 +850,21 @@ export class YogurtAgentService extends EventEmitter {
     const kind = approvalKind(request.method)
     if (kind === 'unsupported') {
       const message = `Unsupported Codex server request: ${request.method}`
-      this.#emitError(new Error(message), 'protocol', {
-        requestId: request.requestId
-      })
+      const fields = {
+        requestId: request.requestId,
+        rejectedMethod: request.method,
+        threadId: request.params?.threadId ?? this.#activeThreadId,
+        turnId: request.params?.turnId ?? this.#activeTurnId
+      }
+      if (this.#activeExecutionMode === 'autonomous') {
+        this.#emitEvent(normalizedEvent('turn.warning', {
+          ...fields,
+          source: 'protocol',
+          message: '自动模式已跳过一个需要人工输入且无法安全代答的请求，Agent 将继续处理其余步骤。'
+        }))
+      } else {
+        this.#emitError(new Error(message), 'protocol', fields)
+      }
       Promise.resolve(
         this.#client.rejectServerRequest?.(request.requestId, {
           code: -32601,
@@ -911,6 +941,8 @@ export const YOGURT_DESKTOP_CAPABILITY_CONTRACT = Object.freeze({
     'elicitation.requested',
     'elicitation.resolved',
     'turn.started',
+    'turn.retrying',
+    'turn.warning',
     'turn.completed',
     'error',
     'state.changed'
