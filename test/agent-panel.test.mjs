@@ -175,7 +175,11 @@ test('Agent execution mode is fail-closed, project-scoped, and explicit in each 
   assert.match(message.runtimeContext, /执行方式：自动执行/)
   assert.match(message.runtimeContext, /当前工作区内/)
   assert.match(message.runtimeContext, /不要请求交互式审批或表单/)
+  assert.match(message.runtimeContext, /图像预演最多尝试两次/)
+  assert.match(message.runtimeContext, /立即继续 html-line-svg 原生图和证据卡/)
+  assert.match(message.runtimeContext, /不要发起确认，也不要把整项任务判失败/)
   assert.match(agentExecutionInstructions('guided'), /整页视觉预演后暂停一次/)
+  assert.match(agentExecutionInstructions('guided'), /结构化页面计划确认/)
 })
 
 test('Agent panel bounds structured shape context to 250 IDs', () => {
@@ -274,7 +278,7 @@ test('Agent panel removes redundant diagram generation shortcuts from Agent surf
   assert.match(markup, /整理选区/)
   assert.match(markup, /生成 PRD/)
   assert.match(markup, /智能编排/)
-  assert.match(markup, /先预演整页，再稳定拆分生成/)
+  assert.match(markup, /整页规划，分区稳定生成/)
   assert.match(markup, /先生成接近成品的整页视觉预演/)
   assert.match(markup, /自动推进画布/)
   assert.match(markup, /aria-pressed="false"/)

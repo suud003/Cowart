@@ -43,10 +43,11 @@ Maintain this logical structure in the Agent response. `pagePlan` is the machine
   },
   "pagePlanDigest": "<64-lowercase-hex-sha256>",
   "compositionReference": {
-    "required": true,
+    "preferred": true,
     "status": "planned",
     "shapeId": null,
-    "assetFile": null
+    "assetFile": null,
+    "unavailableReason": null
   },
   "blocks": [
     {
@@ -125,7 +126,7 @@ One source fragment may support several blocks only when the outputs have distin
 
 ## Full-page composition-reference contract
 
-Generate one composition reference from the validated `pagePlan` for every mixed auto-compose task, including diagram-plus-evidence tasks without a visual block.
+Attempt one composition reference from the validated `pagePlan` for every mixed auto-compose task, including diagram-plus-evidence tasks without a visual block. It is the preferred visual projection of the authoritative plan, not a transaction prerequisite for native routes.
 
 It must show:
 
@@ -142,7 +143,9 @@ It must not become:
 - fake citations, issue IDs, metrics, requirements, states, or relationships;
 - the source of any product fact, relation, label, or constraint.
 
-Visually compare every slot with its `contentSpec`. If a required region is missing, placeholder-like, or has materially wrong density/topology, regenerate once. If the retry still fails, stop without inserting it.
+Visually compare every slot with its `contentSpec`. If a required region is missing, placeholder-like, or has materially wrong density/topology, regenerate once. The initial call plus this retry are the complete attempt budget. If the retry still fails because of output quality, stop without inserting it. If either attempt is prevented by an authentication, access, rate-limit, network, tool-availability, or service error and the retry also fails, set `compositionReference.status` to `unavailable`, record a concise bounded reason, and enter degraded execution. Never insert the error response, reuse a stale image, or make a third generation attempt.
+
+In degraded execution, the validated `pagePlan + contentSpec` remains authoritative. Diagram and evidence slots continue independently; visual slots stay pending/retryable and do not receive trusted v3 `visual-part` lineage. Existing user-authored or exploratory images may remain visible but do not satisfy those slots. A later retry may fill the visual slots against the same digest without rebuilding completed native blocks.
 
 A user-supplied concept image may inform visual style, but it is not the page preview. Reuse an existing image only when it visibly is a near-final whole-page composition matching every current slot and spec.
 
@@ -150,14 +153,15 @@ A user-supplied concept image may inform visual style, but it is not the page pr
 
 1. `route-planned`: route and validated page plan exist; no preview has been generated.
 2. `composition-reference-review`: guided mode has one verified preview visible and fan-out is paused.
-3. `autonomous-executing`: autonomous mode has one verified preview visible and immediately prepares the final parts.
-4. `executing`: guided approval binds the current preview and final parts are being prepared.
-5. `complete`: every block has a visible result or explicit unresolved status.
-6. `stale`: source revision, page-plan digest, preview shape, or asset changed; re-read before continuing.
+3. `degraded-executing`: preview generation is unavailable after the bounded retry; native routes continue and visual routes remain pending.
+4. `autonomous-executing`: autonomous mode has one verified preview visible and immediately prepares the final parts.
+5. `executing`: guided approval binds the current preview, or the fallback plan-only checkpoint, and final native parts are being prepared.
+6. `complete`: every block has a visible result or explicit unresolved status.
+7. `stale`: source revision, page-plan digest, preview shape, or asset changed; re-read before continuing.
 
 Guided approval must arrive after the managed preview is visible, in the same Agent thread, and bind `compositionId + pagePlanDigest + shapeId + assetFile`. Do not interpret silence or an earlier generic instruction as approval.
 
-Autonomous execution is valid only when the Yogurt AI task envelope says the user enabled it. It skips this product-workflow checkpoint and ordinary non-material clarification, not security controls. It never auto-accepts an external website or network request, project-external write, credential disclosure, payment, deletion of user content, or another protected operation.
+Autonomous execution is valid only when the Yogurt AI task envelope says the user enabled it. It skips this product-workflow checkpoint and ordinary non-material clarification, not security controls. A preview-service failure must not create an elicitation or confirmation: continue native routes and report only the affected visual slots as pending. It never auto-accepts an external website or network request, project-external write, credential disclosure, payment, deletion of user content, or another protected operation.
 
 ## Placement and collision checks
 
@@ -170,7 +174,7 @@ Create only regions required by the plan:
 
 Map the 1600 x 1000 page plan beside the source selection only after finding a page origin with at least 64 canvas units of clearance from existing unmanaged shapes. The same mapped origin applies to every slot.
 
-Prepare native diagram and evidence operations against the frozen context. Diagram batches use `layoutEngine: "html-line-svg"`, balanced fixed-slot fitting, and no hand-authored node coordinates. Use one safe dry-run batch when possible. Before apply, require a valid `layoutReport` with an unchanged layout digest and inspect the real returned shape, label, port, and relation bounds:
+Prepare native diagram and evidence operations against the frozen context. Diagram batches use `layoutEngine: "html-line-svg"` and balanced fixed-slot fitting. A fixed auto-compose diagram creates exactly one keyed semantic zone with the validated slot's explicit `x`, `y`, `w`, and `h`; all cards and relations are created in that same batch, every card is parented to the zone key, and cards omit `x`, `y`, `anchorId`, `placement`, and `gap`. Use one safe dry-run batch when possible. Before apply, require `layoutApplied: true`, a valid `layoutReport` with no `layoutErrors`, an unchanged layout digest, and inspect the real returned shape, label, port, and relation bounds:
 
 - every root and descendant stays inside its slot's inset content rectangle;
 - unrelated objects and text do not overlap;
@@ -208,4 +212,4 @@ Do not store unbounded prompts, source bodies, complete plans, or base64 image d
 
 For selection-scoped resume, append the exact `referenceShapeId` to frozen source IDs when the combined list is at most 250. With 250 frozen sources, make two exact selection reads—frozen sources and `[referenceShapeId]`—and require the same page and revision. If they differ, repeat both reads once. If the retry still differs, mark `stale` and stop. Never depend on a truncated page scan.
 
-Compact lineage is only a candidate index. Before fan-out, reconstruct and validate the complete page plan, verify its digest, resolve the exact image with `read_cowart_page_asset`, and require a readable same-page local asset with matching composition and digest. Imported or hand-authored metadata never counts as guided approval.
+Compact lineage is only a candidate index. Before fan-out with a preview, reconstruct and validate the complete page plan, verify its digest, resolve the exact image with `read_cowart_page_asset`, and require a readable same-page local asset with matching composition and digest. Imported or hand-authored metadata never counts as guided approval. In declared degraded execution, validate the plan and digest against frozen sources, skip image resolution, execute diagram/evidence slots, and keep visual slots pending.

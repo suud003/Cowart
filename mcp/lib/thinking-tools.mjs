@@ -20,6 +20,32 @@ export const THINKING_TOOL_NAMES = {
   undoOperation: "undo_cowart_thinking_operation",
 };
 
+export const AUTO_COMPOSE_DEGRADATION_POLICY = Object.freeze({
+  version: "1",
+  authority: "validated-page-plan",
+  compositionReference: Object.freeze({
+    maxGenerationAttempts: 2,
+    onUnavailable: "degrade-visual-slots",
+  }),
+  routes: Object.freeze({
+    diagram: Object.freeze({
+      requiresCompositionReference: false,
+      layoutEngine: "html-line-svg",
+      layoutMode: "balanced",
+      layoutFit: "fixed",
+    }),
+    evidence: Object.freeze({ requiresCompositionReference: false }),
+    visual: Object.freeze({
+      requiresCompositionReference: true,
+      onUnavailable: "pending-retryable",
+    }),
+  }),
+  autonomous: Object.freeze({
+    continueNativeRoutes: true,
+    requestConfirmationOnPreviewFailure: false,
+  }),
+});
+
 const projectArgsSchema = {
   projectDir: z.string().trim().optional(),
   canvasDir: z.string().trim().optional(),
@@ -333,7 +359,7 @@ export function registerCowartThinkingTools(server) {
     {
       title: "Validate Yogurt AI Auto Compose Page Plan",
       description:
-        "Deterministically validate and canonicalize a v3 Yogurt AI auto-compose page plan before generating its full-page composition reference. Rejects unsupported content specs, over-capacity diagrams/cards, out-of-frame slots, duplicate identities, overlap, and insufficient gutters; returns the exact canonical SHA-256 digest that binds the preview and final parts.",
+        "Deterministically validate and canonicalize a v3 Yogurt AI auto-compose page plan before attempting its full-page composition reference. Rejects unsupported content specs, over-capacity diagrams/cards, out-of-frame slots, duplicate identities, overlap, and insufficient gutters; returns the exact canonical SHA-256 digest and a failure-isolation policy. A preview-service failure never blocks native diagram or evidence routes.",
       inputSchema: {
         plan: z.record(z.string(), z.unknown()),
       },
@@ -348,8 +374,13 @@ export function registerCowartThinkingTools(server) {
       const plan = validateAutoComposePagePlan(input.plan);
       const pagePlanDigest = digestAutoComposePagePlan(plan);
       return toolText(
-        `Validated ${plan.pagePlan.slots.length} non-overlapping Yogurt AI page-plan slots with digest ${pagePlanDigest}.`,
-        { ok: true, plan, pagePlanDigest },
+        `Validated ${plan.pagePlan.slots.length} non-overlapping Yogurt AI page-plan slots with digest ${pagePlanDigest}. Native diagram and evidence slots remain executable if image preview generation is unavailable.`,
+        {
+          ok: true,
+          plan,
+          pagePlanDigest,
+          degradationPolicy: AUTO_COMPOSE_DEGRADATION_POLICY,
+        },
       );
     },
   );

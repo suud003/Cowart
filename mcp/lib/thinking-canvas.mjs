@@ -98,6 +98,7 @@ const SEMANTIC_READING_ORDERS = new Set([
   "center-out",
   "board-to-peers",
 ]);
+const FIXED_AUTO_COMPOSE_DIAGRAM_ID = /^ac-diagram:[0-9a-f]{12}:[0-9a-f]{12}$/u;
 const SEMANTIC_DIAGRAM_TYPES = new Set([
   "flow",
   "architecture",
@@ -250,6 +251,11 @@ function normalizeSemanticDiagramMetadata(value, operations = []) {
   ) {
     throw new Error("semanticDiagram must include a valid version, diagramId, teachingClaim, readingOrder, and diagramType.");
   }
+  if (diagramId.startsWith("ac-diagram:") && !FIXED_AUTO_COMPOSE_DIAGRAM_ID.test(diagramId)) {
+    throw new Error(
+      "AUTO_COMPOSE_LAYOUT_CONTRACT: diagramId must use ac-diagram:<12 lowercase hex>:<12 lowercase hex>.",
+    );
+  }
   return {
     version: "1",
     diagramId,
@@ -269,6 +275,113 @@ function normalizeSemanticDiagramMetadata(value, operations = []) {
       : operations.filter((operation) => operation?.type === "create_relation").length,
     specDigest: boundedString(value.specDigest, 128) || null,
   };
+}
+
+function isFixedAutoComposeDiagram(semanticDiagram) {
+  return semanticDiagram?.layoutFit === "fixed" &&
+    FIXED_AUTO_COMPOSE_DIAGRAM_ID.test(semanticDiagram.diagramId);
+}
+
+function fixedAutoComposeDiagramIdForShape(shape) {
+  const diagramId = shape?.meta?.cowartSemanticDiagram?.diagramId;
+  return typeof diagramId === "string" && FIXED_AUTO_COMPOSE_DIAGRAM_ID.test(diagramId)
+    ? diagramId
+    : null;
+}
+
+function assertFixedAutoComposeLayoutContract(store, semanticDiagram, operations) {
+  if (!isFixedAutoComposeDiagram(semanticDiagram)) return;
+
+  const existingShapes = Object.values(store).filter((shape) =>
+    shape?.typeName === "shape" &&
+    shape.meta?.cowartSemanticDiagram?.diagramId === semanticDiagram.diagramId,
+  );
+  const createdZones = operations.filter((operation) => operation.type === "create_zone");
+  const createdCards = operations.filter((operation) => operation.type === "create_card");
+  const geometryOverride = operations.find((operation) =>
+    ["move_shape", "resize_shape"].includes(operation.type) ||
+    (
+      operation.type === "update_zone" &&
+      [operation.x, operation.y, operation.w, operation.h].some((value) => Number.isFinite(value))
+    ),
+  );
+
+  if (existingShapes.length > 0) {
+    const existingRootZones = existingShapes.filter((shape) =>
+      shape.meta?.cowartSemanticZone === true &&
+      shape.meta?.cowartSemanticLayout?.engine === "html-line-svg" &&
+      shape.meta?.cowartSemanticLayout?.valid === true,
+    );
+    if (existingRootZones.length !== 1) {
+      throw new Error(
+        `AUTO_COMPOSE_FIXED_RELAYOUT_REQUIRED: diagram ${semanticDiagram.diagramId} does not have exactly one ` +
+        "validated html-line-svg root zone; recreate it from the validated slot.",
+      );
+    }
+    if (createdZones.length > 0 || createdCards.length > 0) {
+      throw new Error(
+        `AUTO_COMPOSE_FIXED_RELAYOUT_REQUIRED: diagram ${semanticDiagram.diagramId} cannot be extended ` +
+        "incrementally; recreate the complete diagram in one fixed-slot batch.",
+      );
+    }
+    if (geometryOverride) {
+      throw new Error(
+        `AUTO_COMPOSE_FIXED_RELAYOUT_REQUIRED: ${geometryOverride.type} would bypass html-line-svg; ` +
+        "recreate the complete diagram in its validated slot.",
+      );
+    }
+    return;
+  }
+
+  if (createdZones.length !== 1 || createdZones[0].purpose !== "semantic") {
+    throw new Error(
+      `AUTO_COMPOSE_LAYOUT_CONTRACT: fixed diagram ${semanticDiagram.diagramId} must create exactly one ` +
+      "semantic zone in the same batch as its cards and relations.",
+    );
+  }
+
+  const zone = createdZones[0];
+  const zoneKey = boundedString(zone.key, 80);
+  if (
+    !zoneKey ||
+    !Number.isFinite(zone.x) ||
+    !Number.isFinite(zone.y) ||
+    !Number.isFinite(zone.w) ||
+    !Number.isFinite(zone.h)
+  ) {
+    throw new Error(
+      `AUTO_COMPOSE_LAYOUT_CONTRACT: fixed diagram ${semanticDiagram.diagramId} requires a keyed semantic ` +
+      "zone with explicit x, y, w, and h from the validated page plan.",
+    );
+  }
+
+  for (const card of createdCards) {
+    if (card.parentZoneId !== zoneKey) {
+      throw new Error(
+        `AUTO_COMPOSE_LAYOUT_CONTRACT: every card in fixed diagram ${semanticDiagram.diagramId} must use ` +
+        `parentZoneId '${zoneKey}' so html-line-svg can fit the complete graph as one unit.`,
+      );
+    }
+    const manualPlacement =
+      Number.isFinite(card.x) ||
+      Number.isFinite(card.y) ||
+      (typeof card.anchorId === "string" && card.anchorId.length > 0) ||
+      (typeof card.placement === "string" && card.placement.length > 0) ||
+      Number.isFinite(card.gap);
+    if (manualPlacement) {
+      throw new Error(
+        `AUTO_COMPOSE_LAYOUT_CONTRACT: cards in fixed diagram ${semanticDiagram.diagramId} must omit ` +
+        "x, y, anchorId, placement, and gap; html-line-svg owns node placement.",
+      );
+    }
+  }
+
+  if (geometryOverride) {
+    throw new Error(
+      `AUTO_COMPOSE_LAYOUT_CONTRACT: ${geometryOverride.type} cannot run in the initial fixed diagram batch; ` +
+      "repack the validated slot and recreate the diagram instead.",
+    );
+  }
 }
 
 function normalizeSemanticObject(value, diagram, fallbackId) {
@@ -2592,6 +2705,13 @@ function semanticLayoutReport(store, pageId, semanticDiagram) {
         area: (diagramBounds.w * diagramBounds.h) / (contentRect.w * contentRect.h),
       }
     : null;
+  const layoutApplied = !isFixedAutoComposeDiagram(semanticDiagram) || zones.some((zone) =>
+    zone.meta?.cowartSemanticLayout?.engine === "html-line-svg" &&
+    zone.meta?.cowartSemanticLayout?.valid === true,
+  );
+  const layoutErrors = layoutApplied
+    ? []
+    : ["fixed auto-compose diagram did not execute the html-line-svg frame-fitting pass"];
   const report = {
     engine: "html-line-svg",
     diagramId,
@@ -2602,7 +2722,9 @@ function semanticLayoutReport(store, pageId, semanticDiagram) {
     relations,
     collisions,
     outOfBounds,
-    valid: collisions.length === 0 && outOfBounds.length === 0,
+    layoutApplied,
+    layoutErrors,
+    valid: collisions.length === 0 && outOfBounds.length === 0 && layoutErrors.length === 0,
   };
   const digestPayload = {
     ...report,
@@ -3021,6 +3143,7 @@ export function applyThinkingOperationsToSnapshot({
   syncThinkingRelationEndpointMetadata(store);
   const pageId = resolvePageId(nextSnapshot, requestedPageId, viewState);
   const semanticDiagram = normalizeSemanticDiagramMetadata(requestedSemanticDiagram, operations);
+  assertFixedAutoComposeLayoutContract(store, semanticDiagram, operations);
   if (!semanticDiagram && operations.some((operation) => operation?.semantic || operation?.semanticId)) {
     throw new Error("Semantic object and relation fields require the batch-level semanticDiagram contract.");
   }
@@ -3029,6 +3152,16 @@ export function applyThinkingOperationsToSnapshot({
   }
   if (!semanticDiagram) {
     for (const operation of operations) {
+      if (["update_card", "update_zone", "move_shape", "resize_shape"].includes(operation.type)) {
+        const target = typeof operation.id === "string" ? store[operation.id] : null;
+        const fixedDiagramId = fixedAutoComposeDiagramIdForShape(target);
+        if (fixedDiagramId) {
+          throw new Error(
+            `AUTO_COMPOSE_LAYOUT_CONTRACT: ${operation.type} cannot modify fixed diagram ${fixedDiagramId} ` +
+            "without its semanticDiagram contract.",
+          );
+        }
+      }
       if (operation.type === "create_card" && semanticScopedShape(store, operation.parentZoneId)) {
         throw new Error("Creating a card inside a semantic canvas zone requires the batch-level semanticDiagram contract.");
       }
@@ -3222,6 +3355,9 @@ export function applyThinkingOperationsToSnapshot({
         : null,
       layoutReport.outOfBounds.length > 0
         ? `out of bounds: ${layoutReport.outOfBounds.join(", ")}`
+        : null,
+      layoutReport.layoutErrors.length > 0
+        ? `layout: ${layoutReport.layoutErrors.join(", ")}`
         : null,
     ].filter(Boolean).join("; ");
     throw new Error(`SEMANTIC_GEOMETRY: ${semanticDiagram.diagramId} is invalid (${details}).`);

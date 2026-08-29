@@ -7,7 +7,11 @@ import test from "node:test";
 import { z } from "zod";
 
 import { getThinkingContext } from "../mcp/lib/thinking-canvas.mjs";
-import { registerCowartThinkingTools, THINKING_TOOL_NAMES } from "../mcp/lib/thinking-tools.mjs";
+import {
+  AUTO_COMPOSE_DEGRADATION_POLICY,
+  registerCowartThinkingTools,
+  THINKING_TOOL_NAMES,
+} from "../mcp/lib/thinking-tools.mjs";
 
 function registeredThinkingTools() {
   const tools = new Map();
@@ -22,6 +26,67 @@ function registeredThinkingTools() {
 function strictInputSchema(tool) {
   return z.object(tool.definition.inputSchema).strict();
 }
+
+function minimalAutoComposePlan() {
+  return {
+    schemaVersion: "3",
+    pagePlan: {
+      version: "3",
+      frame: { width: 1600, height: 1000 },
+      padding: 24,
+      gutter: 24,
+      slots: [
+        {
+          id: "slot:111111111111",
+          blockId: "block:111111111111",
+          route: "diagram",
+          region: "Structure",
+          rect: { x: 24, y: 24, w: 900, h: 952 },
+          padding: 24,
+          order: 1,
+          fit: "native",
+          contentSpec: {
+            type: "diagram",
+            diagramType: "flow",
+            teachingClaim: "The plan remains the geometry authority.",
+            readingOrder: "top-to-bottom",
+            objects: [{ id: "node", label: "Native node" }],
+            relations: [],
+          },
+        },
+        {
+          id: "slot:222222222222",
+          blockId: "block:222222222222",
+          route: "evidence",
+          region: "Evidence",
+          rect: { x: 948, y: 24, w: 628, h: 952 },
+          padding: 24,
+          order: 2,
+          fit: "native",
+          contentSpec: {
+            type: "evidence",
+            cards: [{ id: "fact", role: "evidence", title: "Source fact" }],
+          },
+        },
+      ],
+    },
+  };
+}
+
+test("auto-compose plan validation returns a machine-readable preview failure-isolation policy", async () => {
+  const tool = registeredThinkingTools().get(THINKING_TOOL_NAMES.validateAutoComposePlan);
+  const result = await tool.handler({ plan: minimalAutoComposePlan() });
+
+  assert.deepEqual(result.structuredContent.degradationPolicy, AUTO_COMPOSE_DEGRADATION_POLICY);
+  assert.equal(result.structuredContent.degradationPolicy.compositionReference.maxGenerationAttempts, 2);
+  assert.equal(result.structuredContent.degradationPolicy.routes.diagram.requiresCompositionReference, false);
+  assert.equal(result.structuredContent.degradationPolicy.routes.diagram.layoutEngine, "html-line-svg");
+  assert.equal(result.structuredContent.degradationPolicy.routes.evidence.requiresCompositionReference, false);
+  assert.equal(result.structuredContent.degradationPolicy.routes.visual.onUnavailable, "pending-retryable");
+  assert.equal(result.structuredContent.degradationPolicy.autonomous.continueNativeRoutes, true);
+  assert.equal(result.structuredContent.degradationPolicy.autonomous.requestConfirmationOnPreviewFailure, false);
+  assert.match(result.content[0].text, /remain executable if image preview generation is unavailable/i);
+});
 
 test("safe thinking operations are non-destructive while the explicit destructive entry point remains available", () => {
   const tools = registeredThinkingTools();
@@ -112,7 +177,7 @@ test("safe semantic dry-run and apply return the same validated html-line-svg la
       layoutFit: "fixed",
     };
     const operations = [
-      { type: "create_zone", key: "flow", title: "Decision flow", purpose: "semantic", w: 1_200, h: 420, semantic: { id: "object:flow" } },
+      { type: "create_zone", key: "flow", title: "Decision flow", purpose: "semantic", x: 0, y: 0, w: 1_200, h: 420, semantic: { id: "object:flow" } },
       { type: "create_card", key: "decision", title: "Decision", parentZoneId: "flow", semantic: { id: "object:decision", order: 1 } },
       { type: "create_card", key: "state", title: "Next state", parentZoneId: "flow", semantic: { id: "object:state", order: 2 } },
       { type: "create_relation", key: "decision-state", semanticId: "relation:decision-state", from: "decision", to: "state" },

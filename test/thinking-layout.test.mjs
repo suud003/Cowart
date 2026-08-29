@@ -564,6 +564,7 @@ test("fits an html-line-svg semantic chain to its target frame instead of cluste
   assert.equal(zone.meta.cowartSemanticLayout.engine, "html-line-svg");
   assert.equal(zone.meta.cowartSemanticLayout.valid, true);
   assert.equal(result.layoutReport.engine, "html-line-svg");
+  assert.equal(result.layoutReport.layoutApplied, true);
   assert.equal(result.layoutReport.valid, true);
   assert.deepEqual(result.layoutReport.collisions, []);
   assert.deepEqual(result.layoutReport.outOfBounds, []);
@@ -636,7 +637,7 @@ test("rejects fixed semantic slot overflow instead of silently growing its frame
         layoutFit: "fixed",
       }),
       operations: [
-        { type: "create_zone", key: "zone", title: "Too dense", purpose: "semantic", w: 480, h: 320, semantic: { id: "object:zone" } },
+        { type: "create_zone", key: "zone", title: "Too dense", purpose: "semantic", x: 0, y: 0, w: 480, h: 320, semantic: { id: "object:zone" } },
         ...["a", "b", "c", "d"].map((key, index) => ({
           type: "create_card",
           key,
@@ -653,7 +654,33 @@ test("rejects fixed semantic slot overflow instead of silently growing its frame
   );
 });
 
-test("keeps fixed frames immutable for explicit, anchored, and incremental overflow", () => {
+test("requires canonical IDs and explicit validated slot geometry for auto-compose diagrams", () => {
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({ diagramId: "ac-diagram:aaaaaaaaaaaa:not-a-digest" }),
+      operations: [
+        { type: "create_zone", key: "zone", title: "Invalid", purpose: "semantic", x: 0, y: 0, w: 900, h: 500, semantic: { id: "object:zone" } },
+      ],
+    }),
+    /AUTO_COMPOSE_LAYOUT_CONTRACT.*12 lowercase hex/,
+  );
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({ diagramId: "ac-diagram:abababababab:cdcdcdcdcdcd" }),
+      operations: [
+        { type: "create_zone", key: "zone", title: "Missing slot", purpose: "semantic", w: 900, h: 500, semantic: { id: "object:zone" } },
+        { type: "create_card", key: "a", title: "A", parentZoneId: "zone", semantic: { id: "object:a" } },
+      ],
+    }),
+    /AUTO_COMPOSE_LAYOUT_CONTRACT.*explicit x, y, w, and h/,
+  );
+});
+
+test("rejects manual placement and split batches for fixed auto-compose diagrams", () => {
   const diagram = semanticDiagram({
     diagramId: "ac-diagram:dddddddddddd:eeeeeeeeeeee",
     layoutEngine: "html-line-svg",
@@ -670,7 +697,7 @@ test("keeps fixed frames immutable for explicit, anchored, and incremental overf
         { type: "create_card", key: "outside", title: "Outside", parentZoneId: "zone", x: 1_000, y: 700, semantic: { id: "object:outside" } },
       ],
     }),
-    /SEMANTIC_GEOMETRY.*out of bounds: object:outside/,
+    /AUTO_COMPOSE_LAYOUT_CONTRACT.*must omit x, y, anchorId, placement, and gap/,
   );
   assert.throws(
     () => applyThinkingOperationsToSnapshot({
@@ -683,7 +710,7 @@ test("keeps fixed frames immutable for explicit, anchored, and incremental overf
         { type: "create_card", key: "anchored", title: "Anchored", parentZoneId: "anchor-zone", anchorId: "anchor", gap: 600, semantic: { id: "object:anchored" } },
       ],
     }),
-    /SEMANTIC_GEOMETRY.*out of bounds: object:anchored/,
+    /AUTO_COMPOSE_LAYOUT_CONTRACT.*must omit x, y, anchorId, placement, and gap/,
   );
 
   const initial = applyThinkingOperationsToSnapshot({
@@ -691,12 +718,30 @@ test("keeps fixed frames immutable for explicit, anchored, and incremental overf
     pageId: "page:test",
     semanticDiagram: diagram,
     operations: [
-      { type: "create_zone", key: "incremental-zone", title: "Fixed", purpose: "semantic", w: 900, h: 360, semantic: { id: "object:incremental-zone" } },
+      { type: "create_zone", key: "incremental-zone", title: "Fixed", purpose: "semantic", x: 0, y: 0, w: 900, h: 360, semantic: { id: "object:incremental-zone" } },
       { type: "create_card", key: "a", title: "A", parentZoneId: "incremental-zone", semantic: { id: "object:a", order: 1 } },
       { type: "create_card", key: "b", title: "B", parentZoneId: "incremental-zone", semantic: { id: "object:b", order: 2 } },
       { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
     ],
   });
+  const updated = applyThinkingOperationsToSnapshot({
+    snapshot: initial.snapshot,
+    pageId: "page:test",
+    semanticDiagram: diagram,
+    operations: [
+      { type: "update_card", id: initial.references.a, title: "A revised", semantic: { state: "success" } },
+    ],
+  });
+  assert.equal(updated.layoutReport.layoutApplied, true);
+  assert.equal(updated.layoutReport.valid, true);
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: initial.snapshot,
+      pageId: "page:test",
+      operations: [{ type: "move_shape", id: initial.references.a, x: 400, y: 200 }],
+    }),
+    /AUTO_COMPOSE_LAYOUT_CONTRACT.*cannot modify fixed diagram/,
+  );
   assert.throws(
     () => applyThinkingOperationsToSnapshot({
       snapshot: initial.snapshot,
@@ -709,7 +754,7 @@ test("keeps fixed frames immutable for explicit, anchored, and incremental overf
         { type: "create_relation", key: "c-d", semanticId: "relation:c-d", from: "c", to: "d" },
       ],
     }),
-    /SEMANTIC_GEOMETRY.*out of bounds: object:c, object:d/,
+    /AUTO_COMPOSE_FIXED_RELAYOUT_REQUIRED.*cannot be extended incrementally/,
   );
   const unchangedZone = initial.snapshot.store[initial.references["incremental-zone"]];
   assert.deepEqual({ w: unchangedZone.props.w, h: unchangedZone.props.h }, { w: 900, h: 360 });
@@ -774,7 +819,7 @@ test("keeps keyless parallel relation ports and layout digests deterministic", (
 
 test("lays SCC cycles and wide fan-outs inside their unchanged fixed frames", () => {
   const cycleDiagram = semanticDiagram({
-    diagramId: "ac-diagram:aaaaaaaaaaaa:cyclecycle00",
+    diagramId: "ac-diagram:aaaaaaaaaaaa:cccccccccccc",
     layoutFit: "fixed",
   });
   const cycle = applyThinkingOperationsToSnapshot({
@@ -782,7 +827,7 @@ test("lays SCC cycles and wide fan-outs inside their unchanged fixed frames", ()
     pageId: "page:test",
     semanticDiagram: cycleDiagram,
     operations: [
-      { type: "create_zone", key: "zone", title: "Cycle", purpose: "semantic", w: 900, h: 360, semantic: { id: "object:zone" } },
+      { type: "create_zone", key: "zone", title: "Cycle", purpose: "semantic", x: 0, y: 0, w: 900, h: 360, semantic: { id: "object:zone" } },
       ...["a", "b", "c"].map((key, index) => ({ type: "create_card", key, title: key.toUpperCase(), parentZoneId: "zone", semantic: { id: `object:${key}`, order: index + 1 } })),
       { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
       { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
@@ -797,7 +842,7 @@ test("lays SCC cycles and wide fan-outs inside their unchanged fixed frames", ()
   assert.equal(cycle.layoutReport.valid, true);
 
   const fanoutDiagram = semanticDiagram({
-    diagramId: "ac-diagram:aaaaaaaaaaaa:fanoutfanout",
+    diagramId: "ac-diagram:aaaaaaaaaaaa:ffffffffffff",
     readingOrder: "top-to-bottom",
     layoutFit: "fixed",
   });
@@ -806,7 +851,7 @@ test("lays SCC cycles and wide fan-outs inside their unchanged fixed frames", ()
     pageId: "page:test",
     semanticDiagram: fanoutDiagram,
     operations: [
-      { type: "create_zone", key: "zone", title: "Fan-out", purpose: "semantic", w: 650, h: 600, semantic: { id: "object:zone" } },
+      { type: "create_zone", key: "zone", title: "Fan-out", purpose: "semantic", x: 0, y: 0, w: 650, h: 600, semantic: { id: "object:zone" } },
       ...["hub", "a", "b", "c", "d", "e"].map((key, index) => ({ type: "create_card", key, title: key.toUpperCase(), parentZoneId: "zone", semantic: { id: `object:${key}`, order: index + 1 } })),
       ...["a", "b", "c", "d", "e"].map((to) => ({ type: "create_relation", key: `hub-${to}`, semanticId: `relation:hub-${to}`, from: "hub", to })),
     ],
