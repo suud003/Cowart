@@ -1065,6 +1065,19 @@ body {
   border-radius: 3px;
 }
 
+.cowart-agent-invocation-chip,
+.cowart-agent-selected-invocation > span {
+  color: var(--atelier-blue);
+  background: var(--atelier-blue-soft);
+  border-radius: 3px;
+}
+
+.cowart-agent-selected-invocation {
+  background: var(--atelier-paper);
+  border-color: var(--atelier-line);
+  border-radius: 4px;
+}
+
 .cowart-agent-assistant-avatar { border-color: var(--atelier-line); background: var(--atelier-paper); }
 .cowart-agent-assistant-body > header { border-bottom: 1px solid var(--atelier-line); }
 .cowart-agent-assistant-body > header strong { color: var(--atelier-ink); font-size: 10px; letter-spacing: 0; text-transform: none; }

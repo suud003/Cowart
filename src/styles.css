@@ -583,6 +583,7 @@ body {
 }
 
 .cowart-agent-user-bubble {
+  display: flex;
   max-width: 88%;
   padding: 10px 12px;
   overflow-wrap: anywhere;
@@ -594,7 +595,54 @@ body {
   background: #eeedff;
   border: 1px solid #dfdcff;
   border-radius: 13px 13px 4px 13px;
+  gap: 7px;
+  align-items: flex-start;
+  flex-direction: column;
   user-select: text;
+}
+
+.cowart-agent-invocation-chip,
+.cowart-agent-selected-invocation > span {
+  display: inline-flex;
+  min-height: 22px;
+  padding: 2px 7px;
+  gap: 5px;
+  align-items: center;
+  color: #4f46b8;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  background: #e4e2ff;
+  border-radius: 999px;
+}
+
+.cowart-agent-selected-invocation {
+  display: flex;
+  min-height: 34px;
+  padding: 6px 8px;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--cowart-panel-card-muted);
+  border: 1px solid var(--cowart-panel-border);
+  border-radius: 9px;
+}
+
+.cowart-agent-selected-invocation > button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  color: var(--cowart-panel-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cowart-agent-selected-invocation > button:hover {
+  color: var(--cowart-panel-text);
+  background: rgb(0 0 0 / 5%);
 }
 
 .cowart-agent-assistant-row {

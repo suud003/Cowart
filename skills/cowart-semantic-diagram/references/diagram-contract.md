@@ -78,7 +78,7 @@ Store one JSON object in the template carrying data-cowart-diagram-spec and pres
 
 Required object roles are selected from interface, agent, task, container, document, state, claim, evidence, question, decision, zone, and system. Required origins are source, user, synthesis, inference, or unknown. Use unknown only while keeping the uncertainty visible.
 
-For the native route, put the batch trace in `semanticDiagram`, object trace in each `semantic` object, and relation trace directly on each `create_relation` operation. A native relation carries `semanticId`, `kind`, `direction`, `path`, optional `payload`, `lane`, `origin`, `sourceShapeIds`, and `sourceIds`. Real tldraw start/end bindings are the authoritative endpoints after a user reconnects an arrow; stale compatibility metadata must not revive a missing terminal or cross a diagram boundary. Do not reuse Product Bridge `bridge`, `zoneId`, requirement, page, or annotation fields. The semantic-zone title must show the teaching claim so the diagram remains understandable without inspecting metadata.
+For the native route, put the batch trace in `semanticDiagram`, object trace in each `semantic` object, and relation trace directly on each `create_relation` operation. A native relation carries `semanticId`, `kind`, `direction`, `path`, optional `payload`, `lane`, `origin`, `sourceShapeIds`, and `sourceIds`. Real tldraw start/end bindings are the authoritative endpoints after a user reconnects an arrow; stale compatibility metadata must not revive a missing terminal or cross a diagram boundary. Do not reuse Product Bridge `bridge`, `zoneId`, requirement, page, or annotation fields. Keep the single-line semantic-zone title short; show a necessary teaching claim in a wrap-capable claim card and retain the full value in metadata.
 
 Native semantic card and zone revisions may patch type, state, origin, reading order, and source mappings, but must preserve their `diagramId` and `semanticId`. A relation revision is one ordered batch containing `delete_shape` followed by `create_relation` with the same stable `semanticId`; there is no `update_relation` shortcut.
 
@@ -213,7 +213,7 @@ Run scripts/validate-semantic-svg.mjs before insertion and after material change
 - Record the returned HTML draft shape ID after insertion. On later edits, update that same draft rather than creating a sibling.
 - Before writing native cards back, re-read Yogurt context and compare revisions. A stale source revision invalidates a prior return preview.
 - Preview HTML insertion with `dryRun: true`, then apply the exact payload with the returned `baseRevision`. A stale revision invalidates the preview and requires a new context read.
-- Preview the smallest typed operation list with apply_cowart_thinking_operations. Preserve user-authored shapes unless the user explicitly approved their modification.
+- Preview ordinary additive work with `apply_cowart_safe_thinking_operations` and require a valid `layoutReport`. Preserve user-authored shapes; use `apply_cowart_thinking_operations` only after explicit authorization for deletion or user-authored modification.
 - After a successful return, add operation IDs, returned shape IDs, and lastAppliedRevision to trace, then update the existing HTML draft through insert_cowart_html_draft with updateExistingDraft true.
 - Never infer external source content from a URL. Record it as unread unless the actual body is already present in the active context.
 - Never write raw tldraw records or replace a full canvas snapshot.

@@ -15,6 +15,7 @@ export const THINKING_TOOL_NAMES = {
   getContext: "get_cowart_thinking_context",
   validateAutoComposePlan: "validate_cowart_auto_compose_plan",
   importMaterial: "import_cowart_material",
+  applySafeOperations: "apply_cowart_safe_thinking_operations",
   applyOperations: "apply_cowart_thinking_operations",
   undoOperation: "undo_cowart_thinking_operation",
 };
@@ -52,6 +53,9 @@ const semanticDiagramSchema = z.object({
   teachingClaim: z.string().trim().min(1).max(500),
   readingOrder: readingOrderSchema,
   diagramType: diagramTypeSchema,
+  layoutEngine: z.literal("html-line-svg").optional(),
+  layoutMode: z.enum(["balanced", "compact"]).optional(),
+  layoutFit: z.enum(["fixed", "grow"]).optional(),
   sourceShapeIds: z.array(z.string().trim().min(1).max(160)).max(250).optional(),
   sourceIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
   objectCount: z.number().int().min(0).max(250).optional(),
@@ -265,6 +269,26 @@ const operationSchema = z.discriminatedUnion("type", [
   deleteShapeSchema,
 ]);
 
+const safeOperationSchema = z.discriminatedUnion("type", [
+  createCardSchema,
+  updateCardSchema,
+  createZoneSchema,
+  updateZoneSchema,
+  moveShapeSchema,
+  resizeShapeSchema,
+  createRelationSchema,
+]);
+
+function safeThinkingOperationInput(input = {}) {
+  if (input.allowUserAuthoredEdits === true) {
+    throw new Error("Safe Yogurt AI thinking operations cannot enable allowUserAuthoredEdits.");
+  }
+  if (input.operations?.some((operation) => operation?.type === "delete_shape")) {
+    throw new Error("Safe Yogurt AI thinking operations cannot delete shapes.");
+  }
+  return { ...input, allowUserAuthoredEdits: false };
+}
+
 function toolText(text, structuredContent) {
   return {
     content: [{ type: "text", text }],
@@ -369,6 +393,39 @@ export function registerCowartThinkingTools(server) {
       const action = result.applied ? "Imported" : "Previewed";
       return toolText(
         `${action} material ${result.source.fileName} as ${result.references.material} at revision ${result.resultRevision}.`,
+        result,
+      );
+    },
+  );
+
+  server.registerTool(
+    THINKING_TOOL_NAMES.applySafeOperations,
+    {
+      title: "Apply Safe Yogurt AI Thinking Operations",
+      description:
+        "Preview or atomically apply non-destructive local edits to Yogurt AI. This safe entry point creates cards, zones, and relations and may update, move, or resize only Cowart-managed shapes. It cannot delete shapes or enable edits to user-authored content. Use it by default for autonomous composition and ordinary additive canvas work; use the separately annotated destructive tool only for an explicitly authorized deletion or user-authored edit.",
+      inputSchema: {
+        ...projectArgsSchema,
+        baseRevision: z.string().trim().optional(),
+        pageId: z.string().trim().optional(),
+        operations: z.array(safeOperationSchema).min(1).max(100),
+        semanticDiagram: semanticDiagramSchema.optional(),
+        reason: z.string().max(2_000).optional(),
+        explanation: z.string().max(8_000).optional(),
+        dryRun: z.boolean().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input = {}) => {
+      const safeInput = safeThinkingOperationInput(input);
+      const result = await applyThinkingOperations(safeInput, safeInput);
+      return toolText(
+        `${result.applied ? "Applied" : "Previewed"} ${result.changes.length} safe Yogurt AI thinking edit(s); result revision ${result.resultRevision}.`,
         result,
       );
     },

@@ -13,6 +13,7 @@ let agentExecutionInstructions
 let agentExecutionModeScope
 let agentExecutionModeStorageKey
 let buildAgentPanelMessage
+let buildAgentPanelTaskRequest
 let buildElicitationContent
 let claimAgentSubmission
 let conversationTurnParts
@@ -55,6 +56,7 @@ test.before(async () => {
     agentExecutionModeScope,
     agentExecutionModeStorageKey,
     buildAgentPanelMessage,
+    buildAgentPanelTaskRequest,
     buildElicitationContent,
     claimAgentSubmission,
     conversationTurnParts,
@@ -95,17 +97,50 @@ test('Agent panel tasks include stable page and selection IDs instead of screens
     exactShapeIds: ['shape:brief', 'shape:choice', 'shape:ending']
   })
 
-  assert.equal(typeof message.prompt, 'string')
-  assert.match(message.prompt, /page:story-map/)
-  assert.match(message.prompt, /shape:brief/)
-  assert.match(message.prompt, /shape:ending/)
-  assert.match(message.prompt, /不要依赖截图坐标/)
-  assert.match(message.prompt, /当前选中的 2 个对象/)
-  assert.match(message.prompt, /\$cowart-auto-compose/)
+  assert.equal(message.prompt, '整理这些产品想法')
+  assert.equal(typeof message.runtimeContext, 'string')
+  assert.doesNotMatch(message.prompt, /page:story-map|shape:brief|\$cowart-auto-compose/)
+  assert.doesNotMatch(message.runtimeContext, /整理这些产品想法/)
+  assert.match(message.runtimeContext, /page:story-map/)
+  assert.match(message.runtimeContext, /shape:brief/)
+  assert.match(message.runtimeContext, /shape:ending/)
+  assert.match(message.runtimeContext, /不要依赖截图坐标/)
+  assert.match(message.runtimeContext, /当前选中的 2 个对象/)
+  assert.match(message.runtimeContext, /\$cowart-auto-compose/)
   assert.equal(message.executionMode, 'guided')
-  assert.match(message.prompt, /接近成品的整页视觉预演/)
-  assert.match(message.prompt, /结构化计划控制最终坐标和防碰撞/)
-  assert.match(message.prompt, /执行方式：分步确认/)
+  assert.match(message.runtimeContext, /接近成品的整页视觉预演/)
+  assert.match(message.runtimeContext, /结构化计划控制最终坐标和防碰撞/)
+  assert.match(message.runtimeContext, /执行方式：分步确认/)
+})
+
+test('quick task presets stay in hidden application context instead of the persisted user prompt', () => {
+  const preset = 'INTERNAL AUTO COMPOSE PRESET: create a validated page plan.'
+  const taskRequest = buildAgentPanelTaskRequest({
+    id: 'auto-compose',
+    label: '智能编排',
+    prompt: preset
+  }, '')
+  const message = buildAgentPanelMessage(taskRequest.prompt, {
+    projectName: 'AI 互动影游',
+    pageId: 'page:story-map'
+  }, {
+    applicationTask: taskRequest.applicationTask
+  })
+
+  assert.equal(taskRequest.prompt, '执行“智能编排”。')
+  assert.deepEqual(taskRequest.invocation, { id: 'auto-compose', label: '智能编排' })
+  assert.equal(message.prompt, '执行“智能编排”。')
+  assert.doesNotMatch(message.prompt, /INTERNAL AUTO COMPOSE PRESET/)
+  assert.match(message.runtimeContext, /INTERNAL AUTO COMPOSE PRESET/)
+
+  const supplemented = buildAgentPanelTaskRequest({
+    id: 'auto-compose',
+    label: '智能编排',
+    prompt: preset
+  }, '优先梳理玩家核心循环')
+  assert.equal(supplemented.prompt, '优先梳理玩家核心循环')
+  assert.equal(supplemented.userText, '优先梳理玩家核心循环')
+  assert.equal(supplemented.applicationTask, preset)
 })
 
 test('Agent execution mode is fail-closed, project-scoped, and explicit in each task envelope', () => {
@@ -135,9 +170,11 @@ test('Agent execution mode is fail-closed, project-scoped, and explicit in each 
     executionMode: readAgentExecutionMode(storage, 'Project A')
   })
   assert.equal(message.executionMode, 'autonomous')
-  assert.match(message.prompt, /执行方式：自动执行/)
-  assert.match(message.prompt, /仅对 \$cowart-auto-compose/)
-  assert.match(message.prompt, /不能自动同意/)
+  assert.equal(message.prompt, '自动编排这个需求')
+  assert.doesNotMatch(message.prompt, /执行方式|工作区|审批/)
+  assert.match(message.runtimeContext, /执行方式：自动执行/)
+  assert.match(message.runtimeContext, /当前工作区内/)
+  assert.match(message.runtimeContext, /不要请求交互式审批或表单/)
   assert.match(agentExecutionInstructions('guided'), /整页视觉预演后暂停一次/)
 })
 
@@ -150,9 +187,10 @@ test('Agent panel bounds structured shape context to 250 IDs', () => {
     exactShapeIds: shapeIds
   })
 
-  assert.match(message.prompt, /"shapeIdsTruncated": true/)
-  assert.match(message.prompt, /shape:250/)
-  assert.doesNotMatch(message.prompt, /shape:251/)
+  assert.equal(message.prompt, '整理选区')
+  assert.match(message.runtimeContext, /"shapeIdsTruncated": true/)
+  assert.match(message.runtimeContext, /shape:250/)
+  assert.doesNotMatch(message.runtimeContext, /shape:251/)
 })
 
 test('Agent panel approval state is isolated by request id', () => {
@@ -240,7 +278,7 @@ test('Agent panel removes redundant diagram generation shortcuts from Agent surf
   assert.match(markup, /先生成接近成品的整页视觉预演/)
   assert.match(markup, /自动推进画布/)
   assert.match(markup, /aria-pressed="false"/)
-  assert.match(markup, /不会自动批准命令、需 Codex 审批的文件修改、外部授权或敏感信息请求/)
+  assert.match(markup, /自动模式不弹审批；超出工作区、外部授权或敏感操作会停止并说明/)
   assert.doesNotMatch(markup, /生成框线图/)
   assert.doesNotMatch(actionMenuSource, /生成画布框线图/)
 })
@@ -386,7 +424,7 @@ test('Agent conversation groups one task into a user turn, one complete reply, t
         id: 'task:one',
         status: 'sending',
         startedAt: '2026-08-26T10:00:00.000Z',
-        metadata: { instruction: '梳理这张玩法画布并找出缺口' }
+        metadata: { userText: '梳理这张玩法画布并找出缺口' }
       },
       at: '2026-08-26T10:00:00.000Z'
     },
@@ -414,10 +452,62 @@ test('Agent conversation groups one task into a user turn, one complete reply, t
   assert.equal(parts.changeText, '新增失败回流节点并连接核心循环')
 })
 
+test('Agent conversation hides ambiguous instructions and renders only explicit user presentation metadata', () => {
+  const hiddenRuntimeInstruction = '内部预制指令：不要把这段文字显示给用户。'
+  const hidden = reduceAgentConversation(createAgentConversationState(), {
+    type: 'task.started',
+    task: {
+      id: 'task:hidden-runtime',
+      metadata: { instruction: hiddenRuntimeInstruction }
+    }
+  })
+
+  assert.equal(hidden.turns[0].userText, '')
+  assert.equal(hidden.turns[0].invocation, null)
+
+  const userText = '请保留我输入的 $cowart-auto-compose 字样'
+  const presentationMetadata = {
+    instruction: hiddenRuntimeInstruction,
+    userText,
+    invocation: { id: 'auto-compose', label: '智能编排' }
+  }
+  const visible = reduceAgentConversation(createAgentConversationState(), {
+    type: 'task.started',
+    task: { id: 'task:visible-presentation', metadata: presentationMetadata }
+  })
+
+  assert.equal(visible.turns[0].userText, userText)
+  assert.deepEqual(visible.turns[0].invocation, { id: 'auto-compose', label: '智能编排' })
+
+  const bridgeState = {
+    status: 'sending',
+    capabilities: { available: true, provider: 'desktop', streaming: true },
+    pendingTaskIds: ['task:visible-presentation'],
+    activity: { phase: 'running' },
+    lastTask: {
+      id: 'task:visible-presentation',
+      status: 'accepted',
+      startedAt: '2026-08-29T10:00:00.000Z',
+      metadata: presentationMetadata
+    },
+    lastEvent: null
+  }
+  const markup = renderToStaticMarkup(React.createElement(CowartAgentPanel, {
+    bridge: { getState: () => bridgeState },
+    contextProvider: () => ({ projectName: 'Test', pageShapeCount: 0 }),
+    isOpen: true,
+    onOpenChange: () => {}
+  }))
+
+  assert.match(markup, /智能编排/)
+  assert.match(markup, /请保留我输入的 \$cowart-auto-compose 字样/)
+  assert.doesNotMatch(markup, /内部预制指令/)
+})
+
 test('Agent conversation shows a final reply carried only by turn completion', () => {
   let state = reduceAgentConversation(createAgentConversationState(), {
     type: 'task.started',
-    task: { id: 'task:terminal-only', metadata: { instruction: '给出最终结论' } }
+    task: { id: 'task:terminal-only', metadata: { userText: '给出最终结论' } }
   })
   state = reduceAgentConversation(state, {
     type: 'turn.completed',
@@ -432,7 +522,7 @@ test('Agent conversation shows a final reply carried only by turn completion', (
 
   let defaultOnly = reduceAgentConversation(createAgentConversationState(), {
     type: 'task.started',
-    task: { id: 'task:default-only', metadata: { instruction: '执行任务' } }
+    task: { id: 'task:default-only', metadata: { userText: '执行任务' } }
   })
   defaultOnly = reduceAgentConversation(defaultOnly, {
     type: 'turn.completed',
@@ -452,7 +542,7 @@ test('Agent panel submission lock rejects a second pre-send claim until released
 test('Agent conversation terminal states and blocking requests are monotonic and request-scoped', () => {
   let state = reduceAgentConversation(createAgentConversationState(), {
     type: 'task.started',
-    task: { id: 'task:one', metadata: { instruction: '检查风险' } }
+    task: { id: 'task:one', metadata: { userText: '检查风险' } }
   })
   state = reduceAgentConversation(state, { type: 'turn.started', turnId: 'turn:one' })
   state = reduceAgentConversation(state, {
@@ -500,7 +590,7 @@ test('Agent conversation terminal states and blocking requests are monotonic and
 test('Agent conversation resolves a reused request id against the newest active turn', () => {
   let state = reduceAgentConversation(createAgentConversationState(), {
     type: 'task.started',
-    task: { id: 'task:old', metadata: { instruction: '旧任务' } }
+    task: { id: 'task:old', metadata: { userText: '旧任务' } }
   })
   state = reduceAgentConversation(state, {
     type: 'approval.requested',
@@ -511,7 +601,7 @@ test('Agent conversation resolves a reused request id against the newest active 
   state = reduceAgentConversation(state, { type: 'turn.completed', taskId: 'task:old' })
   state = reduceAgentConversation(state, {
     type: 'task.started',
-    task: { id: 'task:new', metadata: { instruction: '新任务' } }
+    task: { id: 'task:new', metadata: { userText: '新任务' } }
   })
   state = reduceAgentConversation(state, {
     type: 'approval.requested',
@@ -534,7 +624,7 @@ test('Agent conversation retains the latest twenty completed turns', () => {
     const taskId = `task:${index}`
     state = reduceAgentConversation(state, {
       type: 'task.started',
-      task: { id: taskId, metadata: { instruction: `任务 ${index}` } }
+      task: { id: taskId, metadata: { userText: `任务 ${index}` } }
     })
     state = reduceAgentConversation(state, { type: 'turn.completed', taskId })
   }
@@ -556,7 +646,7 @@ test('Agent conversation restores a reviewable turn and renders it as dialogue i
       threadId: 'thread:restored',
       turnId: 'turn:restored',
       startedAt: '2026-08-26T10:00:00.000Z',
-      metadata: { instruction: '把战斗、构筑和地图风险整理成一个核心循环' }
+      metadata: { userText: '把战斗、构筑和地图风险整理成一个核心循环' }
     },
     lastEvent: {
       type: 'agent.delta',

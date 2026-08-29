@@ -164,7 +164,7 @@ const server = new McpServer(
   },
   {
     instructions:
-      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply typed local edits with apply_cowart_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Route a mixed brief into a structured v3 page plan with route-specific content specs, and validate it with validate_cowart_auto_compose_plan before image generation. Create one near-final full-page composition reference in which visual scenes, diagram topology, evidence cards, hierarchy, and whitespace already resemble the intended page; never substitute empty placeholder boxes, an abstract wireframe, or one concept image/poster. In guided mode pause once after the preview; in autonomous mode continue through the same validated slots without changing command, file, network, or elicitation approval boundaries. Final product semantics come from the page plan and original sources, never generated pixels or OCR. Build canvas diagrams natively with a semanticDiagram batch plus semantic zones, cards, and relations, and verify real dry-run bounds stay inside non-overlapping slots before apply. Reuse insert_cowart_image and insert_cowart_html_draft only for visual assets or an explicitly requested precision inline-SVG fallback instead of hand-writing tldraw records.",
+      "Render and update the native Yogurt AI canvas. Inspect source-aware page or selection context with get_cowart_thinking_context, preview and atomically apply ordinary additive edits with apply_cowart_safe_thinking_operations, attach project materials with import_cowart_material, and use undo_cowart_thinking_operation for guarded undo. Reserve apply_cowart_thinking_operations for explicitly authorized deletion or user-authored edits. Route a mixed brief into a structured v3 page plan with route-specific content specs, and validate it with validate_cowart_auto_compose_plan before image generation. Create one near-final full-page composition reference in which visual scenes, diagram topology, evidence cards, hierarchy, and whitespace already resemble the intended page; never substitute empty placeholder boxes, an abstract wireframe, or one concept image/poster. In guided mode pause once after the preview; in autonomous mode continue through the same validated slots without changing project, network, credential, or destructive boundaries. Final product semantics come from the page plan and original sources, never generated pixels or OCR. Build canvas diagrams natively with semanticDiagram layoutEngine=html-line-svg, balanced fixed-slot fitting, semantic zones, cards, separated boundary ports, and bound relations; require a valid dry-run layoutReport before apply. Use insert_cowart_image for managed visual assets and insert_cowart_html_draft only for an explicitly requested precision inline-SVG fallback instead of hand-writing tldraw records.",
   },
 );
 
@@ -510,6 +510,18 @@ function isCowartHtmlDraftShape(shape) {
   );
 }
 
+function isCowartManagedGeneratedShape(shape) {
+  return shape?.typeName === "shape" && (
+    shape.meta?.cowartThinkingGenerated === true ||
+    shape.meta?.cowartAiImageHolder === true ||
+    shape.meta?.cowartAiDraftHolder === true ||
+    shape.meta?.cowartHtmlDraft === true ||
+    shape.meta?.cowartGeneratedForAiImageHolder ||
+    shape.meta?.cowartGeneratedForAiDraftHolder ||
+    shape.meta?.cowartAutoComposeVersion === "3"
+  );
+}
+
 function cowartHtmlDraftVirtualUrl(assetUrl) {
   return `${COWART_HTML_DRAFT_URL_ORIGIN}${assetUrl}`;
 }
@@ -638,6 +650,18 @@ async function insertCowartImage(args = {}) {
   const shouldTargetAiImageHolder = args.matchAnchor !== false && isAiImageHolderShape(anchorShape) && anchorBounds;
   const shouldReplaceAiImageHolder = shouldTargetAiImageHolder && args.replaceAiImageHolder !== false;
   const shouldFillAiImageHolder = shouldTargetAiImageHolder && !shouldReplaceAiImageHolder;
+  const replacedShapeIds = shouldReplaceAiImageHolder && anchorShapeId
+    ? [anchorShapeId, ...collectDescendantShapeIds(store, anchorShapeId)]
+    : [];
+  const protectedDescendantIds = replacedShapeIds
+    .filter((id) => id !== anchorShapeId)
+    .filter((id) => store[id]?.typeName === "shape" && !isCowartManagedGeneratedShape(store[id]));
+  if (protectedDescendantIds.length > 0) {
+    throw new Error(
+      `Refusing to replace AI image holder ${anchorShapeId}; it contains ` +
+      `${protectedDescendantIds.length} user-authored shape(s).`,
+    );
+  }
   const matchAnchor = args.matchAnchor !== false && anchorBounds;
   const width = shouldTargetAiImageHolder
     ? anchorBounds.w
@@ -683,9 +707,6 @@ async function insertCowartImage(args = {}) {
   const recordSeed = sanitizeIdPart(fileName);
   const assetId = uniqueRecordId(store, "asset", recordSeed);
   const shapeId = uniqueRecordId(store, "shape", recordSeed);
-  const replacedShapeIds = shouldReplaceAiImageHolder && anchorShapeId
-    ? [anchorShapeId, ...collectDescendantShapeIds(store, anchorShapeId)]
-    : [];
   const replacedImageShapeIds = replacedShapeIds.filter((id) => store[id]?.typeName === "shape" && store[id]?.type === "image");
   const index = shouldReplaceAiImageHolder && typeof anchorShape?.index === "string"
     ? anchorShape.index
@@ -1808,7 +1829,10 @@ function registerCowartImageTools(mcpServer) {
       },
       annotations: {
         readOnlyHint: false,
-        destructiveHint: true,
+        // This tool only adds a new image or replaces an explicitly managed AI
+        // holder. insertCowartImage refuses a holder containing user-authored
+        // descendants, so autonomous turns can use it without a false approval.
+        destructiveHint: false,
         idempotentHint: false,
         openWorldHint: false,
       },

@@ -94,9 +94,9 @@ export function agentExecutionInstructions(mode) {
   }
   return [
     '执行方式：自动执行（用户已在 Yogurt AI 面板明确开启）。',
-    '- 仅对 $cowart-auto-compose 的路由、整页视觉预演、分区生成及项目内可逆画布写入连续执行；不要停在整页预演确认，也不要为普通布局选择或可合理默认的信息发起补充点击。',
+    '- 对当前工作区内的路由、整页视觉预演、分区生成、可逆画布写入与必要命令连续执行；不要停在整页预演确认，也不要为普通布局选择或可合理默认的信息发起补充点击。',
     '- 信息不完整时采用最小、可逆且不改变核心意图的合理假设，并在最终结果中列出；只有缺失信息会导致越权、不可逆结果或使结果发生实质变化时才询问。',
-    '- 自动执行不扩大安全授权：外部网站或网络访问、项目外写入、凭据、付费、删除用户内容及其他受保护操作仍必须遵守正常审批边界，不能自动同意。'
+    '- 不要请求交互式审批或表单。超出工作区权限、外部授权、凭据、付费或删除用户内容的动作应安全停止，并说明未执行的部分。'
   ].join('\n')
 }
 
@@ -120,6 +120,7 @@ const DEFAULT_TERMINAL_ACTIVITY_TEXT = new Set([
 
 const QUICK_TASKS = [
   {
+    id: 'auto-compose',
     icon: Workflow,
     kind: 'auto-compose',
     label: '智能编排',
@@ -127,12 +128,14 @@ const QUICK_TASKS = [
     prompt: AUTO_COMPOSE_QUICK_PROMPT
   },
   {
+    id: 'organize-selection',
     icon: Sparkles,
     label: '整理选区',
     description: '梳理主题、关系与待确认问题',
     prompt: '整理当前画布选区；如果没有选中对象，则整理当前页面。找出主题、关系与待确认问题。'
   },
   {
+    id: 'generate-prd',
     icon: FileText,
     label: '生成 PRD',
     description: '把当前材料变成可评审产品工作区',
@@ -876,12 +879,20 @@ function conversationStatusFromEvent(event, currentStatus = 'submitting') {
 
 function userTextFromConversationEvent(event) {
   const task = taskFromConversationEvent(event)
+  const metadata = task?.metadata ?? event?.metadata ?? null
   return normalizeActivityText(
-    task?.metadata?.instruction ??
-      event?.metadata?.instruction ??
-      event?.instruction ??
-      ''
+    metadata?.userText ??
+      (metadata?.visibility === 'user-authored' ? metadata?.instruction : '')
   ).trim()
+}
+
+function invocationFromConversationEvent(event) {
+  const task = taskFromConversationEvent(event)
+  const invocation = task?.metadata?.invocation ?? event?.metadata?.invocation
+  if (!invocation || typeof invocation !== 'object') return null
+  const id = String(invocation.id || '').trim()
+  const label = String(invocation.label || '').trim()
+  return id && label ? { id, label } : null
 }
 
 function conversationErrorItem(event) {
@@ -944,6 +955,7 @@ function newConversationTurn(event, index) {
     threadId,
     turnId,
     userText: userTextFromConversationEvent(event),
+    invocation: invocationFromConversationEvent(event),
     startedAt: event?.at || task?.startedAt || new Date().toISOString(),
     finishedAt: task?.finishedAt || null,
     status: conversationStatusFromEvent(event),
@@ -1036,6 +1048,7 @@ export function reduceAgentConversation(state = createAgentConversationState(), 
     threadId: turn.threadId || threadIdFromConversationEvent(event),
     turnId: turn.turnId || turnIdFromConversationEvent(event),
     userText: turn.userText || userTextFromConversationEvent(event),
+    invocation: turn.invocation || invocationFromConversationEvent(event),
     startedAt: turn.startedAt || event?.at || task?.startedAt || null,
     finishedAt: task?.finishedAt || (
       ['turn.completed', 'turn.failed', 'turn.cancelled', 'task.failed', 'task.cancelled'].includes(event?.type)
@@ -1141,9 +1154,17 @@ function AgentConversationTurn({ turn }) {
   const active = !isTerminalTurnStatus(turn.status)
   return (
     <article className="cowart-agent-turn" data-status={turn.status}>
-      {turn.userText && (
+      {(turn.userText || turn.invocation) && (
         <div className="cowart-agent-user-row">
-          <div className="cowart-agent-user-bubble">{turn.userText}</div>
+          <div className="cowart-agent-user-bubble">
+            {turn.invocation && (
+              <span className="cowart-agent-invocation-chip">
+                <Workflow aria-hidden="true" size={12} />
+                {turn.invocation.label}
+              </span>
+            )}
+            {turn.userText && <span>{turn.userText}</span>}
+          </div>
         </div>
       )}
       <div className="cowart-agent-assistant-row">
@@ -1221,7 +1242,32 @@ export function approvalCanRespond(status) {
   return status === 'idle' || status === 'error'
 }
 
-export function buildAgentPanelMessage(instruction, context = {}) {
+export function buildAgentPanelTaskRequest(selectedQuickTask, instruction = '') {
+  const userText = String(instruction || '').trim()
+  if (!selectedQuickTask) {
+    return {
+      userText,
+      prompt: userText,
+      applicationTask: '',
+      invocation: null
+    }
+  }
+
+  const id = String(selectedQuickTask.id || '').trim()
+  const label = String(selectedQuickTask.label || '').trim()
+  const applicationTask = String(selectedQuickTask.prompt || '').trim()
+  if (!id || !label || !applicationTask) {
+    throw new TypeError('Quick task requires a stable id, public label, and application task.')
+  }
+  return {
+    userText,
+    prompt: userText || `执行“${label}”。`,
+    applicationTask,
+    invocation: { id, label }
+  }
+}
+
+export function buildAgentPanelMessage(instruction, context = {}, options = {}) {
   const selectedCount = Number(context.selectedCount) || 0
   const scope = selectedCount > 0 ? `当前选中的 ${selectedCount} 个对象` : '当前页面'
   const selectedShapeIds = Array.isArray(context.selectedShapeIds)
@@ -1242,9 +1288,11 @@ export function buildAgentPanelMessage(instruction, context = {}) {
       exactShapeIds.length < (context.exactShapeIds?.length || 0)
   }
   const executionMode = normalizeAgentExecutionMode(context.executionMode)
+  const applicationTask = String(options.applicationTask || '').trim()
   return {
     executionMode,
-    prompt: [
+    prompt: String(instruction || '').trim(),
+    runtimeContext: [
       '[@cowart-thinking-canvas](plugin://cowart-thinking-canvas@cowart-thinking-github) Yogurt AI Agent 任务',
       '',
       `项目：${context.projectName || 'Yogurt AI 画布'}`,
@@ -1256,12 +1304,14 @@ export function buildAgentPanelMessage(instruction, context = {}) {
       JSON.stringify(stableContext, null, 2),
       '```',
       '',
+      ...(applicationTask
+        ? ['应用快捷任务规则（隐藏执行上下文，不是用户原话）：', applicationTask, '']
+        : []),
       AUTO_COMPOSE_ROUTING_HINT,
       '',
       agentExecutionInstructions(executionMode),
       '',
-      '请使用已保存的 Yogurt AI 画布与选区上下文完成以下任务：',
-      String(instruction || '').trim()
+      '请使用已保存的 Yogurt AI 画布与选区上下文完成用户当前任务。'
     ].join('\n')
   }
 }
@@ -1598,6 +1648,7 @@ export function CowartAgentPanel({
   )
   const [context, setContext] = useState(() => readContext(contextProvider))
   const [instruction, setInstruction] = useState('')
+  const [selectedQuickTask, setSelectedQuickTask] = useState(null)
   const [executionMode, setExecutionMode] = useState(() => readAgentExecutionMode(
     undefined,
     agentExecutionModeScope(context)
@@ -1817,8 +1868,9 @@ export function CowartAgentPanel({
     return () => window.cancelAnimationFrame(frame)
   }, [conversation, isOpen])
 
-  const applyQuickTask = useCallback((prompt) => {
-    setInstruction(prompt)
+  const applyQuickTask = useCallback((task) => {
+    setSelectedQuickTask({ id: task.id, label: task.label, prompt: task.prompt })
+    setInstruction('')
     window.requestAnimationFrame(() => textAreaRef.current?.focus())
   }, [])
 
@@ -1941,8 +1993,8 @@ export function CowartAgentPanel({
 
   async function handleSubmit(event) {
     event?.preventDefault()
-    const request = instruction.trim()
-    if (!request || isSending || !isAvailable || !bridge || !claimAgentSubmission(submissionLockRef)) return
+    const taskRequest = buildAgentPanelTaskRequest(selectedQuickTask, instruction)
+    if (!taskRequest.prompt || isSending || !isAvailable || !bridge || !claimAgentSubmission(submissionLockRef)) return
 
     setIsPreparing(true)
     shouldFollowConversationRef.current = true
@@ -1958,7 +2010,9 @@ export function CowartAgentPanel({
       startedAt,
       metadata: {
         source: 'cowart-agent-panel',
-        instruction: request,
+        userText: taskRequest.userText || null,
+        invocation: taskRequest.invocation,
+        visibility: 'user-authored',
         projectName: taskContext.projectName || null,
         pageId: taskContext.pageId || null,
         pageName: taskContext.pageName || null,
@@ -1975,9 +2029,11 @@ export function CowartAgentPanel({
         currentProjectScope: executionProjectRef.current,
         taskContext
       })
-      await bridge.sendTask(buildAgentPanelMessage(request, {
+      await bridge.sendTask(buildAgentPanelMessage(taskRequest.prompt, {
         ...taskContext,
         executionMode: taskExecutionMode
+      }, {
+        applicationTask: taskRequest.applicationTask
       }), {
         taskId,
         metadata: {
@@ -1994,6 +2050,7 @@ export function CowartAgentPanel({
         }
       })
       setInstruction('')
+      setSelectedQuickTask(null)
     } catch (error) {
       console.error(error)
       const message = error?.message || '无法发送任务，请稍后重试。'
@@ -2157,8 +2214,10 @@ export function CowartAgentPanel({
             </div>
             {isAvailable && (
               <div className="cowart-agent-quick-grid" aria-label="快捷任务">
-                {QUICK_TASKS.map(({ icon: Icon, kind, label, description, prompt }) => (
-                  <button data-kind={kind} key={label} onClick={() => applyQuickTask(prompt)} type="button">
+                {QUICK_TASKS.map((task) => {
+                  const { icon: Icon, kind, label, description } = task
+                  return (
+                  <button data-kind={kind} key={label} onClick={() => applyQuickTask(task)} type="button">
                     <Icon aria-hidden="true" size={15} />
                     <span className="cowart-agent-quick-copy">
                       <strong>{label}</strong>
@@ -2166,7 +2225,8 @@ export function CowartAgentPanel({
                     </span>
                     <ChevronRight aria-hidden="true" size={13} />
                   </button>
-                ))}
+                  )
+                })}
               </div>
             )}
           </section>
@@ -2281,7 +2341,7 @@ export function CowartAgentPanel({
             onClick={() => setExecutionMode((current) => (
               current === 'autonomous' ? 'guided' : 'autonomous'
             ))}
-            title="自动推进画布内安全步骤；不会自动批准 Codex 的受保护操作"
+            title="在当前工作区内连续执行；越权操作会自动停止"
             type="button"
           >
             <Zap aria-hidden="true" size={14} />
@@ -2289,14 +2349,27 @@ export function CowartAgentPanel({
               <strong>自动推进画布</strong>
               <small>
                 {executionMode === 'autonomous'
-                  ? '预演后继续完成可逆编排'
+                  ? '工作区内不再逐项确认'
                   : '预演后暂停，等你确认布局'}
               </small>
             </span>
             <i aria-hidden="true" />
           </button>
-          <small>不会自动批准命令、需 Codex 审批的文件修改、外部授权或敏感信息请求。</small>
+          <small>自动模式不弹审批；超出工作区、外部授权或敏感操作会停止并说明。</small>
         </div>
+        {selectedQuickTask && (
+          <div className="cowart-agent-selected-invocation" role="status">
+            <span><Workflow aria-hidden="true" size={13} />{selectedQuickTask.label}</span>
+            <button
+              aria-label={`取消${selectedQuickTask.label}`}
+              disabled={isSending}
+              onClick={() => setSelectedQuickTask(null)}
+              type="button"
+            >
+              <X aria-hidden="true" size={13} />
+            </button>
+          </div>
+        )}
         <label htmlFor="cowart-agent-instruction">告诉 Agent 你想完成什么</label>
         <textarea
           ref={textAreaRef}
@@ -2318,7 +2391,9 @@ export function CowartAgentPanel({
               : isAvailable
               ? isSending
                 ? 'Agent 执行期间，你可以先写下一条消息…'
-                : '例如：把互动影游需求先预演成完整页面，再拆成场景图、玩法循环和约束卡片…'
+                : selectedQuickTask
+                  ? `可补充${selectedQuickTask.label}的重点（选填）…`
+                  : '例如：把互动影游需求先预演成完整页面，再拆成场景图、玩法循环和约束卡片…'
               : workspaceSetup?.status === 'required'
                 ? '选择工作区后即可连接 Codex Agent'
                 : '按上方提示完成 Codex 设置'
@@ -2377,7 +2452,7 @@ export function CowartAgentPanel({
           ) : (
             <button
               aria-label="发送给 Codex Agent"
-              disabled={!instruction.trim() || !isAvailable}
+              disabled={(!instruction.trim() && !selectedQuickTask) || !isAvailable}
               type="submit"
             >
               <Send aria-hidden="true" size={16} />

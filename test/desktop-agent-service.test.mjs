@@ -37,8 +37,8 @@ class FakeCodexClient extends EventEmitter {
     return { thread: { id: threadId } }
   }
 
-  async startTurn(threadId, input) {
-    this.calls.push(['startTurn', threadId, input])
+  async startTurn(threadId, input, overrides = {}) {
+    this.calls.push(['startTurn', threadId, input, overrides])
     return { turn: { id: 'turn_1' } }
   }
 
@@ -174,32 +174,59 @@ test('YogurtAgentService starts and steers turns while returning acceptance only
   assert.equal(startThreadCall[1].sandbox, 'workspace-write')
 })
 
-test('YogurtAgentService injects a narrow fail-closed execution envelope without changing security policy', async () => {
+test('YogurtAgentService sends execution guidance as hidden application context and overrides approval policy per turn', async () => {
   const client = new FakeCodexClient()
   const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
 
   assert.equal(taskExecutionMode({ executionMode: 'autonomous' }), 'autonomous')
   assert.equal(taskExecutionMode({ executionMode: 'invalid' }), 'guided')
   assert.equal(taskExecutionMode('plain task'), 'guided')
-  assert.match(executionModeEnvelope('autonomous'), /Skip only the cowart-auto-compose composition-reference product checkpoint/)
-  assert.match(executionModeEnvelope('autonomous'), /never grants or auto-approves/)
+  assert.match(executionModeEnvelope('autonomous'), /non-interactive execution/)
+  assert.match(executionModeEnvelope('autonomous'), /approvalPolicy=never/)
 
-  await service.sendTask({ prompt: 'Compose this page.', executionMode: 'autonomous' })
+  await service.sendTask({
+    prompt: 'Compose this page.',
+    runtimeContext: 'Project: Yogurt AI\nSelected page: Page 1',
+    executionMode: 'autonomous'
+  })
   const startTurnCall = client.calls.find(([name]) => name === 'startTurn')
-  assert.match(startTurnCall[2], /^\[Yogurt AI execution mode: autonomous\]/)
-  assert.match(startTurnCall[2], /Compose this page\./)
+  assert.equal(startTurnCall[2], 'Compose this page.')
+  assert.equal(startTurnCall[3].approvalPolicy, 'never')
+  assert.deepEqual(Object.keys(startTurnCall[3].additionalContext), ['yogurt_ai_canvas'])
+  assert.equal(startTurnCall[3].additionalContext.yogurt_ai_canvas.kind, 'application')
+  assert.match(
+    startTurnCall[3].additionalContext.yogurt_ai_canvas.value,
+    /^\[Yogurt AI execution mode: autonomous\]/
+  )
+  assert.match(startTurnCall[3].additionalContext.yogurt_ai_canvas.value, /Selected page: Page 1/)
+  assert.match(
+    startTurnCall[3].additionalContext.yogurt_ai_canvas.value,
+    /Do not quote, reproduce, or summarize quick-task templates/
+  )
+  assert.equal(
+    startTurnCall[3].additionalContext.yogurt_ai_canvas.value.includes('Compose this page.'),
+    false
+  )
   const startThreadCall = client.calls.find(([name]) => name === 'startThread')
   assert.equal(startThreadCall[1].approvalPolicy, 'on-request')
   assert.equal(startThreadCall[1].sandbox, 'workspace-write')
 
-  const guidedClient = new FakeCodexClient()
-  const guidedService = new YogurtAgentService({ client: guidedClient, projectDir: 'C:\\workspace' })
-  await guidedService.sendTask({ prompt: 'Continue.', executionMode: 'unexpected' })
-  const guidedTurnCall = guidedClient.calls.find(([name]) => name === 'startTurn')
-  assert.match(guidedTurnCall[2], /^\[Yogurt AI execution mode: guided\]/)
+  client.emit('notification', {
+    method: 'turn/completed',
+    params: { threadId: 'thr_1', turn: { id: 'turn_1', status: 'completed' } }
+  })
+  await service.sendTask({ prompt: 'Continue.', executionMode: 'unexpected' })
+  const guidedTurnCall = client.calls.filter(([name]) => name === 'startTurn').at(-1)
+  assert.equal(guidedTurnCall[2], 'Continue.')
+  assert.equal(guidedTurnCall[3].approvalPolicy, 'on-request')
+  assert.equal(guidedTurnCall[3].additionalContext.yogurt_ai_canvas.kind, 'application')
+  assert.match(
+    guidedTurnCall[3].additionalContext.yogurt_ai_canvas.value,
+    /^\[Yogurt AI execution mode: guided\]/
+  )
 })
 
-test('autonomous canvas execution never auto-resolves protected approvals or MCP elicitations', async () => {
+test('autonomous canvas execution declines protected approvals and cancels MCP elicitations without surfacing a prompt', async () => {
   const client = new FakeCodexClient()
   const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
   const events = []
@@ -221,13 +248,88 @@ test('autonomous canvas execution never auto-resolves protected approvals or MCP
     method: 'mcpServer/elicitation/request',
     params: standardElicitationParams()
   })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  for (const requestId of ['autonomous-command', 'autonomous-file', 'autonomous-form']) {
+    client.emit('notification', {
+      method: 'serverRequest/resolved',
+      params: { threadId: 'thr_1', requestId }
+    })
+  }
+
+  assert.equal(
+    events.some(({ type }) => type.startsWith('approval.') || type.startsWith('elicitation.')),
+    false
+  )
+  assert.deepEqual(
+    client.calls.filter(([name]) => name === 'respondToApproval'),
+    [
+      ['respondToApproval', 'autonomous-command', 'decline'],
+      ['respondToApproval', 'autonomous-file', 'decline']
+    ]
+  )
+  assert.deepEqual(
+    client.calls.find(([name]) => name === 'respondToElicitation'),
+    ['respondToElicitation', 'autonomous-form', { action: 'cancel', content: null }]
+  )
+  assert.equal(service.getState().pendingElicitations, 0)
+})
+
+test('a stale turn completion does not disable autonomous request handling for the active turn', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  const events = []
+  service.on('event', (event) => events.push(event))
+  await service.sendTask({ prompt: 'Compose this page.', executionMode: 'autonomous' })
+
+  client.emit('notification', {
+    method: 'turn/completed',
+    params: { threadId: 'thr_old', turn: { id: 'turn_old', status: 'completed' } }
+  })
+  client.emit('serverRequest', {
+    requestId: 'active-command-after-stale-completion',
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: 'thr_1', turnId: 'turn_1', itemId: 'item:command', reason: 'Run a command' }
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(
+    client.calls.find((call) => call[0] === 'respondToApproval'),
+    ['respondToApproval', 'active-command-after-stale-completion', 'decline']
+  )
+  assert.equal(events.some(({ type }) => type === 'approval.requested'), false)
+  assert.equal(service.getState().turnId, 'turn_1')
+})
+
+test('guided canvas execution continues to surface protected approvals and MCP elicitations', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  const events = []
+  service.on('event', (event) => events.push(event))
+  await service.sendTask({ prompt: 'Compose this page.', executionMode: 'guided' })
+
+  client.emit('serverRequest', {
+    requestId: 'guided-command',
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: 'thr_1', turnId: 'turn_1', itemId: 'item:command', reason: 'Run a command' }
+  })
+  client.emit('serverRequest', {
+    requestId: 'guided-file',
+    method: 'item/fileChange/requestApproval',
+    params: { threadId: 'thr_1', turnId: 'turn_1', itemId: 'item:file', reason: 'Change a file' }
+  })
+  client.emit('serverRequest', {
+    requestId: 'guided-form',
+    method: 'mcpServer/elicitation/request',
+    params: standardElicitationParams()
+  })
 
   assert.deepEqual(
     events.filter(({ type }) => type === 'approval.requested').map(({ requestId }) => requestId),
-    ['autonomous-command', 'autonomous-file']
+    ['guided-command', 'guided-file']
   )
   assert.equal(
-    events.some(({ type, requestId }) => type === 'elicitation.requested' && requestId === 'autonomous-form'),
+    events.some(({ type, requestId }) => type === 'elicitation.requested' && requestId === 'guided-form'),
     true
   )
   assert.equal(client.calls.some(([name]) => name === 'respondToApproval'), false)

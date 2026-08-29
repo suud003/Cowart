@@ -43,8 +43,11 @@ export function estimateThinkingCardSize({ title = "", body = "", w, h } = {}) {
   const unitsPerLine = Math.max(8, contentWidth / 18);
   const titleLines = estimatedLines(title, unitsPerLine);
   const bodyLines = estimatedLines(body, unitsPerLine);
-  const height = 40 + titleLines * 27 + bodyLines * 25 + (title && body ? 18 : 0);
-  return { w: width, h: clamp(height, 128, MAX_CARD_HEIGHT) };
+  // tldraw's draw font has a larger real line box than its nominal font size.
+  // Keep an explicit bottom safety band so the last body line never clips at
+  // common Windows font-rendering scales.
+  const height = 64 + titleLines * 28 + bodyLines * 27 + (title && body ? 18 : 0);
+  return { w: width, h: clamp(height, 152, MAX_CARD_HEIGHT) };
 }
 
 export function layoutThinkingGraph({
@@ -143,16 +146,40 @@ export function layoutThinkingGraph({
     }
   }
 
-  const layerMap = new Map();
-  components.forEach((component, componentIndex) => {
-    const layer = layerMap.get(levels.get(componentIndex)) ?? [];
-    layer.push(...component);
-    layerMap.set(levels.get(componentIndex), layer);
-  });
   const nodeById = new Map(validNodes.map((node) => [node.id, node]));
-  const layers = [...layerMap.entries()]
+  const componentPredecessors = new Map(components.map((_component, index) => [index, []]));
+  for (const [source, targets] of componentEdges) {
+    for (const target of targets) componentPredecessors.get(target).push(source);
+  }
+  const componentLayerMap = new Map();
+  components.forEach((_component, componentIndex) => {
+    const layer = componentLayerMap.get(levels.get(componentIndex)) ?? [];
+    layer.push(componentIndex);
+    componentLayerMap.set(levels.get(componentIndex), layer);
+  });
+  const componentRanks = new Map();
+  const layers = [...componentLayerMap.entries()]
     .sort(([first], [second]) => first - second)
-    .map(([, ids]) => ids.sort((first, second) => order.get(first) - order.get(second)).map((id) => nodeById.get(id)));
+    .map(([, componentIndexes]) => {
+      componentIndexes.sort((first, second) => {
+        const barycenter = (componentIndex) => {
+          const ranks = componentPredecessors.get(componentIndex)
+            .map((predecessor) => componentRanks.get(predecessor))
+            .filter(Number.isFinite);
+          return ranks.length > 0
+            ? ranks.reduce((total, rank) => total + rank, 0) / ranks.length
+            : Number.POSITIVE_INFINITY;
+        };
+        return (
+          barycenter(first) - barycenter(second) ||
+          componentOrder.get(first) - componentOrder.get(second)
+        );
+      });
+      componentIndexes.forEach((componentIndex, index) => componentRanks.set(componentIndex, index));
+      return componentIndexes.flatMap((componentIndex) =>
+        components[componentIndex].map((id) => nodeById.get(id)),
+      );
+    });
   const positions = new Map();
 
   if (readingOrder === "center-out") {

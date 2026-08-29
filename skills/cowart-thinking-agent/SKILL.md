@@ -17,7 +17,7 @@ Treat the canvas as shared external memory. Preserve the user's materials and ch
    - source-grounded synthesis;
    - questions, uncertainty, and model inference.
 4. Design one local operation batch. Prefer 3–8 clear cards at a time. Keep evidence beside its conclusion and label relationships with meaningful verbs.
-5. Call `apply_cowart_thinking_operations` with `dryRun: true` and the current revision.
+5. Call `apply_cowart_safe_thinking_operations` with `dryRun: true` and the current revision. This default path cannot delete shapes or enable edits to user-authored content.
 6. Check that the preview touches only intended shapes. Apply the identical operation list against the preview's `baseRevision`.
 7. Report the interpreted intent, changes, evidence used, inference introduced, and returned operation ID.
 
@@ -53,7 +53,7 @@ Treat the submitted screenshot as authoritative visual intent and the compact co
 - Handwritten or typed annotation: treat it as an instruction attached to the nearest marked object.
 - Repeated color or boundary: infer a cluster only when the grouping is visually clear.
 
-If two plausible interpretations would lead to materially different edits, ask one short question before applying. Otherwise preview and apply the smallest local change. Set `allowUserAuthoredEdits: true` only when the user explicitly selected or marked that content for modification.
+If two plausible interpretations would lead to materially different edits, ask one short question before applying. Otherwise preview and apply the smallest local change. Use the destructive `apply_cowart_thinking_operations` entry point only after the user explicitly authorizes a `delete_shape` operation or modification of selected/marked user-authored content. Set `allowUserAuthoredEdits: true` only for that explicitly authorized destructive call; never pass it to `apply_cowart_safe_thinking_operations` and never infer the authorization from autonomous mode.
 
 ## Undo
 

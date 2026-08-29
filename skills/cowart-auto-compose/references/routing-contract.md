@@ -85,7 +85,7 @@ Every executable slot has exactly one bounded `contentSpec`. The same spec drive
 - Slot rectangles may not overlap for any reason. Remove the old decorative-overlap exception. Distinct slots must keep the declared gutter on at least one separating axis.
 - Every slot has `padding >= 24`; its usable content rectangle is the slot rectangle inset by that padding.
 - Use `fit: "cover"` or `"contain"` for visual slots and `fit: "native"` for diagram and evidence slots.
-- A diagram slot should be at least 480 x 320; an evidence slot at least 300 x 180; a visual slot at least 300 x 220. Split or summarize content before preview when it cannot fit.
+- A diagram slot should be at least 480 x 320; an evidence slot at least 300 x 180; a visual slot at least 300 x 220. The validator also computes native node capacity from the inset width, height, minimum card size, and safe gap; a nominally valid node count is still rejected when the actual slot cannot hold it. Split or summarize content before preview when it cannot fit.
 - Unique numeric `order` values define the whole-page reading order.
 - Canonicalize the normalized validation payload `{ "schemaVersion": "3", "pagePlan": ... }`, including all `contentSpec` values, and compute SHA-256 over its UTF-8 bytes. Store all 64 lowercase hexadecimal characters as `pagePlanDigest`. Any geometry or content-spec change invalidates the prior preview and guided approval.
 
@@ -170,7 +170,7 @@ Create only regions required by the plan:
 
 Map the 1600 x 1000 page plan beside the source selection only after finding a page origin with at least 64 canvas units of clearance from existing unmanaged shapes. The same mapped origin applies to every slot.
 
-Prepare native diagram and evidence operations against the frozen context. Use one dry-run batch when possible. Before apply, inspect the real returned shape, label, and relation bounds:
+Prepare native diagram and evidence operations against the frozen context. Diagram batches use `layoutEngine: "html-line-svg"`, balanced fixed-slot fitting, and no hand-authored node coordinates. Use one safe dry-run batch when possible. Before apply, require a valid `layoutReport` with an unchanged layout digest and inspect the real returned shape, label, port, and relation bounds:
 
 - every root and descendant stays inside its slot's inset content rectangle;
 - unrelated objects and text do not overlap;
@@ -197,7 +197,7 @@ Version 1 concept references and version 2 layout references are legacy. Leave t
 
 For native outputs, use their existing typed semantic and source fields:
 
-- diagrams set `semanticDiagram.diagramId` to `ac-diagram:<compositionHash>:<blockHash>`, with stable object/relation IDs and source mappings;
+- diagrams set `semanticDiagram.diagramId` to `ac-diagram:<compositionHash>:<blockHash>`, `layoutEngine` to `html-line-svg`, `layoutMode` to `balanced`, `layoutFit` to `fixed`, with stable object/relation IDs and source mappings;
 - evidence cards use `ac-evidence:<compositionHash>:<blockHash>` and `source.id: "ac-source:<compositionHash>:<blockHash>"`.
 
 For each evidence card, order provenance deterministically: directly cited IDs first, then remaining mapped IDs in frozen source order, deduplicated by first occurrence. Put at most 100 canvas IDs in `source.yogurtShapeIds` and 50 identifiers in `sourceRefs`. For overflow, append `Provenance overflow: <field> kept <limit>/<total>; omitted <count>; sha256:<12-hex-digest>.`

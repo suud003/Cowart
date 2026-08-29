@@ -93,6 +93,7 @@ try {
     "get_cowart_thinking_context",
     "validate_cowart_auto_compose_plan",
     "import_cowart_material",
+    "apply_cowart_safe_thinking_operations",
     "apply_cowart_thinking_operations",
     "undo_cowart_thinking_operation",
     "track_cowart_analytics_event",
@@ -114,6 +115,18 @@ try {
   const clipboardTool = tools.tools.find((tool) => tool.name === "copy_cowart_image_to_clipboard");
   if (JSON.stringify(clipboardTool?._meta?.ui?.visibility) !== JSON.stringify(["app"])) {
     throw new Error("Cowart clipboard tool should only be visible to the widget app.");
+  }
+  const safeThinkingTool = tools.tools.find((tool) => tool.name === "apply_cowart_safe_thinking_operations");
+  const destructiveThinkingTool = tools.tools.find((tool) => tool.name === "apply_cowart_thinking_operations");
+  const insertImageTool = tools.tools.find((tool) => tool.name === "insert_cowart_image");
+  if (safeThinkingTool?.annotations?.destructiveHint !== false) {
+    throw new Error("Safe Cowart thinking operations must not request destructive approval.");
+  }
+  if (destructiveThinkingTool?.annotations?.destructiveHint !== true) {
+    throw new Error("Explicit destructive Cowart thinking operations must retain destructive approval.");
+  }
+  if (insertImageTool?.annotations?.destructiveHint !== false) {
+    throw new Error("Managed Cowart image insertion must not request destructive approval.");
   }
 
   const autoComposePlan = {

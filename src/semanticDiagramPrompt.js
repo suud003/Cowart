@@ -72,15 +72,15 @@ export function buildSemanticDiagramPrompt({
     '4. 原始画布对象必须保持不动。新图保留 source shape IDs，并区分用户原话、事实、推断、假设与待确认问题。',
     '',
     '绘图与布局要求：',
-    '1. 默认使用 apply_cowart_thinking_operations 生成可单独选择和编辑的 Yogurt 原生 cards、purpose:"semantic" 的 zones 与 bound relations；不要因为它是流程、架构、状态或对比图就自动改成 PRD 页面或 HTML。',
-    '2. 顶层传 semanticDiagram：version:"1"、稳定 diagramId、teachingClaim、readingOrder、diagramType、sourceShapeIds/sourceIds、完整 objectCount/relationCount，以及可用时的 specDigest。每个节点/分区传稳定 semantic.id、type、state、origin、order 与 sourceShapeIds；分区标题必须让 teaching claim 在画布上直接可见。',
+    '1. 默认使用 apply_cowart_safe_thinking_operations 生成可单独选择和编辑的 Yogurt 原生 cards、purpose:"semantic" 的 zones 与 bound relations；不要因为它是流程、架构、状态或对比图就自动改成 PRD 页面或 HTML。',
+    '2. 顶层传 semanticDiagram：version:"1"、稳定 diagramId、teachingClaim、readingOrder、diagramType、layoutEngine:"html-line-svg"、layoutMode:"balanced"、layoutFit、sourceShapeIds/sourceIds、完整 objectCount/relationCount，以及可用时的 specDigest。保持分区标题简短；如需显示核心判断，用可换行的 claim card。每个节点/分区传稳定 semantic.id、type、state、origin、order 与 sourceShapeIds。',
     '3. 主流程关系使用 direction:"forward" + path:"primary"；备选路径使用 path:"alternative" 并写清 label/payload；双向同步使用 direction:"bidirectional"；无向关联使用 direction:"none"。每条关系同时传稳定 semanticId、origin、sourceShapeIds/sourceIds 与 lane；包含关系用 parentZoneId 表达，并列对象靠同层布局表达，不添加伪箭头。',
     '4. 选择与 teaching claim 匹配的 readingOrder。先分层与分组，再对齐同级节点并留出安全间距；平行关系使用不同 lane，连线必须绑定源/目标边界，禁止穿过无关文字或节点。',
     '5. 只有用户明确要求 SVG，或原生对象无法无歧义表达精确端口、泳道、GUI/LUI 或密集避障几何时，才生成单文件 HTML 内联 SVG；它仍必须作为一个独立图块插入当前 Yogurt 画布，不能加入 interaction-prd.json。',
     '6. SVG 路线必须响应式、可访问且无脚本：viewBox、role=img、唯一 title/desc/marker ID、aria-labelledby、SVG text、non-scaling-stroke；所有可见坐标直接写入 SVG，禁止对可见分组/节点/路径/文字使用 transform；viewBox 必须覆盖节点、文字、描边、marker 与直线/贝塞尔曲线真实极值，并在四周保留不少于 viewBox 较短边 2% 的安全区。禁止 script、foreignObject、远程资源、事件属性、渐变和阴影，并保存 data-cowart-diagram-spec / data-cowart-diagram-prompt。',
     '',
     '插入与验证：',
-    '1. 原生路线先用当前 revision + dryRun:true 调用 apply_cowart_thinking_operations，检查布局、语义 ID、关系样式与影响范围，再用完全相同的 semanticDiagram 和 operations 配合返回的 baseRevision 正式应用。',
+    '1. 原生路线先用当前 revision + dryRun:true 调用 apply_cowart_safe_thinking_operations，要求 layoutReport.engine 为 html-line-svg、valid 为 true、collisions/outOfBounds 为空，再用完全相同的 semanticDiagram 和 operations 配合返回的 baseRevision 正式应用，并核对 layoutDigest 不变。',
     hasSelection
       ? `2. 若 revision 已变化，重新读取上下文并重新规划，禁止强行落图。原始来源对象必须保持不动，新图放在冻结选区 (${shapeIds[0]}) 旁的空白位置。`
       : `2. 若 revision 已变化，重新读取上下文并重新规划，禁止强行落图。原始来源对象必须保持不动，新图放在当前页面 ${pageId} 的空白位置。`,

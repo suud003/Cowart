@@ -247,6 +247,39 @@ test("enforces slot, visual, diagram, relation, and evidence capacities", async 
     }));
     assert.throws(() => validateAutoComposePagePlan(plan), /more than 10 relations/);
   });
+  await t.test("diagram slot geometry", () => {
+    const plan = validPlan();
+    const slot = plan.pagePlan.slots[1];
+    slot.rect = { x: 548, y: 24, w: 480, h: 320 };
+    slot.contentSpec.objects = Array.from({ length: 8 }, (_, index) => ({
+      id: `node-${index}`,
+      label: `Node ${index}`,
+    }));
+    slot.contentSpec.relations = [];
+    assert.throws(
+      () => validateAutoComposePagePlan(plan),
+      /cannot fit the native layout.*400x208 inset.*split the diagram or enlarge its slot/,
+    );
+  });
+  await t.test("wrapped native fan-out geometry", () => {
+    const plan = validPlan();
+    const slot = plan.pagePlan.slots[1];
+    slot.contentSpec.readingOrder = "top-to-bottom";
+    slot.contentSpec.objects = ["hub", "a", "b", "c", "d", "e"].map((id) => ({
+      id,
+      label: id.toUpperCase(),
+    }));
+    slot.contentSpec.relations = ["a", "b", "c", "d", "e"].map((to) => ({
+      id: `hub-${to}`,
+      from: "hub",
+      to,
+      direction: "forward",
+      path: "primary",
+    }));
+
+    const normalized = validateAutoComposePagePlan(plan);
+    assert.equal(normalized.pagePlan.slots[1].contentSpec.objects.length, 6);
+  });
   await t.test("evidence cards", () => {
     const plan = validPlan();
     const spec = plan.pagePlan.slots[2].contentSpec;

@@ -1,11 +1,16 @@
 import { createHash } from "node:crypto";
 
+import { layoutSemanticGraph } from "./semantic-layout.mjs";
+import { estimateThinkingCardSize, estimateThinkingRelationGap } from "./thinking-layout.mjs";
+
 const PAGE_WIDTH = 1600;
 const PAGE_HEIGHT = 1000;
 const MIN_SLOTS = 2;
 const MAX_SLOTS = 12;
 const MAX_VISUAL_SLOTS = 6;
 const MIN_SPACING = 24;
+const NATIVE_ZONE_PADDING = 40;
+const NATIVE_ZONE_TITLE_BAND = 32;
 
 const ROUTES = new Set(["visual", "diagram", "evidence"]);
 const FITS = {
@@ -305,6 +310,40 @@ function normalizeContentSpec(value, route, path) {
   return normalizeEvidenceSpec(value, path);
 }
 
+function nativeDiagramPreflight(contentSpec, rect) {
+  const nodes = contentSpec.objects.map((object) => ({
+    id: object.id,
+    ...estimateThinkingCardSize({ title: object.label }),
+  }));
+  const edges = contentSpec.relations.flatMap((relation) => {
+    if (relation.direction === "none") return [];
+    if (relation.direction === "bidirectional") {
+      return [
+        { from: relation.from, to: relation.to },
+        { from: relation.to, to: relation.from },
+      ];
+    }
+    return [{ from: relation.from, to: relation.to }];
+  });
+  const labels = contentSpec.relations.map(({ label }) => label ?? "").filter((label) => label.trim());
+  const relationGap = labels.length > 0
+    ? Math.max(...labels.map((label) => estimateThinkingRelationGap(label)))
+    : undefined;
+  return layoutSemanticGraph({
+    nodes,
+    edges,
+    targetRect: {
+      x: NATIVE_ZONE_PADDING,
+      y: NATIVE_ZONE_PADDING + NATIVE_ZONE_TITLE_BAND,
+      w: Math.max(1, rect.w - NATIVE_ZONE_PADDING * 2),
+      h: Math.max(1, rect.h - NATIVE_ZONE_PADDING * 2 - NATIVE_ZONE_TITLE_BAND),
+    },
+    readingOrder: contentSpec.readingOrder,
+    ...(relationGap ? { horizontalGap: relationGap, verticalGap: relationGap } : {}),
+    maxCenterScale: 2.15,
+  });
+}
+
 function normalizeRect(value, path, padding) {
   const rect = requireObject(value, path, new Set(["x", "y", "w", "h"]));
   const x = requireInteger(rect.x, `${path}.x`, { min: 0, max: PAGE_WIDTH });
@@ -351,6 +390,19 @@ function normalizeSlot(value, index, padding) {
   const blockId = requireString(slot.blockId, `${path}.blockId`, { max: 160, identifier: true });
   if (!SLOT_ID_PATTERN.test(id)) fail(`${path}.id`, 'must match "slot:<12-lowercase-hex>".');
   if (!BLOCK_ID_PATTERN.test(blockId)) fail(`${path}.blockId`, 'must match "block:<12-lowercase-hex>".');
+  const contentSpec = normalizeContentSpec(slot.contentSpec, slot.route, `${path}.contentSpec`);
+  if (slot.route === "diagram") {
+    const layout = nativeDiagramPreflight(contentSpec, rect);
+    if (!layout.valid) {
+      fail(
+        `${path}.contentSpec.objects`,
+        `cannot fit the native layout inside the fixed ${layout.diagramBounds.w}x${layout.diagramBounds.h} ` +
+        `diagram bounds for the ${rect.w - NATIVE_ZONE_PADDING * 2}x` +
+        `${rect.h - NATIVE_ZONE_PADDING * 2 - NATIVE_ZONE_TITLE_BAND} inset; ` +
+        "split the diagram or enlarge its slot.",
+      );
+    }
+  }
   return {
     id,
     blockId,
@@ -360,7 +412,7 @@ function normalizeSlot(value, index, padding) {
     padding: slotPadding,
     order: requireInteger(slot.order, `${path}.order`, { min: 1, max: MAX_SLOTS }),
     fit: slot.fit,
-    contentSpec: normalizeContentSpec(slot.contentSpec, slot.route, `${path}.contentSpec`),
+    contentSpec,
   };
 }
 

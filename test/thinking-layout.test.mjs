@@ -528,6 +528,298 @@ test("routes a semantic skip edge outside unrelated cards", () => {
   assert.deepEqual(skip.meta.cowartThinkingObstacleRoute.obstacleShapeIds, [middle.id]);
 });
 
+test("fits an html-line-svg semantic chain to its target frame instead of clustering at the top left", () => {
+  const requestedZone = { x: 120, y: 80, w: 1_600, h: 500 };
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({
+      diagramId: "ac-diagram:111111111111:222222222222",
+      layoutEngine: "html-line-svg",
+      layoutMode: "balanced",
+      layoutFit: "fixed",
+    }),
+    operations: [
+      { type: "create_zone", key: "zone", title: "Core loop", purpose: "semantic", ...requestedZone, semantic: { id: "object:zone" } },
+      { type: "create_card", key: "a", title: "Observe", parentZoneId: "zone", semantic: { id: "object:a", order: 1 } },
+      { type: "create_card", key: "b", title: "Decide", parentZoneId: "zone", semantic: { id: "object:b", order: 2 } },
+      { type: "create_card", key: "c", title: "Act", parentZoneId: "zone", semantic: { id: "object:c", order: 3 } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+      { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
+    ],
+  });
+  const zone = result.snapshot.store[result.references.zone];
+  const cards = ["a", "b", "c"].map((key) => result.snapshot.store[result.references[key]]);
+  const pageBounds = cards.map((card) => ({
+    x: zone.x + card.x,
+    y: zone.y + card.y,
+    w: card.props.w,
+    h: card.props.h,
+  }));
+  const left = Math.min(...pageBounds.map(({ x }) => x));
+  const right = Math.max(...pageBounds.map(({ x, w }) => x + w));
+  const top = Math.min(...pageBounds.map(({ y }) => y));
+  const bottom = Math.max(...pageBounds.map(({ y, h }) => y + h));
+
+  assert.equal(zone.meta.cowartSemanticLayout.engine, "html-line-svg");
+  assert.equal(zone.meta.cowartSemanticLayout.valid, true);
+  assert.equal(result.layoutReport.engine, "html-line-svg");
+  assert.equal(result.layoutReport.valid, true);
+  assert.deepEqual(result.layoutReport.collisions, []);
+  assert.deepEqual(result.layoutReport.outOfBounds, []);
+  assert.match(result.layoutReport.layoutDigest, /^[0-9a-f]{64}$/u);
+  assert.ok(right - left > 1_150, "balanced layout should use the available horizontal slot");
+  assert.ok(Math.abs((left + right) / 2 - (requestedZone.x + requestedZone.w / 2)) < 1);
+  const requestedContentCenterY = requestedZone.y + 72 + (requestedZone.h - 112) / 2;
+  assert.ok(Math.abs((top + bottom) / 2 - requestedContentCenterY) < 1);
+  assert.deepEqual(
+    { x: zone.x, y: zone.y, w: zone.props.w, h: zone.props.h },
+    requestedZone,
+    "a fixed semantic slot must retain its validated frame",
+  );
+});
+
+test("allocates distinct boundary ports for semantic fan-out", () => {
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:fan-out" }),
+    operations: [
+      { type: "create_card", key: "hub", title: "Hub", semantic: { id: "object:hub", order: 1 } },
+      ...["top", "middle", "bottom"].map((key, index) => ({
+        type: "create_card",
+        key,
+        title: key,
+        semantic: { id: `object:${key}`, order: index + 2 },
+      })),
+      ...["top", "middle", "bottom"].map((key) => ({
+        type: "create_relation",
+        key: `hub-${key}`,
+        semanticId: `relation:hub-${key}`,
+        from: "hub",
+        to: key,
+      })),
+    ],
+  });
+  const startFractions = ["top", "middle", "bottom"].map((key) => {
+    const relationId = result.references[`hub-${key}`];
+    return relationBindings(result.snapshot, relationId)
+      .find((binding) => binding.props.terminal === "start").props.normalizedAnchor.y;
+  });
+  assert.equal(new Set(startFractions).size, 3);
+  assert.deepEqual([...startFractions].sort((a, b) => a - b), [0.22, 0.5, 0.78]);
+});
+
+test("rejects overlapping explicit semantic nodes instead of committing tangled geometry", () => {
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({ diagramId: "native:explicit-collision" }),
+      operations: [
+        { type: "create_zone", key: "zone", title: "Collision", purpose: "semantic", w: 900, h: 600, semantic: { id: "object:zone" } },
+        { type: "create_card", key: "a", title: "A", parentZoneId: "zone", x: 180, y: 180, semantic: { id: "object:a" } },
+        { type: "create_card", key: "b", title: "B", parentZoneId: "zone", x: 180, y: 180, semantic: { id: "object:b" } },
+      ],
+    }),
+    /SEMANTIC_GEOMETRY.*collisions: object:a\/object:b/,
+  );
+});
+
+test("rejects fixed semantic slot overflow instead of silently growing its frame", () => {
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({
+        diagramId: "ac-diagram:aaaaaaaaaaaa:bbbbbbbbbbbb",
+        layoutFit: "fixed",
+      }),
+      operations: [
+        { type: "create_zone", key: "zone", title: "Too dense", purpose: "semantic", w: 480, h: 320, semantic: { id: "object:zone" } },
+        ...["a", "b", "c", "d"].map((key, index) => ({
+          type: "create_card",
+          key,
+          title: key.toUpperCase(),
+          parentZoneId: "zone",
+          semantic: { id: `object:${key}`, order: index + 1 },
+        })),
+        { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+        { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
+        { type: "create_relation", key: "c-d", semanticId: "relation:c-d", from: "c", to: "d" },
+      ],
+    }),
+    /LAYOUT_CAPACITY.*cannot fit its fixed/,
+  );
+});
+
+test("keeps fixed frames immutable for explicit, anchored, and incremental overflow", () => {
+  const diagram = semanticDiagram({
+    diagramId: "ac-diagram:dddddddddddd:eeeeeeeeeeee",
+    layoutEngine: "html-line-svg",
+    layoutMode: "balanced",
+    layoutFit: "fixed",
+  });
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: diagram,
+      operations: [
+        { type: "create_zone", key: "zone", title: "Fixed", purpose: "semantic", x: 100, y: 100, w: 480, h: 320, semantic: { id: "object:zone" } },
+        { type: "create_card", key: "outside", title: "Outside", parentZoneId: "zone", x: 1_000, y: 700, semantic: { id: "object:outside" } },
+      ],
+    }),
+    /SEMANTIC_GEOMETRY.*out of bounds: object:outside/,
+  );
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: diagram,
+      operations: [
+        { type: "create_zone", key: "anchor-zone", title: "Fixed", purpose: "semantic", x: 100, y: 100, w: 480, h: 320, semantic: { id: "object:anchor-zone" } },
+        { type: "create_card", key: "anchor", title: "Anchor", parentZoneId: "anchor-zone", x: 160, y: 200, semantic: { id: "object:anchor" } },
+        { type: "create_card", key: "anchored", title: "Anchored", parentZoneId: "anchor-zone", anchorId: "anchor", gap: 600, semantic: { id: "object:anchored" } },
+      ],
+    }),
+    /SEMANTIC_GEOMETRY.*out of bounds: object:anchored/,
+  );
+
+  const initial = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: diagram,
+    operations: [
+      { type: "create_zone", key: "incremental-zone", title: "Fixed", purpose: "semantic", w: 900, h: 360, semantic: { id: "object:incremental-zone" } },
+      { type: "create_card", key: "a", title: "A", parentZoneId: "incremental-zone", semantic: { id: "object:a", order: 1 } },
+      { type: "create_card", key: "b", title: "B", parentZoneId: "incremental-zone", semantic: { id: "object:b", order: 2 } },
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+    ],
+  });
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: initial.snapshot,
+      pageId: "page:test",
+      semanticDiagram: diagram,
+      operations: [
+        { type: "create_card", key: "c", title: "C", parentZoneId: initial.references["incremental-zone"], semantic: { id: "object:c", order: 3 } },
+        { type: "create_card", key: "d", title: "D", parentZoneId: initial.references["incremental-zone"], semantic: { id: "object:d", order: 4 } },
+        { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: initial.references.b, to: "c" },
+        { type: "create_relation", key: "c-d", semanticId: "relation:c-d", from: "c", to: "d" },
+      ],
+    }),
+    /SEMANTIC_GEOMETRY.*out of bounds: object:c, object:d/,
+  );
+  const unchangedZone = initial.snapshot.store[initial.references["incremental-zone"]];
+  assert.deepEqual({ w: unchangedZone.props.w, h: unchangedZone.props.h }, { w: 900, h: 360 });
+});
+
+test("rejects relation crossings and relation labels over unrelated nodes", () => {
+  const crossingDiagram = semanticDiagram({ diagramId: "native:crossing-report" });
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: crossingDiagram,
+      operations: [
+        { type: "create_zone", key: "zone", title: "Crossing", purpose: "semantic", w: 1_200, h: 800, semantic: { id: "object:zone" } },
+        { type: "create_card", key: "a", title: "A", parentZoneId: "zone", x: 160, y: 180, semantic: { id: "object:a" } },
+        { type: "create_card", key: "b", title: "B", parentZoneId: "zone", x: 160, y: 500, semantic: { id: "object:b" } },
+        { type: "create_card", key: "c", title: "C", parentZoneId: "zone", x: 800, y: 180, semantic: { id: "object:c" } },
+        { type: "create_card", key: "d", title: "D", parentZoneId: "zone", x: 800, y: 500, semantic: { id: "object:d" } },
+        { type: "create_relation", key: "a-d", semanticId: "relation:a-d", from: "a", to: "d" },
+        { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
+      ],
+    }),
+    /SEMANTIC_GEOMETRY.*relation:a-d\/relation:b-c/,
+  );
+
+  const multilineLabel = Array.from({ length: 10 }, (_, index) => `retry condition ${index + 1}`).join("\n");
+  assert.throws(
+    () => applyThinkingOperationsToSnapshot({
+      snapshot: emptySnapshot(),
+      pageId: "page:test",
+      semanticDiagram: semanticDiagram({ diagramId: "native:label-node-report" }),
+      operations: [
+        { type: "create_zone", key: "zone", title: "Label", purpose: "semantic", w: 1_200, h: 800, semantic: { id: "object:zone" } },
+        { type: "create_card", key: "loop", title: "Loop", parentZoneId: "zone", x: 300, y: 300, semantic: { id: "object:loop" } },
+        { type: "create_card", key: "peer", title: "Peer", parentZoneId: "zone", x: 520, y: 300, semantic: { id: "object:peer" } },
+        { type: "create_relation", key: "loop-relation", semanticId: "relation:loop", from: "loop", to: "loop", label: multilineLabel },
+      ],
+    }),
+    /SEMANTIC_GEOMETRY.*relation:loop\/object:peer/,
+  );
+});
+
+test("keeps keyless parallel relation ports and layout digests deterministic", () => {
+  const diagram = semanticDiagram({ diagramId: "native:keyless-parallel" });
+  const operations = [
+    { type: "create_zone", key: "zone", title: "Parallel", purpose: "semantic", w: 1_000, h: 500, semantic: { id: "object:zone" } },
+    { type: "create_card", key: "a", title: "A", parentZoneId: "zone", semantic: { id: "object:a", order: 1 } },
+    { type: "create_card", key: "b", title: "B", parentZoneId: "zone", semantic: { id: "object:b", order: 2 } },
+    { type: "create_relation", semanticId: "relation:first", from: "a", to: "b" },
+    { type: "create_relation", semanticId: "relation:second", from: "a", to: "b" },
+  ];
+  const first = applyThinkingOperationsToSnapshot({ snapshot: emptySnapshot(), pageId: "page:test", semanticDiagram: diagram, operations });
+  const second = applyThinkingOperationsToSnapshot({ snapshot: emptySnapshot(), pageId: "page:test", semanticDiagram: diagram, operations });
+  const ports = (result) => result.layoutReport.relations.map(({ semanticId, ports: relationPorts }) => ({
+    semanticId,
+    ports: relationPorts,
+  }));
+
+  assert.equal(first.layoutReport.layoutDigest, second.layoutReport.layoutDigest);
+  assert.deepEqual(ports(first), ports(second));
+});
+
+test("lays SCC cycles and wide fan-outs inside their unchanged fixed frames", () => {
+  const cycleDiagram = semanticDiagram({
+    diagramId: "ac-diagram:aaaaaaaaaaaa:cyclecycle00",
+    layoutFit: "fixed",
+  });
+  const cycle = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: cycleDiagram,
+    operations: [
+      { type: "create_zone", key: "zone", title: "Cycle", purpose: "semantic", w: 900, h: 360, semantic: { id: "object:zone" } },
+      ...["a", "b", "c"].map((key, index) => ({ type: "create_card", key, title: key.toUpperCase(), parentZoneId: "zone", semantic: { id: `object:${key}`, order: index + 1 } })),
+      { type: "create_relation", key: "a-b", semanticId: "relation:a-b", from: "a", to: "b" },
+      { type: "create_relation", key: "b-c", semanticId: "relation:b-c", from: "b", to: "c" },
+      { type: "create_relation", key: "c-a", semanticId: "relation:c-a", from: "c", to: "a" },
+    ],
+  });
+  const cycleZone = cycle.snapshot.store[cycle.references.zone];
+  const cyclePositions = ["a", "b", "c"].map((key) => cycle.snapshot.store[cycle.references[key]]);
+  assert.deepEqual({ w: cycleZone.props.w, h: cycleZone.props.h }, { w: 900, h: 360 });
+  assert.ok(new Set(cyclePositions.map(({ x }) => x)).size > 1);
+  assert.ok(new Set(cyclePositions.map(({ y }) => y)).size > 1);
+  assert.equal(cycle.layoutReport.valid, true);
+
+  const fanoutDiagram = semanticDiagram({
+    diagramId: "ac-diagram:aaaaaaaaaaaa:fanoutfanout",
+    readingOrder: "top-to-bottom",
+    layoutFit: "fixed",
+  });
+  const fanout = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: fanoutDiagram,
+    operations: [
+      { type: "create_zone", key: "zone", title: "Fan-out", purpose: "semantic", w: 650, h: 600, semantic: { id: "object:zone" } },
+      ...["hub", "a", "b", "c", "d", "e"].map((key, index) => ({ type: "create_card", key, title: key.toUpperCase(), parentZoneId: "zone", semantic: { id: `object:${key}`, order: index + 1 } })),
+      ...["a", "b", "c", "d", "e"].map((to) => ({ type: "create_relation", key: `hub-${to}`, semanticId: `relation:hub-${to}`, from: "hub", to })),
+    ],
+  });
+  const fanoutZone = fanout.snapshot.store[fanout.references.zone];
+  const peerRows = new Set(["a", "b", "c", "d", "e"].map((key) => fanout.snapshot.store[fanout.references[key]].y));
+  assert.deepEqual({ w: fanoutZone.props.w, h: fanoutZone.props.h }, { w: 650, h: 600 });
+  assert.ok(peerRows.size > 1);
+  assert.equal(fanout.layoutReport.valid, true);
+  assert.deepEqual(fanout.layoutReport.collisions, []);
+  assert.deepEqual(fanout.layoutReport.outOfBounds, []);
+});
+
 test("expands a semantic zone around obstacle-routed arcs and relation labels", () => {
   const initialZone = { x: 100, y: 100, w: 340, h: 1_500 };
   const result = applyThinkingOperationsToSnapshot({
@@ -798,7 +1090,7 @@ test("uses rebound arrow bindings for context, refresh, and deletion cleanup", (
   assert.equal(relationBindings(withoutBoundTarget.snapshot, relationId).length, 0);
 });
 
-test("keeps semantic claims visible and allows stable relation replacement in one batch", () => {
+test("keeps semantic claims in metadata without stretching frame titles and allows stable relation replacement", () => {
   const created = applyThinkingOperationsToSnapshot({
     snapshot: emptySnapshot(),
     pageId: "page:test",
@@ -815,10 +1107,9 @@ test("keeps semantic claims visible and allows stable relation replacement in on
     pageId: "page:test",
     operations: [{ type: "update_zone", id: created.references.zone, title: "Renamed" }],
   });
-  assert.equal(
-    updatedZone.snapshot.store[created.references.zone].props.name,
-    "Renamed｜核心判断：The claim stays visible.",
-  );
+  const renamedZone = updatedZone.snapshot.store[created.references.zone];
+  assert.equal(renamedZone.props.name, "Renamed");
+  assert.equal(renamedZone.meta.cowartSemanticDiagram.teachingClaim, "The claim stays visible.");
   assert.throws(
     () => applyThinkingOperationsToSnapshot({
       snapshot: updatedZone.snapshot,
