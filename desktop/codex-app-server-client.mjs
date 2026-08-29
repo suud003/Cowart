@@ -275,6 +275,17 @@ export class CodexAppServerClient extends EventEmitter {
   }
 
   startTurn(threadId, input, overrides = {}) {
+    if (
+      isRecord(overrides) &&
+      Object.prototype.hasOwnProperty.call(overrides, 'additionalContext') &&
+      !this.#experimentalApi
+    ) {
+      const error = new Error(
+        'Yogurt AI application context requires an App Server connection initialized with experimentalApi=true.'
+      )
+      error.name = 'CodexAppServerCapabilityError'
+      throw error
+    }
     return this.request('turn/start', {
       ...overrides,
       threadId,

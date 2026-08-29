@@ -30,7 +30,7 @@ Yogurt AI 是一个可安装的 AI 产品工作台，同时提供独立桌面应
 
 普通用户不需要安装 Node.js、Git 或全局 Codex CLI。使用 Windows x64 安装包即可开始：
 
-1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.2.9](https://github.com/suud003/Cowart/releases/tag/v0.2.9%2Bcodex.20260829) 的 `Yogurt-AI-Beta-Setup-0.2.9-x64.exe`。
+1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.2.10](https://github.com/suud003/Cowart/releases/tag/v0.2.10%2Bcodex.20260829) 的 `Yogurt-AI-Beta-Setup-0.2.10-x64.exe`。
 2. 双击安装包，按向导完成安装。安装程序会创建桌面和开始菜单快捷方式。
 3. 第一次打开 Yogurt AI 时，选择一个产品文件夹作为工作区。画布、生成文件和项目会话都会保存在这里；取消选择也不会导致应用崩溃，可以稍后从 Agent 面板重新选择。
 4. 进入画布后，右下角 Codex 入口会使用应用内置、经过兼容性验证的 Codex 与 Node 运行时自动连接，并复用当前电脑已有的 Codex 登录状态。若尚未登录，展开工作台并点击“登录 Codex”：Yogurt AI 会打开官方浏览器授权页，并在成功后自动连接，无需运行终端命令。

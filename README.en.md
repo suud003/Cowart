@@ -30,7 +30,7 @@ For a brief that mixes visuals, flows, and constraints, the agent first creates 
 
 Regular users do not need to install Node.js, Git, or a global Codex CLI. Start with the Windows x64 installer:
 
-1. Download `Yogurt-AI-Beta-Setup-0.2.9-x64.exe` from the [Yogurt AI Beta 0.2.9 GitHub Release](https://github.com/suud003/Cowart/releases/tag/v0.2.9%2Bcodex.20260829).
+1. Download `Yogurt-AI-Beta-Setup-0.2.10-x64.exe` from the [Yogurt AI Beta 0.2.10 GitHub Release](https://github.com/suud003/Cowart/releases/tag/v0.2.10%2Bcodex.20260829).
 2. Double-click the installer and follow the setup wizard. It creates Desktop and Start Menu shortcuts.
 3. On first launch, choose a product folder as the workspace. Canvas data, generated files, and the project session stay there. Cancelling the picker does not crash the app; you can choose a folder later from the Agent panel.
 4. After the canvas opens, the Codex entry in the lower-right corner connects through the bundled, compatibility-tested Codex and Node runtimes and reuses the current Codex sign-in on the computer. If sign-in is required, expand the workbench and click **Sign in to Codex**: Yogurt AI opens the official browser authorization flow and connects automatically after success—no terminal command is required.

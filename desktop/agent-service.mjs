@@ -619,7 +619,7 @@ export class YogurtAgentService extends EventEmitter {
     return Object.freeze({
       protocol: Object.freeze({
         transport: 'stdio-jsonl',
-        experimentalApi: false,
+        experimentalApi: this.#client?.state?.experimentalApi === true,
         websocket: false
       }),
       message: Object.freeze({ text: true, image: false }),

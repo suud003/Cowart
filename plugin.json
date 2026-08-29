@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cowart-thinking-canvas",
-  "version": "0.2.9+codex.20260829",
+  "version": "0.2.10+codex.20260829",
   "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
   "author": {
     "name": "ZHONG XIN",

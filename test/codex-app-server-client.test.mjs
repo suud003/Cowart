@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { EventEmitter, once } from 'node:events'
+import { readFileSync } from 'node:fs'
 import { PassThrough, Writable } from 'node:stream'
 import test from 'node:test'
 
@@ -72,7 +73,83 @@ test('App Server client performs initialize/initialized and stdio JSONL requests
   assert.equal(child.messages[1].method, 'initialized')
   assert.equal(child.messages[2].method, 'thread/start')
   assert.equal(client.state.transport, 'stdio')
+  assert.equal(client.state.experimentalApi, false)
   await client.stop()
+})
+
+test('experimental application context is negotiated before turn start', async () => {
+  let child
+  const client = new CodexAppServerClient({
+    experimentalApi: true,
+    spawnProcess() {
+      child = fakeSidecar((message, process) => {
+        if (message.method === 'initialize') {
+          process.send({ id: message.id, result: { platformFamily: 'windows' } })
+        } else if (message.method === 'turn/start') {
+          process.send({
+            id: message.id,
+            result: { turn: { id: 'turn_1', status: 'inProgress', items: [], error: null } }
+          })
+        }
+      })
+      return child
+    }
+  })
+
+  await client.startTurn('thr_1', 'Compose this page.', {
+    additionalContext: {
+      yogurt_ai_canvas: {
+        kind: 'application',
+        value: 'Hidden Yogurt AI application context.'
+      }
+    }
+  })
+
+  assert.equal(child.messages[0].method, 'initialize')
+  assert.equal(child.messages[0].params.capabilities.experimentalApi, true)
+  assert.equal(child.messages[1].method, 'initialized')
+  assert.equal(child.messages[2].method, 'turn/start')
+  assert.deepEqual(child.messages[2].params.additionalContext, {
+    yogurt_ai_canvas: {
+      kind: 'application',
+      value: 'Hidden Yogurt AI application context.'
+    }
+  })
+  assert.deepEqual(child.messages[2].params.input, [
+    { type: 'text', text: 'Compose this page.', text_elements: [] }
+  ])
+  assert.equal(
+    JSON.stringify(child.messages[2].params.input).includes('Hidden Yogurt AI application context.'),
+    false
+  )
+  assert.equal(client.state.experimentalApi, true)
+  await client.stop()
+})
+
+test('stable clients fail locally instead of leaking application context into user input', () => {
+  const client = new CodexAppServerClient()
+
+  assert.throws(
+    () => client.startTurn('thr_1', 'Compose this page.', {
+      additionalContext: {
+        yogurt_ai_canvas: {
+          kind: 'application',
+          value: 'Hidden Yogurt AI application context.'
+        }
+      }
+    }),
+    (error) => (
+      error?.name === 'CodexAppServerCapabilityError' &&
+      /experimentalApi=true/.test(error.message)
+    )
+  )
+  assert.equal(client.state.status, 'idle')
+})
+
+test('Yogurt AI desktop explicitly opts into its experimental application context field', () => {
+  const desktopMain = readFileSync(new URL('../desktop/main.mjs', import.meta.url), 'utf8')
+  assert.match(desktopMain, /new CodexAppServerClient\([\s\S]*?experimentalApi:\s*true/)
+  assert.equal(CODEX_APP_SERVER_PROTOCOL.experimentalApiDefault, false)
 })
 
 test('thread start uses a cold-start timeout longer than ordinary requests', async () => {

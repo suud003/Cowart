@@ -162,7 +162,7 @@ async function initializeDesktopRuntime() {
           title: 'Yogurt AI Desktop',
           version: process.env.YOGURT_DESKTOP_VERSION || '0.1.0'
         },
-        experimentalApi: false
+        experimentalApi: true
       })
       const sessionFile = path.join(canvasDir, '.yogurt-agent-session.json')
       agentService = new YogurtAgentService({
