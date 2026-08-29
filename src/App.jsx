@@ -6475,6 +6475,12 @@ function getCowartAgentPanelContext(windowObject = globalThis.window) {
 
   return {
     projectName: cowartProjectName(windowObject),
+    projectScopeId: String(
+      windowObject?.yogurtAgent?.toolOutput?.projectScopeId ??
+      windowObject?.cowartMcp?.toolOutput?.projectScopeId ??
+      windowObject?.openai?.toolOutput?.projectScopeId ??
+      ''
+    ).trim() || null,
     pageId,
     pageName,
     pageShapeCount,

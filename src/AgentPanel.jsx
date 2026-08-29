@@ -16,6 +16,7 @@ import {
   Sparkles,
   Square,
   Terminal,
+  Zap,
   X,
   Workflow
 } from 'lucide-react'
@@ -37,6 +38,67 @@ const AGENT_CONTEXT_MAX_SHAPE_IDS = 250
 export const AGENT_ACTIVITY_MAX_ITEMS = 80
 export const AGENT_ACTIVITY_MAX_EVENT_IDS = 4_096
 export const AGENT_CONVERSATION_MAX_TURNS = 20
+export const AGENT_EXECUTION_MODE_STORAGE_KEY = 'yogurt-agent-execution-mode-v1'
+
+export function normalizeAgentExecutionMode(value) {
+  return value === 'autonomous' ? 'autonomous' : 'guided'
+}
+
+export function agentExecutionModeStorageKey(projectName) {
+  const scope = String(projectName || 'default').trim() || 'default'
+  return `${AGENT_EXECUTION_MODE_STORAGE_KEY}:${encodeURIComponent(scope)}`
+}
+
+export function agentExecutionModeScope(context = {}) {
+  return String(context?.projectScopeId || context?.projectName || 'default').trim() || 'default'
+}
+
+export function resolveAgentExecutionModeForTask({
+  currentMode,
+  currentProjectScope,
+  taskContext,
+  storage = globalThis.window?.localStorage
+} = {}) {
+  const taskProjectScope = agentExecutionModeScope(taskContext)
+  if (taskProjectScope !== currentProjectScope) {
+    return readAgentExecutionMode(storage, taskProjectScope)
+  }
+  return normalizeAgentExecutionMode(currentMode)
+}
+
+export function readAgentExecutionMode(storage = globalThis.window?.localStorage, projectName) {
+  try {
+    return normalizeAgentExecutionMode(storage?.getItem?.(agentExecutionModeStorageKey(projectName)))
+  } catch {
+    return 'guided'
+  }
+}
+
+export function persistAgentExecutionMode(mode, storage = globalThis.window?.localStorage, projectName) {
+  const normalized = normalizeAgentExecutionMode(mode)
+  try {
+    storage?.setItem?.(agentExecutionModeStorageKey(projectName), normalized)
+  } catch {
+    // Storage is a convenience. The in-memory execution choice still applies.
+  }
+  return normalized
+}
+
+export function agentExecutionInstructions(mode) {
+  if (normalizeAgentExecutionMode(mode) === 'guided') {
+    return [
+      '执行方式：分步确认。',
+      '- 对混合画布任务，生成并验证整页视觉预演后暂停一次，等待用户确认当前 compositionId、pagePlanDigest、参考图 shapeId 与 assetFile。',
+      '- 确认后按已批准槽位继续；外部访问、项目外写入、凭据、付费、删除用户内容及其他受保护操作仍按正常安全流程处理。'
+    ].join('\n')
+  }
+  return [
+    '执行方式：自动执行（用户已在 Yogurt AI 面板明确开启）。',
+    '- 仅对 $cowart-auto-compose 的路由、整页视觉预演、分区生成及项目内可逆画布写入连续执行；不要停在整页预演确认，也不要为普通布局选择或可合理默认的信息发起补充点击。',
+    '- 信息不完整时采用最小、可逆且不改变核心意图的合理假设，并在最终结果中列出；只有缺失信息会导致越权、不可逆结果或使结果发生实质变化时才询问。',
+    '- 自动执行不扩大安全授权：外部网站或网络访问、项目外写入、凭据、付费、删除用户内容及其他受保护操作仍必须遵守正常审批边界，不能自动同意。'
+  ].join('\n')
+}
 
 const AGENT_TURN_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])
 const AGENT_TURN_EVENTS_ABSORBED_AFTER_TERMINAL = new Set([
@@ -61,7 +123,7 @@ const QUICK_TASKS = [
     icon: Workflow,
     kind: 'auto-compose',
     label: '智能编排',
-    description: '自动分流，先确认整页布局蓝图',
+    description: '先预演整页，再稳定拆分生成',
     prompt: AUTO_COMPOSE_QUICK_PROMPT
   },
   {
@@ -80,6 +142,7 @@ const QUICK_TASKS = [
 
 function stableContextKey(context) {
   return JSON.stringify([
+    context?.projectScopeId,
     context?.projectName,
     context?.pageId,
     context?.pageName,
@@ -1178,7 +1241,9 @@ export function buildAgentPanelMessage(instruction, context = {}) {
       selectedShapeIds.length < (context.selectedShapeIds?.length || 0) ||
       exactShapeIds.length < (context.exactShapeIds?.length || 0)
   }
+  const executionMode = normalizeAgentExecutionMode(context.executionMode)
   return {
+    executionMode,
     prompt: [
       '[@cowart-thinking-canvas](plugin://cowart-thinking-canvas@cowart-thinking-github) Yogurt AI Agent 任务',
       '',
@@ -1192,6 +1257,8 @@ export function buildAgentPanelMessage(instruction, context = {}) {
       '```',
       '',
       AUTO_COMPOSE_ROUTING_HINT,
+      '',
+      agentExecutionInstructions(executionMode),
       '',
       '请使用已保存的 Yogurt AI 画布与选区上下文完成以下任务：',
       String(instruction || '').trim()
@@ -1531,6 +1598,10 @@ export function CowartAgentPanel({
   )
   const [context, setContext] = useState(() => readContext(contextProvider))
   const [instruction, setInstruction] = useState('')
+  const [executionMode, setExecutionMode] = useState(() => readAgentExecutionMode(
+    undefined,
+    agentExecutionModeScope(context)
+  ))
   const [approvalResolution, setApprovalResolution] = useState({ requestId: null, status: 'idle' })
   const [elicitationResolution, setElicitationResolution] = useState({ requestId: null, status: 'idle' })
   const [isInterrupting, setIsInterrupting] = useState(false)
@@ -1551,6 +1622,17 @@ export function CowartAgentPanel({
   const shouldFollowConversationRef = useRef(true)
   const isOpenRef = useRef(isOpen)
   const autoOpenedInteractionRef = useRef(null)
+  const executionProjectRef = useRef(agentExecutionModeScope(context))
+
+  useEffect(() => {
+    const nextProjectScope = agentExecutionModeScope(context)
+    if (executionProjectRef.current !== nextProjectScope) {
+      executionProjectRef.current = nextProjectScope
+      setExecutionMode(readAgentExecutionMode(undefined, nextProjectScope))
+      return
+    }
+    persistAgentExecutionMode(executionMode, undefined, nextProjectScope)
+  }, [context?.projectName, context?.projectScopeId, executionMode])
 
   useEffect(() => {
     if (!isModal || !isOpen) return undefined
@@ -1888,14 +1970,23 @@ export function CowartAgentPanel({
     try {
       const preparedContext = await beforeSend?.(taskContext)
       if (preparedContext) taskContext = preparedContext
-      await bridge.sendTask(buildAgentPanelMessage(request, taskContext), {
+      const taskExecutionMode = resolveAgentExecutionModeForTask({
+        currentMode: executionMode,
+        currentProjectScope: executionProjectRef.current,
+        taskContext
+      })
+      await bridge.sendTask(buildAgentPanelMessage(request, {
+        ...taskContext,
+        executionMode: taskExecutionMode
+      }), {
         taskId,
         metadata: {
           ...initialTask.metadata,
           projectName: taskContext.projectName || null,
           pageId: taskContext.pageId || null,
           pageName: taskContext.pageName || null,
-          selectedCount: Number(taskContext.selectedCount) || 0
+          selectedCount: Number(taskContext.selectedCount) || 0,
+          executionMode: taskExecutionMode
         },
         analyticsContext: {
           promptType: 'other',
@@ -2059,7 +2150,7 @@ export function CowartAgentPanel({
           <section className="cowart-agent-welcome" aria-labelledby="cowart-agent-welcome-title">
             <span className="cowart-agent-welcome-icon" aria-hidden="true"><Sparkles size={19} /></span>
             <h2 id="cowart-agent-welcome-title">把一个需求，编排成一张画布</h2>
-            <p>描述完整需求。Agent 会先生成整张画布的页面布局蓝图供你确认，再按分区生成图片、可编辑结构与证据卡片。</p>
+            <p>描述完整需求。Agent 会先生成接近成品的整页视觉预演，再按同一布局拆成图片、可编辑结构与证据卡片。</p>
             <div className="cowart-agent-welcome-context" aria-label="当前工作范围">
               <span><FileText aria-hidden="true" size={13} />{context?.pageName || '未命名页面'}</span>
               <span data-selection={selectedCount > 0 ? 'true' : 'false'}>{scopeLabel}</span>
@@ -2181,6 +2272,31 @@ export function CowartAgentPanel({
             </button>
           )}
         </div>
+        <div className="cowart-agent-execution-mode">
+          <button
+            aria-label={executionMode === 'autonomous' ? '关闭自动执行，改为分步确认' : '开启自动执行'}
+            aria-pressed={executionMode === 'autonomous'}
+            data-active={executionMode === 'autonomous' ? 'true' : 'false'}
+            disabled={isSending || hasBlockingInteraction}
+            onClick={() => setExecutionMode((current) => (
+              current === 'autonomous' ? 'guided' : 'autonomous'
+            ))}
+            title="自动推进画布内安全步骤；不会自动批准 Codex 的受保护操作"
+            type="button"
+          >
+            <Zap aria-hidden="true" size={14} />
+            <span>
+              <strong>自动推进画布</strong>
+              <small>
+                {executionMode === 'autonomous'
+                  ? '预演后继续完成可逆编排'
+                  : '预演后暂停，等你确认布局'}
+              </small>
+            </span>
+            <i aria-hidden="true" />
+          </button>
+          <small>不会自动批准命令、需 Codex 审批的文件修改、外部授权或敏感信息请求。</small>
+        </div>
         <label htmlFor="cowart-agent-instruction">告诉 Agent 你想完成什么</label>
         <textarea
           ref={textAreaRef}
@@ -2202,7 +2318,7 @@ export function CowartAgentPanel({
               : isAvailable
               ? isSending
                 ? 'Agent 执行期间，你可以先写下一条消息…'
-                : '例如：把互动影游需求编排成整页布局蓝图、场景图、玩法循环和约束卡片…'
+                : '例如：把互动影游需求先预演成完整页面，再拆成场景图、玩法循环和约束卡片…'
               : workspaceSetup?.status === 'required'
                 ? '选择工作区后即可连接 Codex Agent'
                 : '按上方提示完成 Codex 设置'

@@ -641,9 +641,9 @@ test("thinking context exposes a constrained semantic diagram summary for round 
   assert.equal("ignoredRawMarkup" in diagram.visual.semanticDiagram, false);
 });
 
-test("thinking context exposes only v2 layout-blueprint lineage for resume", () => {
+test("thinking context exposes only v3 composition-reference lineage for resume", () => {
   const snapshot = emptySnapshot();
-  const layoutPlanDigest = "a".repeat(64);
+  const pagePlanDigest = "a".repeat(64);
   const addImage = (name, { index, parentId = "page:test", assetPage = "test", meta = {} } = {}) => {
     const assetId = `asset:${name}`;
     const shapeId = `shape:${name}`;
@@ -689,8 +689,8 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
     typeName: "asset",
     type: "image",
     props: {
-      name: "layout-blueprint.png",
-      src: "/page-assets/test/layout-blueprint.png",
+      name: "composition-preview.png",
+      src: "/page-assets/test/composition-preview.png",
       w: 1600,
       h: 900,
       mimeType: "image/png",
@@ -719,13 +719,13 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
       crop: null,
       flipX: false,
       flipY: false,
-      altText: "Full-canvas layout blueprint",
+      altText: "Full-page composition preview",
     },
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
       cowartAutoComposeSourceShapeIds: ["shape:brief"],
       ignoredPrompt: "must not leak into compact context",
     },
@@ -743,72 +743,75 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
     opacity: 1,
     props: { w: 320, h: 180, assetId: "asset:missing", playing: true, url: "", crop: null, flipX: false, flipY: false, altText: "Spoofed reference" },
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   };
   addImage("visual-part", {
     index: "a3",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
       cowartAutoComposeBlockId: "block:rainy-alley",
+      cowartAutoComposeSlotId: "slot:rainy-alley",
       cowartAutoComposeRole: "visual-part",
       cowartAutoComposeReferenceShapeId: "shape:reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
       cowartAutoComposeSourceShapeIds: ["shape:brief"],
     },
   });
   addImage("wrong-composition-part", {
     index: "a4",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:other",
       cowartAutoComposeBlockId: "block:rainy-alley",
+      cowartAutoComposeSlotId: "slot:rainy-alley",
       cowartAutoComposeRole: "visual-part",
       cowartAutoComposeReferenceShapeId: "shape:reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   });
   addImage("wrong-layout-digest-part", {
     index: "a4V",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
       cowartAutoComposeBlockId: "block:rainy-alley",
+      cowartAutoComposeSlotId: "slot:rainy-alley",
       cowartAutoComposeRole: "visual-part",
       cowartAutoComposeReferenceShapeId: "shape:reference",
-      cowartAutoComposeLayoutPlanDigest: "d".repeat(64),
+      cowartAutoComposePagePlanDigest: "d".repeat(64),
     },
   });
   addImage("cross-url-reference", {
     index: "a5",
     assetPage: "other",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   });
   addImage("invalid-role", {
     index: "a6",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
       cowartAutoComposeRole: "diagram",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   });
   addImage("oversized-id", {
     index: "a7",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: `compose:${"x".repeat(200)}`,
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   });
   snapshot.store["page:other"] = { id: "page:other", typeName: "page", name: "Other", index: "a1", meta: {} };
@@ -817,21 +820,22 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
     parentId: "page:other",
     assetPage: "other",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   });
   addImage("cross-page-part", {
     index: "a8",
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
       cowartAutoComposeBlockId: "block:cross-page",
+      cowartAutoComposeSlotId: "slot:cross-page",
       cowartAutoComposeRole: "visual-part",
       cowartAutoComposeReferenceShapeId: otherReferenceId,
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   });
   snapshot.store["shape:non-image-lineage"] = {
@@ -840,10 +844,10 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
     index: "a9",
     x: 400,
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:interactive-film",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     },
   };
   addImage("legacy-concept-reference", {
@@ -854,6 +858,15 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
       cowartAutoComposeRole: "reference",
     },
   });
+  addImage("legacy-layout-reference", {
+    index: "a11",
+    meta: {
+      cowartAutoComposeVersion: "2",
+      cowartAutoComposeId: "compose:interactive-film",
+      cowartAutoComposeRole: "layout-reference",
+      cowartAutoComposeLayoutPlanDigest: pagePlanDigest,
+    },
+  });
 
   const context = summarizeThinkingContext({ snapshot, pageId: "page:test" });
   const reference = context.shapes.find((shape) => shape.id === "shape:reference");
@@ -861,23 +874,25 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
   const visualPart = context.shapes.find((shape) => shape.id === "shape:visual-part");
 
   assert.deepEqual(reference.autoCompose, {
-    version: "2",
+    version: "3",
     compositionId: "compose:interactive-film",
     blockId: null,
-    role: "layout-reference",
-    layoutPlanDigest,
+    slotId: null,
+    role: "composition-reference",
+    pagePlanDigest,
     referenceShapeId: null,
     sourceShapeIds: ["shape:brief"],
   });
-  assert.equal(reference.asset.src, "/page-assets/test/layout-blueprint.png");
+  assert.equal(reference.asset.src, "/page-assets/test/composition-preview.png");
   assert.equal("ignoredPrompt" in reference.autoCompose, false);
   assert.equal(spoofed.autoCompose, null);
   assert.deepEqual(visualPart.autoCompose, {
-    version: "2",
+    version: "3",
     compositionId: "compose:interactive-film",
     blockId: "block:rainy-alley",
+    slotId: "slot:rainy-alley",
     role: "visual-part",
-    layoutPlanDigest,
+    pagePlanDigest,
     referenceShapeId: "shape:reference",
     sourceShapeIds: ["shape:brief"],
   });
@@ -890,6 +905,7 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
     "shape:cross-page-part",
     "shape:non-image-lineage",
     "shape:legacy-concept-reference",
+    "shape:legacy-layout-reference",
   ]) {
     assert.equal(context.shapes.find(({ id }) => id === invalidId).autoCompose, null, `${invalidId} must not expose trusted lineage`);
   }
@@ -909,12 +925,12 @@ test("thinking context exposes only v2 layout-blueprint lineage for resume", () 
     shapeIds: ["shape:brief", "shape:reference"],
   });
   assert.deepEqual(resumed.shapes.map(({ id }) => id), ["shape:brief", "shape:reference"]);
-  assert.equal(resumed.shapes.find(({ id }) => id === "shape:reference").autoCompose.role, "layout-reference");
+  assert.equal(resumed.shapes.find(({ id }) => id === "shape:reference").autoCompose.role, "composition-reference");
 });
 
 test("a 250-shape frozen source scope resumes its later reference with a second exact read", () => {
   const snapshot = emptySnapshot();
-  const layoutPlanDigest = "b".repeat(64);
+  const pagePlanDigest = "b".repeat(64);
   const sourceIds = [];
   for (let index = 0; index < 250; index += 1) {
     const id = `shape:source-${index}`;
@@ -954,10 +970,10 @@ test("a 250-shape frozen source scope resumes its later reference with a second 
     opacity: 1,
     props: { w: 800, h: 450, assetId: "asset:late-reference", playing: true, url: "", crop: null, flipX: false, flipY: false, altText: "Late managed reference" },
     meta: {
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "compose:limit-test",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
       cowartAutoComposeSourceShapeIds: sourceIds,
     },
   };
@@ -969,7 +985,7 @@ test("a 250-shape frozen source scope resumes its later reference with a second 
   const sourceContext = summarizeThinkingContext({ snapshot, pageId: "page:test", scope: "selection", shapeIds: sourceIds });
   const referenceContext = summarizeThinkingContext({ snapshot, pageId: "page:test", scope: "selection", shapeIds: ["shape:late-reference"] });
   assert.equal(sourceContext.shapes.length, 250);
-  assert.equal(referenceContext.shapes[0].autoCompose.role, "layout-reference");
+  assert.equal(referenceContext.shapes[0].autoCompose.role, "composition-reference");
   assert.equal(sourceContext.revision, referenceContext.revision);
   assert.equal(sourceContext.pageId, referenceContext.pageId);
 });
@@ -1016,75 +1032,77 @@ test("auto-compose evidence identity round-trips through supported card source f
 });
 
 test("auto-compose image metadata validates at the image insertion boundary", () => {
-  const layoutPlanDigest = "c".repeat(64);
+  const pagePlanDigest = "c".repeat(64);
   const normalized = normalizeAutoComposeImageMetadata({
     unrelatedShapeField: true,
-    cowartAutoComposeVersion: "2",
+    cowartAutoComposeVersion: "3",
     cowartAutoComposeId: "  ac:composition  ",
     cowartAutoComposeRole: "visual-part",
     cowartAutoComposeBlockId: " ac:block ",
+    cowartAutoComposeSlotId: " ac:slot ",
     cowartAutoComposeReferenceShapeId: " shape:reference ",
-    cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+    cowartAutoComposePagePlanDigest: pagePlanDigest,
     cowartAutoComposeSourceShapeIds: [" shape:brief ", "shape:brief"],
   });
   assert.deepEqual(normalized, {
     unrelatedShapeField: true,
-    cowartAutoComposeVersion: "2",
+    cowartAutoComposeVersion: "3",
     cowartAutoComposeId: "ac:composition",
     cowartAutoComposeRole: "visual-part",
     cowartAutoComposeBlockId: "ac:block",
+    cowartAutoComposeSlotId: "ac:slot",
     cowartAutoComposeReferenceShapeId: "shape:reference",
-    cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+    cowartAutoComposePagePlanDigest: pagePlanDigest,
     cowartAutoComposeSourceShapeIds: ["shape:brief"],
   });
 
   assert.deepEqual(normalizeAutoComposeImageMetadata({
-    cowartAutoComposeVersion: "2",
+    cowartAutoComposeVersion: "3",
     cowartAutoComposeId: "ac:composition",
-    cowartAutoComposeRole: "layout-reference",
-    cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+    cowartAutoComposeRole: "composition-reference",
+    cowartAutoComposePagePlanDigest: pagePlanDigest,
   }), {
-    cowartAutoComposeVersion: "2",
+    cowartAutoComposeVersion: "3",
     cowartAutoComposeId: "ac:composition",
-    cowartAutoComposeRole: "layout-reference",
-    cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+    cowartAutoComposeRole: "composition-reference",
+    cowartAutoComposePagePlanDigest: pagePlanDigest,
   });
 
   assert.throws(
     () => normalizeAutoComposeImageMetadata({
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "ac:composition",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
       cowartAutoComposeUnexpected: true,
     }),
     /Unsupported auto-compose image metadata field/,
   );
   assert.throws(
     () => normalizeAutoComposeImageMetadata({
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "ac:composition",
       cowartAutoComposeRole: "visual-part",
       cowartAutoComposeBlockId: "ac:block",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     }),
-    /require both a block ID and a reference shape ID/,
+    /require a block ID, slot ID, and reference shape ID/,
   );
   assert.throws(
     () => normalizeAutoComposeImageMetadata({
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "ac:composition",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
     }, { allowLineage: false }),
     /belongs on shapeMeta/,
   );
   assert.throws(
     () => normalizeAutoComposeImageMetadata({
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "ac:composition",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
       cowartAutoComposeSourceShapeIds: Array.from({ length: 251 }, (_, index) => `shape:${index}`),
     }),
     /cannot exceed 250 items/,
@@ -1095,25 +1113,25 @@ test("auto-compose image metadata validates at the image insertion boundary", ()
       cowartAutoComposeId: "ac:composition",
       cowartAutoComposeRole: "reference",
     }),
-    /must be exactly "2"/,
+    /must be exactly "3"/,
   );
   assert.throws(
     () => normalizeAutoComposeImageMetadata({
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "ac:composition",
-      cowartAutoComposeRole: "layout-reference",
+      cowartAutoComposeRole: "composition-reference",
     }),
     /must be exactly 64 lowercase hexadecimal characters/,
   );
   assert.throws(
     () => normalizeAutoComposeImageMetadata({
-      cowartAutoComposeVersion: "2",
+      cowartAutoComposeVersion: "3",
       cowartAutoComposeId: "ac:composition",
-      cowartAutoComposeRole: "layout-reference",
-      cowartAutoComposeLayoutPlanDigest: layoutPlanDigest,
+      cowartAutoComposeRole: "composition-reference",
+      cowartAutoComposePagePlanDigest: pagePlanDigest,
       cowartAutoComposeReferenceShapeId: "shape:other",
     }),
-    /cannot declare a block ID or reference shape ID/,
+    /cannot declare a block ID, slot ID, or reference shape ID/,
   );
 });
 

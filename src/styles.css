@@ -1417,6 +1417,102 @@ body {
   cursor: default;
 }
 
+.cowart-agent-execution-mode {
+  margin: 0 0 10px;
+}
+
+.cowart-agent-execution-mode > button {
+  display: grid;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  grid-template-columns: 18px minmax(0, 1fr) 30px;
+  gap: 8px;
+  align-items: center;
+  color: var(--cowart-panel-text);
+  text-align: left;
+  background: var(--cowart-panel-bg);
+  border: 1px solid var(--cowart-panel-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.cowart-agent-execution-mode > button:hover:not(:disabled) {
+  border-color: var(--cowart-panel-accent);
+}
+
+.cowart-agent-execution-mode > button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.cowart-agent-execution-mode > button > svg {
+  color: var(--cowart-panel-text-muted);
+}
+
+.cowart-agent-execution-mode > button > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.cowart-agent-execution-mode strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cowart-agent-execution-mode button small,
+.cowart-agent-execution-mode > small {
+  color: var(--cowart-panel-text-muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.cowart-agent-execution-mode > small {
+  display: block;
+  margin: 5px 2px 0;
+}
+
+.cowart-agent-execution-mode button > i {
+  position: relative;
+  display: block;
+  width: 28px;
+  height: 16px;
+  background: #d7d6dc;
+  border-radius: 999px;
+  transition: background 140ms ease;
+}
+
+.cowart-agent-execution-mode button > i::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  content: '';
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+  transition: transform 140ms ease;
+}
+
+.cowart-agent-execution-mode > button[data-active="true"] {
+  background: var(--cowart-panel-accent-soft);
+  border-color: var(--cowart-panel-accent);
+}
+
+.cowart-agent-execution-mode > button[data-active="true"] > svg {
+  color: var(--cowart-panel-accent-strong);
+}
+
+.cowart-agent-execution-mode > button[data-active="true"] > i {
+  background: var(--cowart-panel-accent-strong);
+}
+
+.cowart-agent-execution-mode > button[data-active="true"] > i::after {
+  transform: translateX(12px);
+}
+
 .cowart-agent-composer label {
   display: block;
   margin: 0 1px 7px;

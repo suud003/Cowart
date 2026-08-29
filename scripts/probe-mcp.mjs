@@ -91,6 +91,7 @@ try {
     "insert_cowart_image",
     "insert_cowart_html_draft",
     "get_cowart_thinking_context",
+    "validate_cowart_auto_compose_plan",
     "import_cowart_material",
     "apply_cowart_thinking_operations",
     "undo_cowart_thinking_operation",
@@ -113,6 +114,75 @@ try {
   const clipboardTool = tools.tools.find((tool) => tool.name === "copy_cowart_image_to_clipboard");
   if (JSON.stringify(clipboardTool?._meta?.ui?.visibility) !== JSON.stringify(["app"])) {
     throw new Error("Cowart clipboard tool should only be visible to the widget app.");
+  }
+
+  const autoComposePlan = {
+    schemaVersion: "3",
+    pagePlan: {
+      version: "3",
+      frame: { width: 1600, height: 1000 },
+      padding: 24,
+      gutter: 24,
+      slots: [
+        {
+          id: "slot:111111111111",
+          blockId: "block:111111111111",
+          route: "visual",
+          region: "Visual",
+          rect: { x: 24, y: 24, w: 600, h: 952 },
+          padding: 24,
+          order: 1,
+          fit: "cover",
+          contentSpec: {
+            type: "visual",
+            brief: "A representative scene for the complete page preview.",
+          },
+        },
+        {
+          id: "slot:222222222222",
+          blockId: "block:222222222222",
+          route: "diagram",
+          region: "Structure",
+          rect: { x: 648, y: 24, w: 928, h: 952 },
+          padding: 24,
+          order: 2,
+          fit: "native",
+          contentSpec: {
+            type: "diagram",
+            diagramType: "flow",
+            teachingClaim: "A choice updates the shared state.",
+            readingOrder: "left-to-right",
+            objects: [
+              { id: "choice", label: "Choice" },
+              { id: "state", label: "State" },
+            ],
+            relations: [
+              { id: "updates", from: "choice", to: "state" },
+            ],
+          },
+        },
+      ],
+    },
+  };
+  const validatedAutoCompose = await client.callTool({
+    name: "validate_cowart_auto_compose_plan",
+    arguments: { plan: autoComposePlan },
+  });
+  if (
+    validatedAutoCompose.isError ||
+    validatedAutoCompose.structuredContent?.plan?.pagePlan?.slots?.length !== 2 ||
+    !/^[0-9a-f]{64}$/.test(validatedAutoCompose.structuredContent?.pagePlanDigest || "")
+  ) {
+    throw new Error("Auto Compose page-plan validator did not return a canonical v3 plan and digest.");
+  }
+  const overlappingAutoComposePlan = structuredClone(autoComposePlan);
+  overlappingAutoComposePlan.pagePlan.slots[1].rect.x = 600;
+  const rejectedAutoCompose = await client.callTool({
+    name: "validate_cowart_auto_compose_plan",
+    arguments: { plan: overlappingAutoComposePlan },
+  });
+  if (rejectedAutoCompose.isError !== true) {
+    throw new Error("Auto Compose page-plan validator must reject overlapping slots.");
   }
 
   const projectDir = await mkdtemp(path.join(tmpdir(), "cowart-widget-probe-"));

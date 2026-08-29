@@ -312,6 +312,41 @@ async function captureDesktopIfRequested() {
     ? Math.min(Math.max(requestedDelay, 250), 15_000)
     : 2_500
   await new Promise((resolve) => setTimeout(resolve, delayMs))
+  const captureAgentPanel = process.env.YOGURT_DESKTOP_CAPTURE_AGENT_PANEL === '1'
+  const captureAutoAdvance = process.env.YOGURT_DESKTOP_CAPTURE_AUTO_ADVANCE === '1'
+  if (captureAgentPanel || captureAutoAdvance) {
+    const captureState = await mainWindow.webContents.executeJavaScript(`
+      (async () => {
+        const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+        const shouldOpenPanel = ${JSON.stringify(captureAgentPanel || captureAutoAdvance)}
+        const shouldEnableAutoAdvance = ${JSON.stringify(captureAutoAdvance)}
+        if (shouldOpenPanel) {
+          const opener = document.querySelector('.yogurt-app-agent-toggle')
+          if (opener?.getAttribute('aria-expanded') !== 'true') opener?.click()
+        }
+        let executionToggle = null
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          executionToggle = document.querySelector('.cowart-agent-execution-mode > button')
+          if (executionToggle) break
+          await sleep(100)
+        }
+        if (shouldEnableAutoAdvance && executionToggle?.getAttribute('aria-pressed') !== 'true') {
+          executionToggle.click()
+          await sleep(250)
+        }
+        return {
+          agentPanelOpen: document.querySelector('.yogurt-app-agent-toggle')?.getAttribute('aria-expanded') === 'true',
+          autoAdvanceEnabled: executionToggle?.getAttribute('aria-pressed') === 'true'
+        }
+      })()
+    `)
+    if (captureState?.agentPanelOpen !== true) {
+      throw new Error('Requested desktop capture could not open the Codex Agent panel.')
+    }
+    if (captureAutoAdvance && captureState?.autoAdvanceEnabled !== true) {
+      throw new Error('Requested desktop capture could not enable Auto-advance canvas.')
+    }
+  }
   const image = await mainWindow.webContents.capturePage()
   await mkdir(path.dirname(capturePath), { recursive: true })
   await writeFile(capturePath, image.toPNG())

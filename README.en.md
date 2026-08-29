@@ -19,7 +19,7 @@
 
 Yogurt AI is an installable AI product workspace, available as both a standalone desktop app and a Codex plugin. It puts a native tldraw infinite canvas and Codex Agent in the same interface. Organize local documents, notes, images, conversations, and directly pasted requirement excerpts—or describe one complete brief and let the agent decide which parts should become images, native editable structures, or source-linked evidence.
 
-For a brief that mixes visuals, flows, and constraints, the agent plans the whole page first and creates a low-text canvas layout blueprint for review. It shows where image, editable-structure, and evidence regions belong, including their proportions, hierarchy, and reading order. After approval, every part is generated and placed into its slot. The blueprint is not concept art or a source of product facts; flows, relationships, and constraints still come from the original material and remain selectable, movable, and editable. PRDs and prototypes remain an independent, on-demand workspace.
+For a brief that mixes visuals, flows, and constraints, the agent first creates a near-final full-page visual preview. Scenes, flow nodes, connectors, evidence cards, type hierarchy, and whitespace already take shape in one coherent page. It then follows the same regions to generate visual assets and rebuild flows and constraints as native editable objects. The page plan is checked for overflow, overlap, spacing, and content capacity before generation, preventing the final canvas from collapsing into a tangle. You can pause once after the preview or enable **Auto-advance canvas** to continue reversible canvas work without another layout click. PRDs and prototypes remain an independent, on-demand workspace.
 
 <p align="center">
   <img src="docs/images/yogurt-ai-workspace.png" width="100%" alt="Yogurt AI visual product workspace organizing world tone, player loop, evidence, and constraints">
@@ -30,7 +30,7 @@ For a brief that mixes visuals, flows, and constraints, the agent plans the whol
 
 Regular users do not need to install Node.js, Git, or a global Codex CLI. Start with the Windows x64 installer:
 
-1. Download `Yogurt-AI-Beta-Setup-0.2.7-x64.exe` from the [Yogurt AI Beta 0.2.7 GitHub Release](https://github.com/suud003/Cowart/releases/tag/v0.2.7%2Bcodex.20260828).
+1. Download `Yogurt-AI-Beta-Setup-0.2.8-x64.exe` from the [Yogurt AI Beta 0.2.8 GitHub Release](https://github.com/suud003/Cowart/releases/tag/v0.2.8%2Bcodex.20260829).
 2. Double-click the installer and follow the setup wizard. It creates Desktop and Start Menu shortcuts.
 3. On first launch, choose a product folder as the workspace. Canvas data, generated files, and the project session stay there. Cancelling the picker does not crash the app; you can choose a folder later from the Agent panel.
 4. After the canvas opens, the Codex entry in the lower-right corner connects through the bundled, compatibility-tested Codex and Node runtimes and reuses the current Codex sign-in on the computer. If sign-in is required, expand the workbench and click **Sign in to Codex**: Yogurt AI opens the official browser authorization flow and connects automatically after success—no terminal command is required.
@@ -44,10 +44,13 @@ flowchart LR
   A["Docs / notes / images / one complete brief"] --> B["Agent reads page and stable object IDs"]
   B --> C{"Does the brief need mixed outputs?"}
   C -->|Yes| D["Route images / editable structure / evidence"]
-  D --> F["Create a full-page layout blueprint"]
-  F --> I["Approve regions, then generate into each slot"]
+  D --> F["Create a near-final full-page preview"]
+  F --> I{"Current execution mode"}
+  I -->|Auto-advance| J["Continue through fixed slots"]
+  I -->|Guided| K["Approve once, then generate"]
   C -->|No| G["Use the best matching canvas capability"]
-  I --> H["Edit / review / export"]
+  J --> H["Edit / review / export"]
+  K --> H
   G --> H
   H --> B
 ```
@@ -55,7 +58,7 @@ flowchart LR
 | Where you begin | How Codex Agent participates | What remains |
 | --- | --- | --- |
 | Scattered research, meeting notes, and requirement links | Organizes source-grounded facts, observations, hypotheses, and open questions | A knowledge panorama you can keep clustering, connecting, and questioning |
-| One brief mixing scenes, a gameplay flow, and product constraints | Routes the content and creates a full-page layout blueprint; after approval, generates visuals, native structure, and evidence into the planned slots | One complete, semantically editable, source-traceable product canvas |
+| One brief mixing scenes, a gameplay flow, and product constraints | Creates a near-final page preview, validates its regions, then generates visuals, native structure, and evidence into the same slots | One complete, non-tangled, semantically editable, source-traceable product canvas |
 | A group of cards or a system that needs explanation | Reads the active page and exact selection, then plans and creates a semantic structure | Native editable cards, zones, and bound connectors |
 | An incomplete product idea | Completes constraints and acceptance criteria, then creates PRDs and interactive pages | A reviewable product workspace with annotations and canvas return |
 | A mature canvas | Consolidates cards, images, HTML, Slides, and freehand work | A shareable HTML panorama or editable PowerPoint |
@@ -71,7 +74,7 @@ Write any request or start with `Auto compose`, `Organize selection`, or `Genera
 <p align="center">
   <img src="docs/images/yogurt-ai-auto-compose-workbench.png" width="100%" alt="Auto Compose entry in the Yogurt AI Agent workbench">
 </p>
-<p align="center"><sub>Real desktop render: the canvas stays in place while Auto Compose confirms a full-page layout blueprint before generating each region.</sub></p>
+<p align="center"><sub>Real desktop render: with Auto-advance canvas enabled, a validated full-page preview continues directly into each generated region.</sub></p>
 
 After you import documents, images, and notes, Yogurt AI preserves source paths and verbatim excerpts while recording agent summaries and inference separately. Work with cards, relations, zones, and freehand annotations as you would on a whiteboard, or ask the agent to build a panorama around one question.
 
@@ -88,19 +91,21 @@ When only a local area needs revision, use `AI 圈选` to circle the relevant ob
 
 Choose `Auto compose` in the Agent workbench, or write one brief that mixes scenes, characters, flows, relationships, and constraints. Yogurt AI first divides it into `visual images`, `native editable diagrams`, and `evidence and constraint cards`, preserving sources and stable IDs for every block.
 
-Phase one is not a cinematic concept-art pass. The agent first builds a structured page plan, then renders a full-canvas layout blueprint that previews every image, native diagram, and evidence-card region with its bounds, relative size, hierarchy, whitespace, and reading order. After that blueprint returns to the canvas, the agent pauses for layout approval.
+Phase one builds a structured page plan with real content specifications, then renders a near-final full-page visual preview. This is not a grid of empty placeholders: image regions contain representative scenes, diagram regions show recognizable nodes, branches, and connectors, and evidence regions show realistic hierarchy and copy density. Before generation, Yogurt AI deterministically rejects overflowing, overlapping, under-spaced, or over-capacity slots.
 
-Phase two generates each part into its approved slot: visuals use the slot's aspect ratio and composition, gameplay and system relationships become native editable objects, and constraints remain source-linked cards. Final placement comes from the structured plan, never from blueprint pixels or OCR. A normal scene reference can guide a visual asset, but it cannot masquerade as the page layout blueprint.
+Phase two follows the exact same slots. Visuals use their preview region for composition and style; gameplay loops and system relationships are rebuilt from source material as native editable objects; constraints become source-linked cards. Before apply, Yogurt AI checks the real node, text, and connector bounds and repacks crowded results instead of writing overlap to the canvas. The preview controls visual direction, never product semantics.
+
+Guided mode remains the default and pauses once after the full-page preview. When **Auto-advance canvas** is enabled, that product-workflow checkpoint is skipped and reversible canvas steps continue in the same task. This preference never auto-approves Codex commands, file changes, external authorization, privilege changes, or information requests.
 
 ```mermaid
 flowchart LR
   A["One mixed brief"] --> B["Route the content blocks"]
-  B --> C["Full-page layout blueprint"]
-  C --> D{"Approve regions, proportions, and reading order"}
-  D -->|Revise| C
-  D -->|Approve| E["Consistent visual parts"]
-  D -->|Approve| F["Native editable diagrams"]
-  D -->|Approve| G["Evidence and constraint cards"]
+  B --> C["Near-final full-page visual preview"]
+  C --> D["Deterministic slot / capacity / collision checks"]
+  D --> E{"Auto-advance or guided"}
+  E --> F["Consistent visual parts"]
+  E --> G["Native editable diagrams"]
+  E --> H["Evidence and constraint cards"]
 ```
 
 ### 3. Turn Complex Relationships Into Editable Line Diagrams
@@ -234,7 +239,7 @@ hypotheses, and open questions, then build an editable panorama around
 Select the cards you want to advance, choose a quick task in the agent workbench, or state the goal directly:
 
 - `Turn this selection into a line diagram that explains the central takeaway.`
-- `Auto-compose this interactive-film brief: create a full-page layout blueprint first, then generate scene art, an editable gameplay loop, and constraint cards into the approved slots.`
+- `Auto-compose this interactive-film brief: create a near-final full-page visual preview, then generate scene art, an editable gameplay loop, and constraint cards into the same regions.`
 - `Use these materials and requirement excerpts to create a reviewable PRD and interactive prototype.`
 - `Return the confirmed review conclusions to the original canvas while preserving provenance.`
 
@@ -249,12 +254,13 @@ Follow the agent's plan and change summaries in the workbench, approving control
 - Canvas data lives in the current project's `canvas/pages/<page-id>/` directory; page images and HTML live in its matching `assets/` directory.
 - Source paths, verbatim excerpts, and agent summaries are stored separately, making it clear what came from the material and what came from analysis or inference.
 - External links are stored only as source addresses and are never treated as read material automatically. Paste the body text or provide an export when linked requirements are needed.
-- Non-trivial changes show a preview first, write only after the canvas is still in the expected state, and retain guarded undo.
+- Native edit batches show a preview first and write only after the revision still matches; guarded undo remains available. Image generation and native batch writes are separate, traceable steps.
 - Precise SVG blocks pass structural and script-safety validation before entering the canvas.
 - Files outside the project are copied into canvas materials only with explicit user permission.
 - The desktop app connects to Codex App Server over local stdio. The web renderer cannot issue arbitrary RPC calls, shell commands, process-spawn requests, or MCP tool calls outside the allowlist.
 - Yogurt AI does not call private `chatgpt.com/backend-api/...` endpoints. The desktop agent uses the local stdio Codex App Server bridge. Any future direct model API integration must use the public `https://api.openai.com/v1/responses` endpoint with API Key authentication.
 - Agent requests to change files or execute commands are surfaced in the workbench for user approval.
+- **Auto-advance canvas** skips only the Auto Compose preview checkpoint; it never replies to approvals, submits forms, opens external URLs, or expands Codex permissions automatically.
 
 ## Technical Information
 
@@ -262,7 +268,7 @@ Follow the agent's plan and change summaries in the workbench, approving control
 <summary><strong>Built-in skills and workspace validation</strong></summary>
 
 - `cowart-thinking-canvas:cowart-thinking-agent`: organize sources, build thinking spaces, and preview and apply local revisions.
-- `cowart-thinking-canvas:cowart-auto-compose`: route one mixed brief and establish an approved full-page layout blueprint before creating images, native structure, and evidence cards in its slots.
+- `cowart-thinking-canvas:cowart-auto-compose`: create and validate a near-final full-page visual preview, then generate images, native structure, and evidence cards from the same page plan.
 - `cowart-thinking-canvas:cowart-semantic-diagram`: create and revise traceable line diagrams on the current canvas.
 - `cowart-thinking-canvas:cowart-product-bridge`: turn product material into PRDs and interactive prototypes, then handle reviewed returns.
 - `cowart-thinking-canvas:cowart-image-gen` / `cowart-image-edit`: generate images and perform annotation-driven revisions.

@@ -131,29 +131,30 @@ meta flag. Support both shapes.
 
 For ordinary image families outside auto-compose, an approved visual reference can still control palette, lighting, materials, character identity, lens, or illustration language. Resolve and inspect its exact local path, pass it through `referenced_image_paths`, keep the reference set small, and never substitute a stale image or prompt-only imitation when the file is missing. Exact requirements, relationships, labels, and metrics still come from the user's text and source-aware canvas context.
 
-## Auto-compose layout-blueprint mode
+## Auto-compose composition-reference mode
 
 When `$cowart-auto-compose` delegates an image, this skill owns it exactly once from generation through insertion. Auto-compose has two distinct roles.
 
-### `layout-reference`
+### `composition-reference`
 
-1. Accept the composition ID, complete structured `layoutPlan`, exact 64-character `layoutPlanDigest`, source shape IDs, page, and placement intent.
-2. Generate a low-text, full-page layout mock in the plan's frame ratio. It must show the complete page boundary and every planned image, native-diagram, and evidence slot with matching relative bounds, hierarchy, whitespace, and reading order.
-3. Never return a single cinematic concept image, scene, character sheet, moodboard, key art, or poster as the layout reference. A user-supplied concept image is optional visual material for an image slot, not a substitute for the page mock. Reuse an existing image only when visual inspection proves it is already a whole-page mock matching the current plan.
-4. Inspect the generated bitmap against every slot before insertion. If required regions or the overall page boundary are missing, regenerate once. If the second attempt still fails, stop without insertion and report the mismatch.
+1. Accept the composition ID, complete validated v3 `pagePlan`, exact 64-character `pagePlanDigest`, every route-specific `contentSpec`, source shape IDs, page, and placement intent.
+2. Generate one near-final full-page composition in the plan's 1600:1000 ratio. It must already resemble the intended finished board at fit-to-page zoom: representative rendered content in each visual slot; recognizable nodes, lanes, arrows, and short grounded labels in each diagram slot; and realistic title/body hierarchy and copy density in each evidence slot.
+3. Do not produce empty placeholder boxes, grey skeleton UI, an abstract wireframe, or a single cinematic concept image, character sheet, moodboard, key art, or poster. A user concept image may guide one slot's visual language but cannot substitute for the complete page composition.
+4. Use short wording from the supplied content specs. Never invent product facts, citations, issue IDs, metrics, states, or relationships to make the bitmap appear complete. Final semantics remain native and source-grounded.
+5. Inspect every generated region against its slot and content spec. If any slot is missing, placeholder-like, or has materially wrong topology/density, regenerate once. If the second attempt fails, stop without insertion and report the mismatch.
 
 ### `visual-part`
 
-1. Accept the composition ID, block ID, approved layout-reference shape ID and local asset path, matching layout digest, exact target slot bounds, source shape IDs, page, and placement intent.
-2. Use the target slot's `w:h` as the generation and placement aspect-ratio contract. Pass the verified layout blueprint through `referenced_image_paths` so the model can expand the corresponding region, but explicitly instruct it to generate only the slot's finished visual and not copy page borders, placeholder boxes, region labels, diagram arrows, cards, or other board chrome.
-3. Take subject matter and product meaning from the routed block and original sources. Take visual art direction from explicit user material or the original brief; the layout blueprint controls slot, crop, relative weight, and composition rhythm, not product facts.
-4. Do not silently substitute a stale blueprint or fall back to prompt-only imitation when the approved local path cannot be read.
+1. Accept the composition ID, block ID, slot ID, composition-reference shape ID and local asset path, matching page-plan digest, exact target slot bounds and normalized reference window, source shape IDs, page, and placement intent.
+2. Use the target slot's `w:h` as the generation and placement aspect-ratio contract. Pass the verified composition reference through `referenced_image_paths` and identify the precise reference window so the model expands only that region into the slot's finished visual. Do not copy the whole page, neighboring diagrams/cards, page border, or board chrome.
+3. Take subject matter and product meaning from the routed block, its visual `contentSpec`, and original sources. Take crop, palette, balance, and local composition from the reference window. Never recover facts from generated pixels.
+4. Do not silently substitute a stale composition reference or fall back to prompt-only imitation when its local path cannot be read.
 
 ### Shared insertion contract
 
 1. Call `insert_cowart_image` with `dryRun: true`. Apply the identical insertion using the dry-run response's `baseRevision`; do not use an ambiguously named result revision for compare-and-swap.
-2. Write only the supported bounded image metadata: `cowartAutoComposeVersion: "2"`, `cowartAutoComposeId`, `cowartAutoComposeRole` (`layout-reference` or `visual-part`), `cowartAutoComposeLayoutPlanDigest`, optional `cowartAutoComposeBlockId`, optional `cowartAutoComposeReferenceShapeId`, and `cowartAutoComposeSourceShapeIds`.
-3. A `layout-reference` must not carry a block ID or reference shape ID. A `visual-part` must carry both and must match the same-page reference's composition ID and digest.
+2. Write only the supported bounded image metadata: `cowartAutoComposeVersion: "3"`, `cowartAutoComposeId`, `cowartAutoComposeRole` (`composition-reference` or `visual-part`), `cowartAutoComposePagePlanDigest`, optional `cowartAutoComposeBlockId`, optional `cowartAutoComposeSlotId`, optional `cowartAutoComposeReferenceShapeId`, and `cowartAutoComposeSourceShapeIds`.
+3. A `composition-reference` must not carry a block ID, slot ID, or reference shape ID. A `visual-part` must carry all three and must match the same-page reference's composition ID and digest.
 4. Return `assetFile`, image shape ID, page ID, dry-run `baseRevision`, result revision, dimensions, and placement to the caller. The caller must not call `insert_cowart_image` again for this result.
 
 ## Notes

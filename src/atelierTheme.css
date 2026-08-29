@@ -1153,6 +1153,12 @@ body {
 
 .cowart-agent-composer-context { margin-bottom: 8px; }
 .cowart-agent-composer-context > button { color: var(--atelier-blue); background: #fff; }
+.cowart-agent-execution-mode > button { color: var(--atelier-ink); background: #f8f7f3; border-color: var(--atelier-line); border-radius: 7px; }
+.cowart-agent-execution-mode > button[data-active="true"] { background: #edf3ff; border-color: #9eb8ec; }
+.cowart-agent-execution-mode > button[data-active="true"] > svg { color: var(--atelier-blue); }
+.cowart-agent-execution-mode button small,
+.cowart-agent-execution-mode > small { color: var(--atelier-ink-faint); font-family: var(--atelier-sans); }
+.cowart-agent-execution-mode > button[data-active="true"] > i { background: var(--atelier-blue); }
 .cowart-agent-composer label { color: var(--atelier-ink); font-family: var(--atelier-serif); font-size: 15px; font-weight: 650; letter-spacing: -0.01em; text-transform: none; }
 .cowart-agent-composer textarea {
   min-height: 86px;

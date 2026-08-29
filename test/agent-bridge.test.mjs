@@ -65,12 +65,12 @@ test('Codex host adapter prefers the Electron preload bridge', async () => {
     interrupt: false,
     message: { image: true }
   })
-  assert.deepEqual(await adapter.sendTask({ prompt: 'Map this.' }, { taskId: 'task:1' }), {
+  assert.deepEqual(await adapter.sendTask({ prompt: 'Map this.', executionMode: 'autonomous' }, { taskId: 'task:1' }), {
     accepted: true
   })
   assert.deepEqual(calls, [{
     provider: 'yogurtAgent',
-    message: { prompt: 'Map this.' },
+    message: { prompt: 'Map this.', executionMode: 'autonomous' },
     options: { taskId: 'task:1' }
   }])
 })

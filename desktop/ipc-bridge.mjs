@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 
 import {
@@ -380,10 +381,15 @@ function sameWebContents(sender, trusted) {
 
 export function createDesktopBootstrap(agentService) {
   const setup = agentService.getSetup?.() ?? null
+  const projectScopeId = `project:${createHash('sha256')
+    .update(path.resolve(agentService.projectDir), 'utf8')
+    .digest('hex')
+    .slice(0, 24)}`
   return Object.freeze({
     toolOutput: Object.freeze({
       projectDir: agentService.projectDir,
       canvasDir: agentService.canvasDir,
+      projectScopeId,
       workspaceName: setup?.workspace?.configured
         ? path.basename(agentService.projectDir)
         : '开始使用 Yogurt AI'

@@ -120,7 +120,8 @@ const cowartMcp = Object.freeze({
 const openai = Object.freeze({
   toolOutput: Object.freeze({
     projectDir: bootstrap.toolOutput?.projectDir,
-    canvasDir: bootstrap.toolOutput?.canvasDir
+    canvasDir: bootstrap.toolOutput?.canvasDir,
+    projectScopeId: bootstrap.toolOutput?.projectScopeId
   })
 })
 

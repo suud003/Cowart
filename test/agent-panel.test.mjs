@@ -9,6 +9,9 @@ import { createServer } from 'vite'
 let CowartAgentPanel
 let AGENT_ACTIVITY_MAX_ITEMS
 let AGENT_CONVERSATION_MAX_TURNS
+let agentExecutionInstructions
+let agentExecutionModeScope
+let agentExecutionModeStorageKey
 let buildAgentPanelMessage
 let buildElicitationContent
 let claimAgentSubmission
@@ -21,7 +24,11 @@ let codexLoginButtonLabel
 let connectionPresentation
 let mergeAgentActivityItems
 let normalizeActivityEvent
+let normalizeAgentExecutionMode
 let normalizeElicitationRequest
+let persistAgentExecutionMode
+let readAgentExecutionMode
+let resolveAgentExecutionModeForTask
 let reduceAgentConversation
 let releaseAgentSubmission
 let restoreAgentConversationState
@@ -44,6 +51,9 @@ test.before(async () => {
     AGENT_ACTIVITY_MAX_ITEMS,
     AGENT_CONVERSATION_MAX_TURNS,
     CowartAgentPanel,
+    agentExecutionInstructions,
+    agentExecutionModeScope,
+    agentExecutionModeStorageKey,
     buildAgentPanelMessage,
     buildElicitationContent,
     claimAgentSubmission,
@@ -56,7 +66,11 @@ test.before(async () => {
     connectionPresentation,
     mergeAgentActivityItems,
     normalizeActivityEvent,
+    normalizeAgentExecutionMode,
     normalizeElicitationRequest,
+    persistAgentExecutionMode,
+    readAgentExecutionMode,
+    resolveAgentExecutionModeForTask,
     reduceAgentConversation,
     releaseAgentSubmission,
     restoreAgentConversationState,
@@ -88,9 +102,43 @@ test('Agent panel tasks include stable page and selection IDs instead of screens
   assert.match(message.prompt, /不要依赖截图坐标/)
   assert.match(message.prompt, /当前选中的 2 个对象/)
   assert.match(message.prompt, /\$cowart-auto-compose/)
-  assert.match(message.prompt, /整页画布布局蓝图/)
-  assert.match(message.prompt, /布局蓝图不是概念图/)
-  assert.match(message.prompt, /原生可编辑结构区/)
+  assert.equal(message.executionMode, 'guided')
+  assert.match(message.prompt, /接近成品的整页视觉预演/)
+  assert.match(message.prompt, /结构化计划控制最终坐标和防碰撞/)
+  assert.match(message.prompt, /执行方式：分步确认/)
+})
+
+test('Agent execution mode is fail-closed, project-scoped, and explicit in each task envelope', () => {
+  const memory = new Map()
+  const storage = {
+    getItem: (key) => memory.get(key) ?? null,
+    setItem: (key, value) => memory.set(key, value)
+  }
+
+  assert.equal(normalizeAgentExecutionMode(undefined), 'guided')
+  assert.equal(normalizeAgentExecutionMode('invalid'), 'guided')
+  assert.equal(readAgentExecutionMode(storage, 'Project A'), 'guided')
+  assert.equal(agentExecutionModeStorageKey('Project A').includes('Project%20A'), true)
+  persistAgentExecutionMode('autonomous', storage, 'Project A')
+  assert.equal(readAgentExecutionMode(storage, 'Project A'), 'autonomous')
+  assert.equal(readAgentExecutionMode(storage, 'Project B'), 'guided')
+  assert.equal(agentExecutionModeScope({ projectScopeId: 'project:aaa', projectName: 'Same' }), 'project:aaa')
+  assert.equal(resolveAgentExecutionModeForTask({
+    currentMode: 'autonomous',
+    currentProjectScope: 'project:aaa',
+    taskContext: { projectScopeId: 'project:bbb', projectName: 'Same' },
+    storage
+  }), 'guided')
+
+  const message = buildAgentPanelMessage('自动编排这个需求', {
+    projectName: 'Project A',
+    executionMode: readAgentExecutionMode(storage, 'Project A')
+  })
+  assert.equal(message.executionMode, 'autonomous')
+  assert.match(message.prompt, /执行方式：自动执行/)
+  assert.match(message.prompt, /仅对 \$cowart-auto-compose/)
+  assert.match(message.prompt, /不能自动同意/)
+  assert.match(agentExecutionInstructions('guided'), /整页视觉预演后暂停一次/)
 })
 
 test('Agent panel bounds structured shape context to 250 IDs', () => {
@@ -188,8 +236,11 @@ test('Agent panel removes redundant diagram generation shortcuts from Agent surf
   assert.match(markup, /整理选区/)
   assert.match(markup, /生成 PRD/)
   assert.match(markup, /智能编排/)
-  assert.match(markup, /自动分流，先确认整页布局蓝图/)
-  assert.match(markup, /先生成整张画布的页面布局蓝图供你确认/)
+  assert.match(markup, /先预演整页，再稳定拆分生成/)
+  assert.match(markup, /先生成接近成品的整页视觉预演/)
+  assert.match(markup, /自动推进画布/)
+  assert.match(markup, /aria-pressed="false"/)
+  assert.match(markup, /不会自动批准命令、需 Codex 审批的文件修改、外部授权或敏感信息请求/)
   assert.doesNotMatch(markup, /生成框线图/)
   assert.doesNotMatch(actionMenuSource, /生成画布框线图/)
 })

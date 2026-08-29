@@ -18,10 +18,12 @@ const COWART_TOOL_NAMES = Object.freeze([
   'save_cowart_reference_image',
   'save_cowart_selection_state',
   'save_cowart_view_state',
-  'track_cowart_analytics_event'
+  'track_cowart_analytics_event',
+  'validate_cowart_auto_compose_plan'
 ])
 const COWART_TOOL_SET = new Set(COWART_TOOL_NAMES)
 const APPROVAL_DECISIONS = Object.freeze(['accept', 'acceptForSession', 'decline', 'cancel'])
+const EXECUTION_MODES = new Set(['guided', 'autonomous'])
 
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -34,19 +36,43 @@ function requiredString(value, label, maxLength = 100_000) {
   return text
 }
 
-function taskText(task) {
-  if (typeof task === 'string') return requiredString(task, 'Task text')
-  if (!isRecord(task)) throw new TypeError('sendTask expects a string or task object.')
-  if (typeof task.prompt === 'string') return requiredString(task.prompt, 'Task prompt')
-  if (typeof task.content === 'string') return requiredString(task.content, 'Task content')
-  if (Array.isArray(task.content)) {
-    const parts = task.content
-      .filter((item) => isRecord(item) && item.type === 'text')
-      .map((item) => String(item.text || '').trim())
-      .filter(Boolean)
-    return requiredString(parts.join('\n\n'), 'Task content')
+export function taskExecutionMode(task) {
+  if (!isRecord(task) || !EXECUTION_MODES.has(task.executionMode)) return 'guided'
+  return task.executionMode
+}
+
+export function executionModeEnvelope(mode) {
+  if (mode === 'autonomous') {
+    return [
+      '[Yogurt AI execution mode: autonomous]',
+      'The user enabled continuous execution for this Yogurt AI task. Skip only the cowart-auto-compose composition-reference product checkpoint and ordinary reversible canvas-layout clarification. Continue through preview and slot execution in the same turn.',
+      'This mode never grants or auto-approves command execution, file-change approval, external network or website access, project-external writes, credentials, payment, deletion of user content, or MCP elicitation. Keep approvalPolicy and sandbox boundaries unchanged.'
+    ].join('\n')
   }
-  throw new TypeError('sendTask requires prompt or text content.')
+  return [
+    '[Yogurt AI execution mode: guided]',
+    'Pause once after a cowart-auto-compose composition reference is visible and verified. Resume fan-out only after the user approves the current composition tuple. Keep all normal approval and elicitation boundaries unchanged.'
+  ].join('\n')
+}
+
+function taskText(task) {
+  const mode = taskExecutionMode(task)
+  let text = null
+  if (typeof task === 'string') text = requiredString(task, 'Task text')
+  else {
+    if (!isRecord(task)) throw new TypeError('sendTask expects a string or task object.')
+    if (typeof task.prompt === 'string') text = requiredString(task.prompt, 'Task prompt')
+    else if (typeof task.content === 'string') text = requiredString(task.content, 'Task content')
+    else if (Array.isArray(task.content)) {
+      const parts = task.content
+        .filter((item) => isRecord(item) && item.type === 'text')
+        .map((item) => String(item.text || '').trim())
+        .filter(Boolean)
+      text = requiredString(parts.join('\n\n'), 'Task content')
+    }
+  }
+  if (!text) throw new TypeError('sendTask requires prompt or text content.')
+  return `${executionModeEnvelope(mode)}\n\n${text}`
 }
 
 function turnIdFrom(response) {

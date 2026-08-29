@@ -6,9 +6,14 @@ import {
   importThinkingMaterial,
   undoThinkingOperation,
 } from "./thinking-canvas.mjs";
+import {
+  digestAutoComposePagePlan,
+  validateAutoComposePagePlan,
+} from "./auto-compose-plan.mjs";
 
 export const THINKING_TOOL_NAMES = {
   getContext: "get_cowart_thinking_context",
+  validateAutoComposePlan: "validate_cowart_auto_compose_plan",
   importMaterial: "import_cowart_material",
   applyOperations: "apply_cowart_thinking_operations",
   undoOperation: "undo_cowart_thinking_operation",
@@ -295,6 +300,32 @@ export function registerCowartThinkingTools(server) {
       return toolText(
         `Loaded ${context.shapes.length} Yogurt AI thinking object(s) from ${context.scope} at revision ${context.revision}.`,
         context,
+      );
+    },
+  );
+
+  server.registerTool(
+    THINKING_TOOL_NAMES.validateAutoComposePlan,
+    {
+      title: "Validate Yogurt AI Auto Compose Page Plan",
+      description:
+        "Deterministically validate and canonicalize a v3 Yogurt AI auto-compose page plan before generating its full-page composition reference. Rejects unsupported content specs, over-capacity diagrams/cards, out-of-frame slots, duplicate identities, overlap, and insufficient gutters; returns the exact canonical SHA-256 digest that binds the preview and final parts.",
+      inputSchema: {
+        plan: z.record(z.string(), z.unknown()),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input = {}) => {
+      const plan = validateAutoComposePagePlan(input.plan);
+      const pagePlanDigest = digestAutoComposePagePlan(plan);
+      return toolText(
+        `Validated ${plan.pagePlan.slots.length} non-overlapping Yogurt AI page-plan slots with digest ${pagePlanDigest}.`,
+        { ok: true, plan, pagePlanDigest },
       );
     },
   );

@@ -111,5 +111,7 @@ npm run verify:packaged
 | `YOGURT_DESKTOP_DEBUG` | 设为 `1` 时把 renderer 错误输出到终端 |
 | `YOGURT_DESKTOP_CAPTURE_PATH` | 保存一次性桌面截图并退出 |
 | `YOGURT_DESKTOP_CAPTURE_DELAY_MS` | 截图前等待时间，限制在 250–15,000 ms |
+| `YOGURT_DESKTOP_CAPTURE_AGENT_PANEL=1` | 截图前打开 Codex Agent 面板，用于真实界面回归 |
+| `YOGURT_DESKTOP_CAPTURE_AUTO_ADVANCE=1` | 截图前打开面板并启用“自动推进画布”，用于真实界面回归 |
 
 桌面桥接基于 [Codex App Server](https://learn.chatgpt.com/docs/app-server) 的本机 stdio 协议，并使用其 `account/read`、`account/login/start` 与登录完成通知实现应用内授权。当前安装包固定并验证 `@openai/codex 0.144.3`；升级依赖后应重新执行桌面与打包探针。

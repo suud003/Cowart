@@ -3,6 +3,8 @@ import { EventEmitter, once } from 'node:events'
 import test from 'node:test'
 
 import {
+  executionModeEnvelope,
+  taskExecutionMode,
   YOGURT_DESKTOP_CAPABILITY_CONTRACT,
   YogurtAgentService
 } from '../desktop/agent-service.mjs'
@@ -170,6 +172,67 @@ test('YogurtAgentService starts and steers turns while returning acceptance only
   const startThreadCall = client.calls.find(([name]) => name === 'startThread')
   assert.equal(startThreadCall[1].approvalPolicy, 'on-request')
   assert.equal(startThreadCall[1].sandbox, 'workspace-write')
+})
+
+test('YogurtAgentService injects a narrow fail-closed execution envelope without changing security policy', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+
+  assert.equal(taskExecutionMode({ executionMode: 'autonomous' }), 'autonomous')
+  assert.equal(taskExecutionMode({ executionMode: 'invalid' }), 'guided')
+  assert.equal(taskExecutionMode('plain task'), 'guided')
+  assert.match(executionModeEnvelope('autonomous'), /Skip only the cowart-auto-compose composition-reference product checkpoint/)
+  assert.match(executionModeEnvelope('autonomous'), /never grants or auto-approves/)
+
+  await service.sendTask({ prompt: 'Compose this page.', executionMode: 'autonomous' })
+  const startTurnCall = client.calls.find(([name]) => name === 'startTurn')
+  assert.match(startTurnCall[2], /^\[Yogurt AI execution mode: autonomous\]/)
+  assert.match(startTurnCall[2], /Compose this page\./)
+  const startThreadCall = client.calls.find(([name]) => name === 'startThread')
+  assert.equal(startThreadCall[1].approvalPolicy, 'on-request')
+  assert.equal(startThreadCall[1].sandbox, 'workspace-write')
+
+  const guidedClient = new FakeCodexClient()
+  const guidedService = new YogurtAgentService({ client: guidedClient, projectDir: 'C:\\workspace' })
+  await guidedService.sendTask({ prompt: 'Continue.', executionMode: 'unexpected' })
+  const guidedTurnCall = guidedClient.calls.find(([name]) => name === 'startTurn')
+  assert.match(guidedTurnCall[2], /^\[Yogurt AI execution mode: guided\]/)
+})
+
+test('autonomous canvas execution never auto-resolves protected approvals or MCP elicitations', async () => {
+  const client = new FakeCodexClient()
+  const service = new YogurtAgentService({ client, projectDir: 'C:\\workspace' })
+  const events = []
+  service.on('event', (event) => events.push(event))
+  await service.sendTask({ prompt: 'Compose this page.', executionMode: 'autonomous' })
+
+  client.emit('serverRequest', {
+    requestId: 'autonomous-command',
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: 'thr_1', turnId: 'turn_1', itemId: 'item:command', reason: 'Run a command' }
+  })
+  client.emit('serverRequest', {
+    requestId: 'autonomous-file',
+    method: 'item/fileChange/requestApproval',
+    params: { threadId: 'thr_1', turnId: 'turn_1', itemId: 'item:file', reason: 'Change a file' }
+  })
+  client.emit('serverRequest', {
+    requestId: 'autonomous-form',
+    method: 'mcpServer/elicitation/request',
+    params: standardElicitationParams()
+  })
+
+  assert.deepEqual(
+    events.filter(({ type }) => type === 'approval.requested').map(({ requestId }) => requestId),
+    ['autonomous-command', 'autonomous-file']
+  )
+  assert.equal(
+    events.some(({ type, requestId }) => type === 'elicitation.requested' && requestId === 'autonomous-form'),
+    true
+  )
+  assert.equal(client.calls.some(([name]) => name === 'respondToApproval'), false)
+  assert.equal(client.calls.some(([name]) => name === 'respondToElicitation'), false)
+  assert.equal(service.getState().pendingElicitations, 1)
 })
 
 test('YogurtAgentService resumes and persists one Codex thread per project', async () => {
@@ -871,6 +934,7 @@ test('IPC bootstrap can claim exactly one provisional renderer before BrowserWin
   const firstEvent = { sender: firstRenderer, returnValue: null }
   bootstrap(firstEvent)
   assert.equal(firstEvent.returnValue.toolOutput.projectDir, service.projectDir)
+  assert.match(firstEvent.returnValue.toolOutput.projectScopeId, /^project:[0-9a-f]{24}$/)
   assert.equal(provisional, firstRenderer)
 
   trusted = firstRenderer
