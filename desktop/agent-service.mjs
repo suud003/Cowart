@@ -53,13 +53,13 @@ export function executionModeEnvelope(mode) {
   if (mode === 'autonomous') {
     return [
       '[Yogurt AI execution mode: autonomous]',
-      'The user enabled non-interactive execution for this Yogurt AI task. Continue through planning, preview, workspace-local commands, reversible canvas edits, and slot execution without asking for confirmations or MCP forms.',
+      'The user enabled non-interactive execution for this Yogurt AI task. Continue through context reading, semantic planning, native-diagram dry-run, and reversible canvas edits without asking for ordinary layout confirmations or MCP forms.',
       'The turn uses approvalPolicy=on-request with approvalsReviewer=auto_review inside the existing workspace-write sandbox. Do not attempt to escape the workspace, obtain credentials, authorize an external account, make a payment, or delete user-authored content. If a protected action is required, leave it undone and report the boundary instead of blocking the user.'
     ].join('\n')
   }
   return [
     '[Yogurt AI execution mode: guided]',
-    'Pause once after a cowart-auto-compose composition reference is visible and verified. Resume fan-out only after the user approves the current composition tuple. Keep all normal approval and elicitation boundaries unchanged.'
+    'Complete safe native editable-diagram planning, dry-run, and apply in the same turn without a visual-preview checkpoint. Ask only when semantic ambiguity would materially change the diagram or a protected action requires user authority. Keep all normal approval and elicitation boundaries unchanged.'
   ].join('\n')
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.12+codex.20260829",
-  "description": "An editable AI product canvas with source-grounded thinking and a Codex Agent workbench.",
+  "version": "0.2.13+codex.20260901",
+  "description": "An AI canvas that turns requests into Excalidraw-style native editable diagrams.",
   "author": {
     "name": "ZHONG XIN",
     "email": "zhongxin123456@gmail.com",
@@ -14,9 +14,9 @@
     "canvas",
     "tldraw",
     "whiteboard",
-    "auto-compose",
-    "image-generation",
-    "visual-thinking",
+    "excalidraw-style",
+    "editable-diagram",
+    "diagram-layout",
     "codex-agent",
     "electron"
   ],
@@ -24,8 +24,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Yogurt AI",
-    "shortDescription": "Think on an editable canvas, hand work to Codex Agent, and bring the result back.",
-    "longDescription": "Yogurt AI is an installable AI product workspace that combines a tldraw-powered native canvas with a canvas-aware Codex Agent workbench. Organize source material, send the active page or exact selection to the agent, follow plans and changes, approve controlled actions, and return editable semantic diagrams, PRDs, prototypes, images, HTML, and presentations to one persistent project canvas. For mixed briefs, Agent creates a near-final full-page visual preview, validates non-overlapping regions and content capacity, then rebuilds images, native editable structures, and source-linked evidence from the same page plan. An optional auto-advance mode continues reversible canvas steps without weakening Codex approval boundaries.",
+    "shortDescription": "Turn a request into an Excalidraw-style diagram you can keep editing.",
+    "longDescription": "Yogurt AI turns text, the active page, or an exact selection into an Excalidraw-style diagram made from native editable cards, text, frames, and bound arrows. The Agent uses source-aware context and html-line-svg layout rules to choose reading order, spacing, ports, and obstacle-free routes, then validates collisions and bounds before writing to the canvas. Every generated element remains individually selectable, movable, resizable, editable, deletable, and reconnectable.",
     "developerName": "ZHONG XIN",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
@@ -34,26 +34,21 @@
     "composerIcon": "./assets/app-icon.png",
     "capabilities": [
       "Interactive canvas",
-      "Desktop Codex Agent workbench",
-      "Canvas-aware Agent tasks and approvals",
-      "Near-final preview-first mixed-output orchestration",
-      "Optional auto-advance for reversible canvas work",
+      "Canvas-aware Codex Agent",
+      "Excalidraw-style hand-drawn visual language",
+      "Native editable cards, frames, text, and bound arrows",
+      "Deterministic html-line-svg layout and collision checks",
       "Native Codex widget",
       "Source-grounded reasoning",
       "Revision-guarded reversible canvas edits",
-      "Native editable semantic canvas diagrams",
-      "Interactive PRD and prototype workspaces",
-      "AI image generation",
-      "Annotation-driven editing",
-      "HTML and PowerPoint canvas export",
+      "Selection-scoped diagram revision",
       "Project-local persistence"
     ],
     "defaultPrompt": [
       "Open Yogurt AI for this project.",
-      "Route one mixed requirement into a near-final full-page visual preview, validate its regions, then rebuild images, native editable diagrams, and evidence cards from the same plan.",
-      "Organize these documents into source-linked cards and relationships on the canvas.",
-      "Turn my selected Yogurt notes into a traceable semantic line diagram directly on the current canvas.",
-      "Turn my selected notes and pasted requirement excerpts into an interactive PRD, then preview a snapshot to sync back."
+      "Turn this requirement into an Excalidraw-style native editable diagram on the current canvas.",
+      "Organize the selected notes into editable cards, frames, and bound arrows without creating an image or PRD.",
+      "Improve this selected diagram while preserving my text edits and stable object IDs."
     ]
   }
 }

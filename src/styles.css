@@ -553,7 +553,7 @@ body {
   white-space: nowrap;
 }
 
-.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="auto-compose"] {
+.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="editable-diagram"] {
   min-height: 58px;
   background: #f0f4ff;
   border-color: #cbd8fa;

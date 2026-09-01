@@ -7,7 +7,7 @@ export function buildThinkingReviewPrompt({
   height
 }) {
   return [
-    'Use $cowart-thinking-agent to carry out this scoped visual-canvas request.',
+    'Use $cowart-semantic-diagram to carry out this scoped native editable-diagram request.',
     '',
     'User request:',
     userInstruction.trim(),
@@ -27,10 +27,10 @@ export function buildThinkingReviewPrompt({
     'Required workflow:',
     '1. Read the selected Yogurt AI context and preserve links to source material.',
     '2. Briefly interpret the request and visible marks; ask only when an ambiguity would materially change the result.',
-    '3. Preview one typed local operation batch against the latest revision.',
+    '3. Preserve stable semantic IDs when revising an existing generated diagram. Preview one typed native operation batch against the latest revision.',
     '4. Apply that same batch only to the selected region. Never rewrite, move, or delete unrelated page content.',
     '5. An explicit request to delete selected content is authorization for that selected content only; never infer deletion.',
     '6. Explain what changed, the evidence used, and provide the operation ID for undo.',
-    'Use existing Yogurt AI image and HTML insertion tools when a requested chart or visual cannot be represented as cards and relations.'
+    'Use only native editable cards, semantic zones, text, and bound relations. Keep the Excalidraw-style draw stroke and font, and never fall back to image, HTML, SVG, Slides, Auto Compose, or PRD output.'
   ].join('\n')
 }

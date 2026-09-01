@@ -4,6 +4,23 @@ export const SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE =
   'COWART_SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE'
 export const SEMANTIC_DIAGRAM_MAX_CONTEXT_SHAPES = 250
 
+export const SEMANTIC_DIAGRAM_QUICK_PROMPT = [
+  '使用 $cowart-semantic-diagram 把当前需求生成到 Yogurt AI 画布。',
+  '只使用原生可编辑卡片、分区、文字和绑定箭头，呈现 Excalidraw 风格；不要生成位图、整页预演、PRD、HTML、SVG 或 Slides。',
+  '先用 html-line-svg 语义与布局规则确定阅读顺序、层级、间距和端口，再 dry-run 验证无碰撞、无越界后直接写入当前画布。',
+  '每个节点和箭头都必须可以单独选择、改字、移动、缩放、删除和重新连接。'
+].join('\n')
+
+export const SEMANTIC_DIAGRAM_ROUTING_HINT = [
+  'Yogurt AI 当前只聚焦原生可编辑图（隐藏应用执行上下文，不是用户原话）：',
+  '- 将用户对流程、系统、关系、状态、对比、架构或概念的描述默认路由到 $cowart-semantic-diagram。',
+  '- 输出必须是当前画布中的原生 tldraw/Excalidraw 风格对象：cards、purpose:"semantic" zones、editable text 与 bound relations。',
+  '- 禁止调用自动编排、图片生成、Product Bridge、Interaction PRD、AI HTML、inline SVG 或 Slides 能力；复杂内容应拆成多张相邻原生图，而不是栅格化或降级为单一图块。',
+  '- 新建图时不要手写节点坐标；让 layoutEngine:"html-line-svg" 负责层级、间距、端口、避障与画框收紧。',
+  '- 有选区时保持来源对象不动，优先在选区旁生成或只修改明确点名的已生成对象；无选区时使用当前整页作为语义来源。',
+  '- 普通布局选择采用可逆默认值，不要要求用户逐项确认。'
+].join('\n')
+
 function normalizedText(value, fallback) {
   const text = String(value ?? '').trim()
   return text || fallback
@@ -53,9 +70,9 @@ export function buildSemanticDiagramPrompt({
     : `get_cowart_thinking_context(scope: "page", pageId: ${JSON.stringify(pageId)})`
 
   return [
-    'Use $cowart-semantic-diagram to draw a traceable semantic line diagram directly on the current Yogurt AI canvas.',
-    'This is a canvas operation, not a Product Bridge or Interaction PRD task. Do not create, update, or embed a PRD workspace.',
-    '输出必须直接在当前 Yogurt AI canvas 落图。',
+    'Use $cowart-semantic-diagram to draw a traceable, Excalidraw-style semantic diagram directly on the current Yogurt AI canvas.',
+    'This invocation is native-editable only. It is not a Product Bridge, Interaction PRD, image, HTML, SVG, Slides, or Auto Compose task.',
+    '输出必须直接在当前 Yogurt AI canvas 落图，并且每个节点、文字和箭头都可单独编辑。',
     '',
     '当前 Yogurt AI 范围：',
     `- 当前页面：${pageName} (${pageId})`,
@@ -72,20 +89,19 @@ export function buildSemanticDiagramPrompt({
     '4. 原始画布对象必须保持不动。新图保留 source shape IDs，并区分用户原话、事实、推断、假设与待确认问题。',
     '',
     '绘图与布局要求：',
-    '1. 默认使用 apply_cowart_safe_thinking_operations 生成可单独选择和编辑的 Yogurt 原生 cards、purpose:"semantic" 的 zones 与 bound relations；不要因为它是流程、架构、状态或对比图就自动改成 PRD 页面或 HTML。',
+    '1. 只使用 apply_cowart_safe_thinking_operations 生成可单独选择和编辑的 Yogurt 原生 cards、purpose:"semantic" 的 zones 与 bound relations；不要创建图片、整页视觉预演、PRD 页面、HTML 或 SVG 图块。',
     '2. 顶层传 semanticDiagram：version:"1"、稳定 diagramId、teachingClaim、readingOrder、diagramType、layoutEngine:"html-line-svg"、layoutMode:"balanced"、layoutFit、sourceShapeIds/sourceIds、完整 objectCount/relationCount，以及可用时的 specDigest。保持分区标题简短；如需显示核心判断，用可换行的 claim card。每个节点/分区传稳定 semantic.id、type、state、origin、order 与 sourceShapeIds。',
     '3. 主流程关系使用 direction:"forward" + path:"primary"；备选路径使用 path:"alternative" 并写清 label/payload；双向同步使用 direction:"bidirectional"；无向关联使用 direction:"none"。每条关系同时传稳定 semanticId、origin、sourceShapeIds/sourceIds 与 lane；包含关系用 parentZoneId 表达，并列对象靠同层布局表达，不添加伪箭头。',
     '4. 选择与 teaching claim 匹配的 readingOrder。先分层与分组，再对齐同级节点并留出安全间距；平行关系使用不同 lane，连线必须绑定源/目标边界，禁止穿过无关文字或节点。',
-    '5. 只有用户明确要求 SVG，或原生对象无法无歧义表达精确端口、泳道、GUI/LUI 或密集避障几何时，才生成单文件 HTML 内联 SVG；它仍必须作为一个独立图块插入当前 Yogurt 画布，不能加入 interaction-prd.json。',
-    '6. SVG 路线必须响应式、可访问且无脚本：viewBox、role=img、唯一 title/desc/marker ID、aria-labelledby、SVG text、non-scaling-stroke；所有可见坐标直接写入 SVG，禁止对可见分组/节点/路径/文字使用 transform；viewBox 必须覆盖节点、文字、描边、marker 与直线/贝塞尔曲线真实极值，并在四周保留不少于 viewBox 较短边 2% 的安全区。禁止 script、foreignObject、远程资源、事件属性、渐变和阴影，并保存 data-cowart-diagram-spec / data-cowart-diagram-prompt。',
+    '5. 使用 Excalidraw 风格视觉契约：手绘 draw 描边与字体、透明填充、中性黑色主线、小号节点、无阴影；只有警告或阻塞状态使用克制的橙/红强调，备选路径使用 dashed。',
+    '6. 单张图优先控制在 12 个节点以内。信息更多时按独立 teaching claim 拆成多张相邻的原生可编辑图；不要压缩字号、堆叠节点、生成超大空框或退化为不可拆分图块。',
     '',
     '插入与验证：',
     '1. 原生路线先用当前 revision + dryRun:true 调用 apply_cowart_safe_thinking_operations，要求 layoutReport.engine 为 html-line-svg、valid 为 true、collisions/outOfBounds 为空，再用完全相同的 semanticDiagram 和 operations 配合返回的 baseRevision 正式应用，并核对 layoutDigest 不变。',
     hasSelection
       ? `2. 若 revision 已变化，重新读取上下文并重新规划，禁止强行落图。原始来源对象必须保持不动，新图放在冻结选区 (${shapeIds[0]}) 旁的空白位置。`
       : `2. 若 revision 已变化，重新读取上下文并重新规划，禁止强行落图。原始来源对象必须保持不动，新图放在当前页面 ${pageId} 的空白位置。`,
-    '3. 在 Yogurt 实际显示尺寸检查文字碰撞、裁切、同级对齐、安全间距、边界端口和平行 lane；确认 simple/native 路线没有产生 cowartHtmlDraft。',
-    '4. 仅当选择 SVG 路线时运行 validate-semantic-svg.mjs，再使用 insert_cowart_html_draft 的 dry-run/baseRevision 流程把图块放到当前画布。',
-    '5. 返回所选表示、diagramId、核心判断、原生 shape/relation IDs 或 SVG 图块 ID、来源覆盖、未确认关系和验证结果；不要只返回代码而不落到画布。'
+    '3. 在 Yogurt 实际显示尺寸检查文字碰撞、裁切、同级对齐、安全间距、边界端口和平行 lane；确认没有产生 cowartHtmlDraft、图片或其他不可逐项编辑的输出。',
+    '4. 返回 diagramId、核心判断、原生 shape/relation IDs、来源覆盖、未确认关系和验证结果；不要只返回代码而不落到画布。'
   ].join('\n')
 }

@@ -5,4 +5,4 @@ interface:
   default_prompt: "Use $cowart-auto-compose to route my mixed requirement, create a near-final full-page visual preview, and rebuild its planned regions as images, native editable diagrams, and source-linked evidence cards."
 
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

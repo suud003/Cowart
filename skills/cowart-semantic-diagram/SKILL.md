@@ -1,25 +1,17 @@
 ---
 name: cowart-semantic-diagram
-description: Create or revise source-traceable semantic diagrams directly on the Yogurt AI canvas. Default to native editable cards, semantic zones, and bound relations using html-line-svg's semantic and layout grammar; use safe inline-SVG canvas blocks only when exact geometry cannot be expressed natively. Never make the diagram a Product Bridge or PRD page.
+description: Create or revise source-traceable, Excalidraw-style diagrams directly on the Yogurt AI canvas as native editable cards, semantic zones, text, and bound relations using html-line-svg's semantic and layout grammar. Never rasterize the diagram or turn it into HTML, SVG, Product Bridge, or PRD output.
 ---
 
 # Yogurt Semantic Diagram
 
 Turn source-grounded ideas into diagrams that remain understandable, editable, and traceable in Yogurt AI. Preserve the user's material and change only the intended page or selection. This is a first-class canvas capability; do not create or modify an Interaction PRD workspace.
 
-## Choose the representation
+## Representation contract
 
-Use **native Yogurt cards, semantic zones, and relations by default**, including flows, hierarchies, state maps, architecture summaries, comparisons, claim-evidence maps, and board-to-peers compositions. Native objects remain individually selectable and editable and carry stable semantic/source metadata. Express containment through real frame parentage and comparison through peer alignment, not fake arrows.
+Always use **native Yogurt cards, short semantic frames, editable text, and bound relations** for flows, hierarchies, state maps, architecture summaries, comparisons, claim-evidence maps, and board-to-peers compositions. Every visible object must remain individually selectable, movable, resizable, editable, deletable, and reconnectable. Express containment through real frame parentage and comparison through peer alignment, not fake arrows.
 
-Use an **HTML draft with one inline semantic SVG only as a canvas-level precision route** when the user explicitly requests SVG or when meaning depends on geometry the native canvas cannot render unambiguously: dense obstacle routing, exact multi-port topology, detailed swimlanes, or GUI/LUI wireframes. The HTML draft is one scalable object on the current Yogurt page; it is never a PRD document or prototype page.
-
-Use a **hybrid** only when both representations add distinct value. Keep a small native summary or zone as the editable index and put the detailed SVG in one anchored HTML draft; do not duplicate the entire graph in both forms.
-
-Do not turn a semantic diagram into a bitmap. Route illustrative or decorative image requests to the Yogurt image skills.
-
-When `$cowart-auto-compose` delegates a block, stay in native-only mode: use editable cards, semantic zones, and bound relations even when the standalone skill would otherwise consider HTML + inline SVG. Honor the validated slot bounds, inset content rectangle, diagram `contentSpec`, and reading order. Pass `layoutEngine: "html-line-svg"`, `layoutMode: "balanced"`, and `layoutFit: "fixed"`; omit node coordinates so the native engine owns placement, center fitting, safe gaps, frame tightening, and port separation. The full-page composition reference may guide broad geometry, density, palette, and rhythm, but every object, label, direction, state, and relation must come from the shared content spec and traceable sources, never pixels or OCR. Keep at most 8 nodes and 10 relations in one slot. Dry-run the complete block, require `layoutReport.valid: true`, and verify its real node/edge bounds, collisions, out-of-bounds list, utilization, and layout digest before applying; never overflow, tangle, or silently rasterize it.
-
-Before authoring or revising an HTML diagram, read [references/diagram-contract.md](references/diagram-contract.md). It defines the semantic model, relation grammar, HTML envelope, layout and port rules, trace fields, and validator contract.
+Never turn a semantic diagram into a bitmap, full-page preview, HTML draft, inline SVG, Slides deck, Product Bridge, or PRD workspace. If one graph would become too dense, split it into adjacent native diagrams with one teaching claim each. Do not shrink text, stack nodes, or create a large empty frame to force everything into one artifact.
 
 ## Capture context and write the semantic plan
 
@@ -31,9 +23,11 @@ Before authoring or revising an HTML diagram, read [references/diagram-contract.
 
 ## Native-card route
 
-Build one connected operation batch with typed card, zone, and relation operations. For a new diagram, omit coordinates so Yogurt can apply SCC-aware layers, peer alignment, label-aware safe gaps, and the requested reading order. Use explicit coordinates only when a repair requires a specific composition. User-authored or unmanaged siblings remain fixed; managed nodes in the same diagram may shift together to preserve reading order, and automatic placement must never overlap a fixed sibling. Use `purpose: "semantic"` for grouping zones.
+Build one connected operation batch with typed card, zone, and relation operations. For a new diagram, omit coordinates so Yogurt can apply SCC-aware layers, peer alignment, label-aware safe gaps, and the requested reading order. Use explicit coordinates only when a repair requires a specific composition. User-authored or unmanaged siblings remain fixed; managed nodes in the same diagram may shift together to preserve reading order, and automatic placement must never overlap a fixed sibling. Use `purpose: "semantic"` for short grouping frames.
 
 Pass a batch-level `semanticDiagram` contract with `version: "1"`, a stable `diagramId`, the teaching claim, diagram type, reading order, `layoutEngine: "html-line-svg"`, `layoutMode: "balanced" | "compact"`, `layoutFit: "fixed" | "grow"`, source shape/source IDs, full-diagram object/relation counts, and an optional spec digest. Use `fixed` for an auto-compose slot and `grow` for an unconstrained standalone diagram. Counts are derived for an initial creation batch; provide the complete counts when repairing or extending an existing diagram. Keep the frame name short; when the teaching claim must be visible, create one concise wrap-capable claim card instead of concatenating the full claim into the single-line frame title. Give every new card or zone a stable `semantic.id`, object type, visible state, origin, reading order, and source-shape mappings. Give every relation a stable `semanticId`, semantic `kind`, `direction`, `path`, optional payload, lane, `origin`, `sourceShapeIds`, and `sourceIds`.
+
+Keep a standalone diagram to at most 12 nodes whenever possible. A legacy fixed auto-compose slot remains bounded to at most 8 nodes and 10 relations; split denser material into adjacent native diagrams instead of compressing it.
 
 Use the relation grammar directly in native operations:
 
@@ -46,34 +40,19 @@ Use the relation grammar directly in native operations:
 
 The canvas engine derives color, dash, arrowheads, boundary anchors, and parallel lanes from those semantics. Do not override semantic relation styling with arbitrary color or dash values.
 
-Call `apply_cowart_safe_thinking_operations` with `dryRun: true` and the captured revision. Require a matching `layoutReport` whose `engine` is `html-line-svg`, `valid` is true, `collisions` and `outOfBounds` are empty, and `layoutDigest` is present. Verify that every non-root card has the intended relation and that only the selected region changes. Apply the identical operation list through the same safe tool against the preview's `baseRevision`, then require the same layout digest. If the revision changed or the digest differs, discard the preview, re-read context, and recompute. The safe tool may update, move, or resize only Cowart-managed shapes and cannot accept `delete_shape` or `allowUserAuthoredEdits`.
+Use the Excalidraw-style visual contract throughout:
+
+- cards use `geo: "cowart-card"`, `dash: "draw"`, `font: "draw"`, `size: "s"`, and are unlocked;
+- default card fill is transparent; use `fill: "hachure"` only for a small number of meaningful emphasized nodes, never as decoration;
+- primary and unlabelled relations are neutral black `draw` strokes; alternatives are `dashed`;
+- warning and blocked states may use restrained orange or red; do not assign a different color to every category;
+- use short visible labels and place detail in the card body so text never spills outside the node.
+
+Call `apply_cowart_safe_thinking_operations` with `dryRun: true` and the captured revision. Require a matching `layoutReport` whose `engine` is `html-line-svg`, `layoutReport.valid` is true, `collisions` and `outOfBounds` are empty, and `layoutDigest` is present. Validate the real node/edge bounds returned by that dry run, not guessed placeholder geometry. Verify that every non-root card has the intended relation and that only the selected region changes. Apply the identical operation list through the same safe tool against the preview's `baseRevision`, then require the same layout digest. If the revision changed or the digest differs, discard the preview, re-read context, and recompute. The safe tool may update, move, or resize only Cowart-managed shapes and cannot accept `delete_shape` or `allowUserAuthoredEdits`.
 
 Use native relation labels only when the verb carries meaning not already clear from the hierarchy. Keep source-shape IDs and semantic IDs in the native semantic metadata; do not borrow Product Bridge zone/trace fields. Never write raw tldraw records.
 
 To revise card or zone semantics, use the restricted `semantic` patch on `update_card` or `update_zone`; keep `diagramId` and `semanticId` stable and change only type, state, origin, order, or source mappings. To revise a relation's direction, path, lane, label, payload, provenance, or endpoints, explicit deletion is required because there is no `update_relation` operation. Obtain explicit user authorization, then use the destructive `apply_cowart_thinking_operations` entry point with `delete_shape` before `create_relation` and reuse the stable relation `semanticId`. Never route that replacement through autonomous safe execution.
-
-## HTML inline-SVG route
-
-Create a self-contained HTML document containing exactly one semantic SVG. The document must include two inert, machine-readable siblings:
-
-~~~html
-<template data-cowart-diagram-spec type="application/json">{"schemaVersion":"1","diagramId":"checkout-flow"}</template>
-<template data-cowart-diagram-prompt type="application/json">{"schemaVersion":"1","diagramId":"checkout-flow","prompt":"Rebuild the source-grounded checkout flow using the embedded specification."}</template>
-~~~
-
-The real templates must contain the complete contract described in the reference. JSON-escape the less-than character as \u003c before embedding so source text cannot close a template. Keep the prompt synchronized with the final diagram rather than preserving abandoned layout attempts.
-
-Apply the relation grammar and route every directional line between explicit object-boundary ports. Allocate group boundaries, label zones, and relation lanes before drawing objects. Bake visible coordinates into the SVG instead of using `transform`. Size the root viewBox from all nodes, labels, strokes, markers, and true line/Bezier extrema, with an outer inset of at least 2% of the shorter viewBox dimension. Do not use a visually detached arrow as though it were a connected edge.
-
-Validate the finished HTML with:
-
-~~~powershell
-node "<skill-dir>/scripts/validate-semantic-svg.mjs" --root "<artifact-root>" "<diagram.html>"
-~~~
-
-The validator also supports --stdin when the caller can safely stream markup without creating a file. It rejects static geometry that exceeds the padded viewBox, but it is not a substitute for collision checks, real-canvas geometry, or screenshot review.
-
-Call insert_cowart_html_draft with dryRun true, an anchor shape when the source is local, and dimensions appropriate to the existing canvas region. Review the planned placement, then repeat the exact content, placement, and semanticDiagram payload with dryRun false and the returned baseRevision. If the revision changed, re-read context and recompute instead of forcing the insertion. To revise an existing artifact, target its draftShapeId and set updateExistingDraft true; do not create a duplicate beside it.
 
 ## Verify the rendered result
 
@@ -85,20 +64,13 @@ Check the actual Yogurt viewport, not only the source markup:
 - lines do not cross unrelated objects or text, and parallel routes do not visually merge;
 - containment labels have their own safe zone and inner objects remain within the outer boundary;
 - title, description, reading order, font size, clipping, and narrow-view behavior remain usable;
-- the source context is still understandable without seeing the SVG.
+- each card keeps its current live rich text when a later Agent update changes only color, state, or provenance;
+- saving and reopening preserves rich text, frame parentage, semantic IDs, arrow bindings, and style props.
 
 If the geometry is ambiguous, reassign ports, separate lanes, use a monotonic Bezier route, or split the diagram. Do not preserve a dense network merely because the markup validates.
 
-## Trace and write back
+## Revise and report
 
-Treat the specification template as the round-trip source of truth and the SVG as its rendering. Preserve unknown fields when revising it.
+When revising an existing generated diagram, match objects by stable semantic IDs instead of recreating the whole graph. Keep manually edited rich text and user-positioned nodes unless the user explicitly asks to rewrite or relayout them. Use the smallest safe native operation batch; do not replace an editable graph with a new image or monolithic object.
 
-When the user asks to turn an HTML diagram back into native Yogurt structure:
-
-1. Read the current HTML draft and parse both templates; do not reconstruct semantics from pixels alone.
-2. Call get_cowart_thinking_context again and compare the current revision with trace.sourceRevision and trace.lastAppliedRevision.
-3. Build the smallest native-card operation list from the stable semantic IDs and mappings. Preserve user-authored shapes and unrelated regions.
-4. Preview additive and Cowart-managed changes with `apply_cowart_safe_thinking_operations` and show which objects and relations will be created or updated. Require explicit confirmation before overwriting user-authored content or applying a materially changed return plan. If the confirmed plan requires `delete_shape` or `allowUserAuthoredEdits`, use the destructive `apply_cowart_thinking_operations` entry point; otherwise keep using the safe tool.
-5. Apply the identical operations against the preview revision. On success, update the existing HTML draft through insert_cowart_html_draft so its spec records returned shape IDs, operation IDs, and the applied revision. If the canvas revision is stale, recompute instead of forcing the write.
-
-Report the chosen representation, diagram claim, source scope and access limitations, artifact or operation IDs, validation performed, inference introduced, and whether any return is applied, awaiting confirmation, or stale.
+Report the diagram claim, source scope and access limitations, affected native shape/relation IDs, validation performed, inference introduced, and the operation ID available for undo.

@@ -3,3 +3,6 @@ interface:
   short_description: "把 Yogurt 产品思路变成可评审 PRD 与交互原型并安全回流"
   brand_color: "#FF6234"
   default_prompt: "Use $cowart-product-bridge to turn my selected Yogurt AI product notes and pasted requirement excerpts into a traceable PRD and interactive prototype workspace, then prepare a safe return preview."
+
+policy:
+  allow_implicit_invocation: false

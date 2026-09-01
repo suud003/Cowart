@@ -4,6 +4,30 @@ export const REMOTE_CANVAS_REFRESH_ACTION = Object.freeze({
   CONFLICT: 'conflict'
 })
 
+export function collectNewSemanticDiagramRootIds({
+  localStore = {},
+  remoteStore = {},
+  pageId = null
+} = {}) {
+  return Object.values(remoteStore)
+    .filter((record) => {
+      if (
+        record?.typeName !== 'shape' ||
+        record.type !== 'frame' ||
+        record.meta?.cowartSemanticZone !== true ||
+        !record.meta?.cowartSemanticDiagram?.diagramId ||
+        localStore?.[record.id]
+      ) {
+        return false
+      }
+
+      const parent = remoteStore?.[record.parentId]
+      if (parent?.typeName !== 'page') return false
+      return !pageId || record.parentId === pageId
+    })
+    .map((record) => record.id)
+}
+
 export function classifyRemoteCanvasRefresh({
   revisionBeforeFetch = null,
   currentRevision = null,

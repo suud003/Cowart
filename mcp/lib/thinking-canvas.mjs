@@ -467,6 +467,11 @@ function diagramColor(value) {
   return CARD_COLORS.has(value) ? value : "black";
 }
 
+function cardFill(value) {
+  if (value === "hachure" || value === "pattern") return "pattern";
+  return value === "solid" ? "solid" : "none";
+}
+
 function zoneColor(value) {
   return CARD_COLORS.has(value) ? value : "grey";
 }
@@ -500,6 +505,7 @@ function plainTextFromRichText(richText) {
   for (const block of richText?.content ?? []) {
     let text = "";
     const visit = (node) => {
+      if (node?.type === "hardBreak") text += "\n";
       if (typeof node?.text === "string") text += node.text;
       for (const child of node?.content ?? []) visit(child);
     };
@@ -511,6 +517,9 @@ function plainTextFromRichText(richText) {
 
 function textForShape(shape) {
   if (!shape) return "";
+  if (shape.meta?.cowartThinkingCard === true && shape.props?.richText) {
+    return currentCardTextParts(shape).body;
+  }
   if (typeof shape.meta?.cowartThinkingBody === "string") {
     return shape.meta.cowartThinkingBody.trim();
   }
@@ -1102,14 +1111,17 @@ function shapeContext(store, shape, selected, maxTextLength) {
     nativeSemantic.relation.unsafe = relationValidity.unsafe;
     nativeSemantic.relation.invalidReason = relationValidity.reason;
   }
+  const currentCardText = shape.meta?.cowartThinkingCard === true
+    ? currentCardTextParts(shape)
+    : null;
   return {
     id: shape.id,
     type: shape.type,
     role: inferShapeRole(shape),
     selected,
     bounds: pageBounds(store, shape),
-    title: boundedString(shape.meta?.cowartThinkingTitle, 300) || null,
-    text: boundedString(textForShape(shape), maxTextLength) || null,
+    title: boundedString(currentCardText?.title ?? shape.meta?.cowartThinkingTitle, 300) || null,
+    text: boundedString(currentCardText?.body ?? textForShape(shape), maxTextLength) || null,
     source: compactSource(shape.meta),
     key: boundedString(
       shape.meta?.cowartThinkingKey ?? shape.meta?.cowartThinkingZoneKey ?? shape.meta?.cowartProductZoneKey,
@@ -1278,6 +1290,33 @@ function formatCardText(title, body) {
   return [title, body].filter(Boolean).join("\n\n");
 }
 
+function currentCardTextParts(shape) {
+  const storedTitle = boundedString(shape?.meta?.cowartThinkingTitle, 300);
+  const storedBody = boundedString(shape?.meta?.cowartThinkingBody, 12_000);
+  if (!shape?.props?.richText) return { title: storedTitle, body: storedBody };
+
+  const visibleText = boundedString(plainTextFromRichText(shape.props.richText), 12_302);
+  if (visibleText === formatCardText(storedTitle, storedBody)) {
+    return { title: storedTitle, body: storedBody };
+  }
+
+  if (!visibleText) return { title: "", body: "" };
+
+  const paragraphBreak = visibleText.indexOf("\n\n");
+  if (paragraphBreak >= 0) {
+    return {
+      title: boundedString(visibleText.slice(0, paragraphBreak), 300),
+      body: boundedString(visibleText.slice(paragraphBreak + 2), 12_000),
+    };
+  }
+
+  const [firstLine = "", ...bodyLines] = visibleText.split("\n");
+  return {
+    title: boundedString(firstLine, 300),
+    body: boundedString(bodyLines.join("\n"), 12_000),
+  };
+}
+
 function explicitOrAnchoredCardPagePosition(store, pageId, operation, width, height, references) {
   if (Number.isFinite(operation.x) && Number.isFinite(operation.y)) {
     return { x: operation.x, y: operation.y };
@@ -1422,7 +1461,7 @@ function createCardRecord(store, pageId, operation, createdCount, references, se
     opacity: 1,
     props: {
       geo: COWART_CARD_GEO,
-      dash: semanticDiagram ? "solid" : "draw",
+      dash: "draw",
       url: boundedString(operation.url, 2_000),
       w: width,
       h: height,
@@ -1430,7 +1469,7 @@ function createCardRecord(store, pageId, operation, createdCount, references, se
       scale: 1,
       labelColor: "black",
       color: semanticColor ?? diagramColor(operation.color),
-      fill: "none",
+      fill: cardFill(operation.fill),
       size: "s",
       font: "draw",
       align: body ? "start" : "middle",
@@ -1632,11 +1671,12 @@ function updateThinkingCard(store, operation, allowUserAuthoredEdits, semanticDi
   if (!shape.props?.richText) throw new Error(`Shape ${shape.id} does not contain editable rich text.`);
 
   const role = safeRole(operation.role, shape.meta?.cowartThinkingRole ?? "idea");
+  const currentText = currentCardTextParts(shape);
   const title = operation.title === undefined
-    ? boundedString(shape.meta?.cowartThinkingTitle, 300)
+    ? currentText.title
     : boundedString(operation.title, 300);
   const body = operation.body === undefined
-    ? boundedString(shape.meta?.cowartThinkingBody ?? textForShape(shape), 12_000)
+    ? currentText.body
     : boundedString(operation.body, 12_000);
   const sourceRefs = operation.sourceRefs === undefined
     ? boundedStringList(shape.meta?.cowartThinkingSourceRefs, 50, 500)
@@ -1653,13 +1693,17 @@ function updateThinkingCard(store, operation, allowUserAuthoredEdits, semanticDi
     semanticDiagram,
     "update_card",
   );
+  const hasExplicitTextUpdate = operation.title !== undefined || operation.body !== undefined;
   const updated = {
     ...shape,
     props: {
       ...shape.props,
       color: operation.color === undefined ? shape.props.color : safeColor(operation.color, role),
+      fill: operation.fill === undefined ? shape.props.fill : cardFill(operation.fill),
       url: operation.url === undefined ? shape.props.url : boundedString(operation.url, 2_000),
-      richText: toRichText(formatCardText(title, body)),
+      richText: hasExplicitTextUpdate
+        ? toRichText(formatCardText(title, body))
+        : shape.props.richText,
     },
     meta: {
       ...shape.meta,
@@ -1757,8 +1801,8 @@ function semanticRelationStyle(operation, semanticDiagram) {
     relationType,
     direction,
     path,
-    color: direction === "none" ? "black" : "blue",
-    dash: path === "alternative" ? "dashed" : "solid",
+    color: "black",
+    dash: path === "alternative" ? "dashed" : "draw",
     arrowheadStart: direction === "bidirectional" ? "arrow" : "none",
     arrowheadEnd: direction === "none" ? "none" : "arrow",
   };

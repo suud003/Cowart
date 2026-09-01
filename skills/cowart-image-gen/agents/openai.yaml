@@ -4,4 +4,4 @@ interface:
   default_prompt: "Use $cowart-thinking-canvas:cowart-image-gen to replace the selected Yogurt AI image holder with a generated image."
 
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

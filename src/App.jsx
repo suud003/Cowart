@@ -118,6 +118,7 @@ import {
 } from './canvasSnapshot.js'
 import {
   classifyRemoteCanvasRefresh,
+  collectNewSemanticDiagramRootIds,
   REMOTE_CANVAS_REFRESH_ACTION
 } from './canvasSync.js'
 import {
@@ -158,6 +159,12 @@ import {
   PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE,
   PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
 } from './productBridgePrompt.js'
+import {
+  buildSemanticDiagramPrompt,
+  getSemanticDiagramScopeSize,
+  SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE,
+  SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+} from './semanticDiagramPrompt.js'
 import { getCowartHtmlDraftSandbox } from './htmlDraftSecurity.js'
 
 if (!isYogurtDesktopRenderer()) installCowartHandDrawnFontFaces()
@@ -554,14 +561,31 @@ function storeChangedSinceSnapshot(editor, baselineStore) {
 }
 
 function applyRemoteCanvasSnapshot(editor, snapshot, { preserveLocalChanges = false } = {}) {
-  if (!isCanvasSnapshot(snapshot)) return { changedRecords: 0, skippedRecords: [] }
+  if (!isCanvasSnapshot(snapshot)) {
+    return { changedRecords: 0, skippedRecords: [], addedSemanticDiagramRootIds: [] }
+  }
 
   const sanitized = sanitizeCanvasSnapshotForTldraw(snapshot)
-  if (!sanitized.snapshot) return { changedRecords: 0, skippedRecords: sanitized.skippedRecords }
+  if (!sanitized.snapshot) {
+    return {
+      changedRecords: 0,
+      skippedRecords: sanitized.skippedRecords,
+      addedSemanticDiagramRootIds: []
+    }
+  }
+
+  const localStore = editor.store.getStoreSnapshot().store
+  const addedSemanticDiagramRootIds = preserveLocalChanges
+    ? []
+    : collectNewSemanticDiagramRootIds({
+        localStore,
+        remoteStore: sanitized.snapshot.store,
+        pageId: editor.getCurrentPageId()
+      })
 
   const recordsToPut = Object.values(sanitized.snapshot.store).filter((record) => {
     if (preserveLocalChanges) return false
-    const localRecord = editor.store.get(record.id)
+    const localRecord = localStore[record.id]
     if (!localRecord) return true
     return !recordsAreEqual(localRecord, record)
   })
@@ -573,7 +597,11 @@ function applyRemoteCanvasSnapshot(editor, snapshot, { preserveLocalChanges = fa
         .map((record) => record.id)
 
   if (recordsToPut.length === 0 && recordsToRemove.length === 0) {
-    return { changedRecords: 0, skippedRecords: sanitized.skippedRecords }
+    return {
+      changedRecords: 0,
+      skippedRecords: sanitized.skippedRecords,
+      addedSemanticDiagramRootIds: []
+    }
   }
 
   let changedRecords = 0
@@ -592,7 +620,28 @@ function applyRemoteCanvasSnapshot(editor, snapshot, { preserveLocalChanges = fa
     }
   })
 
-  return { changedRecords, skippedRecords: sanitized.skippedRecords }
+  return {
+    changedRecords,
+    skippedRecords: sanitized.skippedRecords,
+    addedSemanticDiagramRootIds
+  }
+}
+
+function focusNewSemanticDiagrams(editor, shapeIds) {
+  if (!shapeIds?.length || !editor.isInAny('select.idle')) return
+  const bounds = shapeIds
+    .map((shapeId) => editor.getShapePageBounds(shapeId))
+    .filter(Boolean)
+  if (!bounds.length) return
+
+  const left = Math.min(...bounds.map((box) => box.x))
+  const top = Math.min(...bounds.map((box) => box.y))
+  const right = Math.max(...bounds.map((box) => box.x + box.w))
+  const bottom = Math.max(...bounds.map((box) => box.y + box.h))
+  editor.zoomToBounds(
+    { x: left, y: top, w: Math.max(1, right - left), h: Math.max(1, bottom - top) },
+    { inset: 96, targetZoom: 1, animation: { duration: 320 } }
+  )
 }
 
 function getAiImageHolderMeta() {
@@ -3894,6 +3943,89 @@ async function submitCowartProductBridge(editor) {
   }
 }
 
+async function submitCowartSemanticDiagram(editor) {
+  const { selectedRootShapeIds, exactShapeIds } = getCowartFrozenSelectionIds(editor)
+  const currentPageShapeCount = exactShapeIds.length > 0 ? 0 : editor.getCurrentPageShapeIds().size
+  const scopeSize = getSemanticDiagramScopeSize({
+    selectedShapeIds: exactShapeIds,
+    currentPageShapeCount
+  })
+  if (scopeSize.isTooLarge) {
+    const scopeLabel = scopeSize.scope === 'selection' ? '当前选区展开后' : '当前页面'
+    const error = new Error(
+      `${scopeLabel}包含 ${scopeSize.shapeCount} 个对象，超过最多 ${scopeSize.maxShapes} 个对象的限制。请缩小选区${scopeSize.scope === 'page' ? '或拆分页面' : ''}。`
+    )
+    error.code = SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+    error.scope = scopeSize.scope
+    error.shapeCount = scopeSize.shapeCount
+    error.maxShapes = scopeSize.maxShapes
+    throw error
+  }
+
+  const selectedShapeIds = exactShapeIds
+  const currentPageId = editor.getCurrentPageId()
+  const currentPageName = String(editor.getCurrentPage()?.name || '').trim() || '未命名页面'
+  const scope = scopeSize.scope
+  const semanticDiagramContext = {
+    selectedShapes: selectedShapeIds.map((id) => ({ id })),
+    selectedRootShapeIds,
+    exactShapeIds,
+    scope,
+    currentPageId,
+    currentPageName,
+    requestType: 'semantic-diagram',
+    updatedAt: new Date().toISOString()
+  }
+
+  const flushCanvasSnapshot = cowartCanvasSnapshotFlushers.get(editor)
+  if (!flushCanvasSnapshot) {
+    throw new Error('Yogurt AI 画布保存尚未就绪，请稍后再生成可编辑图。')
+  }
+  await flushCanvasSnapshot()
+
+  writeCowartSelectionState(semanticDiagramContext)
+  await saveCowartSelectionState(semanticDiagramContext)
+
+  const prompt = buildSemanticDiagramPrompt({
+    selectedShapeIds,
+    currentPageId,
+    currentPageName
+  })
+  const sender = followUpSender()
+  if (!sender) {
+    let copied = false
+    try {
+      const clipboard = globalThis.navigator?.clipboard
+      if (typeof clipboard?.writeText === 'function') {
+        await clipboard.writeText(prompt)
+        copied = true
+      }
+    } catch (_clipboardError) {
+      // Persisting the exact page and selection still makes the request recoverable.
+    }
+
+    const error = new Error(
+      copied
+        ? '选区/页面上下文已保存，可编辑图指令已复制。请在 Codex 原生 Yogurt AI 画布中发送。'
+        : '选区/页面上下文已保存。生成可编辑图需要在 Codex 原生 Yogurt AI 画布中使用。'
+    )
+    error.code = SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE
+    throw error
+  }
+
+  const response = await sender(
+    { prompt },
+    { promptType: 'other', hasReference: true }
+  )
+  return {
+    response,
+    scope,
+    selectedCount: selectedShapeIds.length,
+    currentPageId,
+    currentPageName
+  }
+}
+
 function CowartCanvasOverlay() {
   return (
     <>
@@ -3904,6 +4036,7 @@ function CowartCanvasOverlay() {
         onCreateHtml={createAiDraftHolderAtViewportCenter}
         onCreateImage={createAiImageHolderAtViewportCenter}
         onCreateProductBridge={submitCowartProductBridge}
+        onCreateSemanticDiagram={submitCowartSemanticDiagram}
         onCreateSlides={createAiSlidesAtViewportCenter}
         onExportCanvasHtml={(editor) => exportCowartCanvas(editor, 'html')}
         onExportCanvasPptx={(editor) => exportCowartCanvas(editor, 'pptx')}
@@ -6830,13 +6963,21 @@ export default function App() {
 
         if (refreshAction === REMOTE_CANVAS_REFRESH_ACTION.IGNORE) return
 
-        const { skippedRecords: nextSkippedRecords } = applyRemoteCanvasSnapshot(
+        const {
+          skippedRecords: nextSkippedRecords,
+          addedSemanticDiagramRootIds
+        } = applyRemoteCanvasSnapshot(
           editor,
           nextSnapshot,
           { preserveLocalChanges: false }
         )
         setSkippedRecords(nextSkippedRecords)
         canvasRevisionRef.current = remoteRevision
+        if (addedSemanticDiagramRootIds.length > 0) {
+          window.requestAnimationFrame(() => {
+            focusNewSemanticDiagrams(editor, addedSemanticDiagramRootIds)
+          })
+        }
       } catch (error) {
         if (error.name === 'AbortError') return
         console.error(error)

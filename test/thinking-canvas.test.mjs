@@ -71,6 +71,20 @@ function relationBindings(snapshot, relationId) {
   );
 }
 
+function richTextPlainText(richText) {
+  const paragraphs = [];
+  for (const block of richText?.content ?? []) {
+    let text = "";
+    const visit = (node) => {
+      if (typeof node?.text === "string") text += node.text;
+      for (const child of node?.content ?? []) visit(child);
+    };
+    visit(block);
+    paragraphs.push(text);
+  }
+  return paragraphs.join("\n").trim();
+}
+
 function simpleBoundsOverlap(first, second) {
   return !(
     first.x + first.props.w < second.x ||
@@ -1697,6 +1711,89 @@ test("snapshot revisions change only when canvas records change", () => {
     operations: [{ type: "create_card", role: "question", title: "What is missing?" }],
   });
   assert.notEqual(snapshotRevision(initial), snapshotRevision(created.snapshot));
+});
+
+test("preserves live canvas text when a later Agent update changes only style or semantics", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: semanticDiagram("native:live-text"),
+    operations: [
+      {
+        type: "create_card",
+        key: "editable",
+        title: "旧标题",
+        body: "旧正文",
+        semantic: { id: "object:editable", type: "concept" },
+      },
+    ],
+  });
+  const cardId = created.references.editable;
+  const manuallyEdited = structuredClone(created.snapshot);
+  manuallyEdited.store[cardId].props.richText = {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "用户标题", marks: [{ type: "bold" }] }],
+      },
+      { type: "paragraph" },
+      {
+        type: "paragraph",
+        content: [
+          { type: "text", text: "用户正文第一行" },
+          { type: "hardBreak" },
+          { type: "text", text: "用户正文第二行", marks: [{ type: "italic" }] },
+        ],
+      },
+    ],
+  };
+  const exactLiveRichText = structuredClone(manuallyEdited.store[cardId].props.richText);
+
+  const beforeUpdate = summarizeThinkingContext({ snapshot: manuallyEdited, scope: "page" })
+    .shapes.find(({ id }) => id === cardId);
+  assert.equal(beforeUpdate.title, "用户标题");
+  assert.equal(beforeUpdate.text, "用户正文第一行\n用户正文第二行");
+
+  const updated = applyThinkingOperationsToSnapshot({
+    snapshot: manuallyEdited,
+    semanticDiagram: semanticDiagram("native:live-text"),
+    operations: [
+      {
+        type: "update_card",
+        id: cardId,
+        color: "orange",
+        semantic: { state: "warning" },
+      },
+    ],
+  });
+  const card = updated.snapshot.store[cardId];
+  assert.equal(card.meta.cowartThinkingTitle, "用户标题");
+  assert.equal(card.meta.cowartThinkingBody, "用户正文第一行\n用户正文第二行");
+  assert.deepEqual(card.props.richText, exactLiveRichText);
+  assert.equal(card.props.color, "orange");
+  assert.doesNotThrow(() => validateSnapshot(updated.snapshot));
+});
+
+test("treats a user-cleared card as authoritative during a later style-only update", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    operations: [{ type: "create_card", key: "clear-me", title: "旧标题", body: "旧正文" }],
+  });
+  const cardId = created.references["clear-me"];
+  const manuallyCleared = structuredClone(created.snapshot);
+  manuallyCleared.store[cardId].props.richText = toRichText("");
+  const exactEmptyRichText = structuredClone(manuallyCleared.store[cardId].props.richText);
+
+  const updated = applyThinkingOperationsToSnapshot({
+    snapshot: manuallyCleared,
+    operations: [{ type: "update_card", id: cardId, fill: "hachure" }],
+  });
+  const card = updated.snapshot.store[cardId];
+  assert.equal(card.meta.cowartThinkingTitle, "");
+  assert.equal(card.meta.cowartThinkingBody, "");
+  assert.deepEqual(card.props.richText, exactEmptyRichText);
+  assert.equal(card.props.fill, "pattern");
+  assert.doesNotThrow(() => validateSnapshot(updated.snapshot));
 });
 
 test("an MCP-shaped request can atomically create the first card on empty storage", async () => {

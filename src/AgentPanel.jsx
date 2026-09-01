@@ -21,7 +21,10 @@ import {
   Workflow
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { AUTO_COMPOSE_QUICK_PROMPT, AUTO_COMPOSE_ROUTING_HINT } from './autoComposePrompt.js'
+import {
+  SEMANTIC_DIAGRAM_QUICK_PROMPT,
+  SEMANTIC_DIAGRAM_ROUTING_HINT
+} from './semanticDiagramPrompt.js'
 
 const EMPTY_BRIDGE_STATE = {
   status: 'unavailable',
@@ -88,15 +91,15 @@ export function agentExecutionInstructions(mode) {
   if (normalizeAgentExecutionMode(mode) === 'guided') {
     return [
       '执行方式：分步确认。',
-      '- 对混合画布任务，生成并验证整页视觉预演后暂停一次，等待用户确认当前 compositionId、pagePlanDigest、参考图 shapeId 与 assetFile。',
-      '- 如果整页视觉预演因图像服务不可用而在一次重试后仍失败，展示一次结构化页面计划确认；确认后继续原生图与证据卡，视觉槽保持待重试。',
-      '- 确认后按已批准槽位继续；外部访问、项目外写入、凭据、付费、删除用户内容及其他受保护操作仍按正常安全流程处理。'
+      '- 直接完成原生可编辑图的上下文读取、语义规划、dry-run 与安全写入；不要生成视觉预演，也不要为普通布局、配色或可合理默认的信息暂停。',
+      '- 只有语义歧义会实质改变结果，或任务涉及删除用户内容、外部访问、项目外写入、凭据、付费等受保护操作时才询问。',
+      '- 不要创建图片、PRD、HTML、SVG 或 Slides。'
     ].join('\n')
   }
   return [
     '执行方式：自动执行（用户已在 Yogurt AI 面板明确开启）。',
-    '- 对当前工作区内的路由、整页视觉预演、分区生成、可逆画布写入与必要命令连续执行；不要停在整页预演确认，也不要为普通布局选择或可合理默认的信息发起补充点击。',
-    '- 图像预演最多尝试两次；若因鉴权、访问、限流、网络或服务错误失败，仅把视觉槽标记为待重试，立即继续 html-line-svg 原生图和证据卡，不要发起确认，也不要把整项任务判失败。',
+    '- 对当前工作区内的上下文读取、语义规划、html-line-svg 布局验证与原生可逆画布写入连续执行；不要为普通布局选择或可合理默认的信息发起补充点击。',
+    '- 只生成原生可编辑卡片、分区、文字与绑定箭头；不要创建视觉预演、图片、PRD、HTML、SVG 或 Slides。',
     '- 信息不完整时采用最小、可逆且不改变核心意图的合理假设，并在最终结果中列出；只有缺失信息会导致越权、不可逆结果或使结果发生实质变化时才询问。',
     '- 不要请求交互式审批或表单。超出工作区权限、外部授权、凭据、付费或删除用户内容的动作应安全停止，并说明未执行的部分。'
   ].join('\n')
@@ -122,26 +125,12 @@ const DEFAULT_TERMINAL_ACTIVITY_TEXT = new Set([
 
 const QUICK_TASKS = [
   {
-    id: 'auto-compose',
+    id: 'editable-diagram',
     icon: Workflow,
-    kind: 'auto-compose',
-    label: '智能编排',
-    description: '整页规划，分区稳定生成',
-    prompt: AUTO_COMPOSE_QUICK_PROMPT
-  },
-  {
-    id: 'organize-selection',
-    icon: Sparkles,
-    label: '整理选区',
-    description: '梳理主题、关系与待确认问题',
-    prompt: '整理当前画布选区；如果没有选中对象，则整理当前页面。找出主题、关系与待确认问题。'
-  },
-  {
-    id: 'generate-prd',
-    icon: FileText,
-    label: '生成 PRD',
-    description: '把当前材料变成可评审产品工作区',
-    prompt: '根据当前画布与选区信息，生成可评审的产品 PRD 和交互原型。'
+    kind: 'editable-diagram',
+    label: '生成可编辑图',
+    description: 'Excalidraw 风格 · 节点和箭头都能改',
+    prompt: SEMANTIC_DIAGRAM_QUICK_PROMPT
   }
 ]
 
@@ -1320,7 +1309,7 @@ export function buildAgentPanelMessage(instruction, context = {}, options = {}) 
       ...(applicationTask
         ? ['应用快捷任务规则（隐藏执行上下文，不是用户原话）：', applicationTask, '']
         : []),
-      AUTO_COMPOSE_ROUTING_HINT,
+      SEMANTIC_DIAGRAM_ROUTING_HINT,
       '',
       agentExecutionInstructions(executionMode),
       '',
@@ -2219,8 +2208,8 @@ export function CowartAgentPanel({
         {!hasConversation && (
           <section className="cowart-agent-welcome" aria-labelledby="cowart-agent-welcome-title">
             <span className="cowart-agent-welcome-icon" aria-hidden="true"><Sparkles size={19} /></span>
-            <h2 id="cowart-agent-welcome-title">把一个需求，编排成一张画布</h2>
-            <p>描述完整需求。Agent 会先生成接近成品的整页视觉预演，再按同一布局拆成图片、可编辑结构与证据卡片。</p>
+            <h2 id="cowart-agent-welcome-title">描述结构，直接生成可编辑图</h2>
+            <p>AI 会把需求组织成 Excalidraw 风格的原生节点、文字和绑定箭头；每一项都能移动、改字和重新连接。</p>
             <div className="cowart-agent-welcome-context" aria-label="当前工作范围">
               <span><FileText aria-hidden="true" size={13} />{context?.pageName || '未命名页面'}</span>
               <span data-selection={selectedCount > 0 ? 'true' : 'false'}>{scopeLabel}</span>
@@ -2359,11 +2348,11 @@ export function CowartAgentPanel({
           >
             <Zap aria-hidden="true" size={14} />
             <span>
-              <strong>自动推进画布</strong>
+              <strong>自动完成可编辑图</strong>
               <small>
                 {executionMode === 'autonomous'
                   ? '工作区内不再逐项确认'
-                  : '预演后暂停，等你确认布局'}
+                  : '安全写入直接完成，语义歧义才询问'}
               </small>
             </span>
             <i aria-hidden="true" />
@@ -2406,7 +2395,7 @@ export function CowartAgentPanel({
                 ? 'Agent 执行期间，你可以先写下一条消息…'
                 : selectedQuickTask
                   ? `可补充${selectedQuickTask.label}的重点（选填）…`
-                  : '例如：把互动影游需求先预演成完整页面，再拆成场景图、玩法循环和约束卡片…'
+                  : '例如：把登录、权限校验和失败回退画成一张可编辑流程图…'
               : workspaceSetup?.status === 'required'
                 ? '选择工作区后即可连接 Codex Agent'
                 : '按上方提示完成 Codex 设置'

@@ -269,8 +269,8 @@ test("creates a native semantic diagram with editable zones, relation grammar, a
   assert.notEqual(state.y, scene.y);
   assert.equal(choice.meta.cowartSemanticObject.semanticId, "object:choice");
   assert.equal(choice.meta.cowartSemanticDiagram.diagramId, "native:film-loop");
-  assert.equal(primary.props.color, "blue");
-  assert.equal(primary.props.dash, "solid");
+  assert.equal(primary.props.color, "black");
+  assert.equal(primary.props.dash, "draw");
   assert.equal(primary.props.arrowheadStart, "none");
   assert.equal(primary.props.arrowheadEnd, "arrow");
   assert.equal(alternative.props.dash, "dashed");
@@ -1251,6 +1251,8 @@ test("creates a thin, transparent, connected Excalidraw-style diagram", () => {
     assert.equal(card.props.fill, "none");
     assert.equal(card.props.font, "draw");
     assert.equal(card.props.color, "black");
+    assert.equal(card.props.dash, "draw");
+    assert.equal(card.isLocked, false);
   }
   assert.equal(root.props.align, "middle");
   assert.equal(detail.props.align, "start");
@@ -1263,6 +1265,57 @@ test("creates a thin, transparent, connected Excalidraw-style diagram", () => {
     assert.equal(arrow.props.size, "s");
     assert.equal(arrow.props.color, "black");
     assert.equal(arrow.props.font, "draw");
+    assert.equal(arrow.props.dash, "draw");
     assert.equal(arrow.props.richText.content[0].content, undefined);
   }
+});
+
+test("semantic diagrams keep the Excalidraw draw contract and support optional hachure emphasis", () => {
+  const result = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    pageId: "page:test",
+    semanticDiagram: semanticDiagram({ diagramId: "native:excalidraw-style" }),
+    operations: [
+      {
+        type: "create_zone",
+        key: "diagram",
+        title: "Editable flow",
+        purpose: "semantic",
+        semantic: { id: "object:diagram", type: "container" },
+      },
+      {
+        type: "create_card",
+        key: "start",
+        title: "开始",
+        fill: "hachure",
+        parentZoneId: "diagram",
+        semantic: { id: "object:start", type: "state", order: 1 },
+      },
+      {
+        type: "create_card",
+        key: "done",
+        title: "完成",
+        parentZoneId: "diagram",
+        semantic: { id: "object:done", type: "state", order: 2 },
+      },
+      {
+        type: "create_relation",
+        key: "start-done",
+        semanticId: "relation:start-done",
+        from: "start",
+        to: "done",
+      },
+    ],
+  });
+
+  const start = result.snapshot.store[result.references.start];
+  const done = result.snapshot.store[result.references.done];
+  const relation = result.snapshot.store[result.references["start-done"]];
+  assert.equal(start.props.fill, "pattern");
+  assert.equal(start.props.dash, "draw");
+  assert.equal(done.props.fill, "none");
+  assert.equal(done.props.dash, "draw");
+  assert.equal(relation.props.color, "black");
+  assert.equal(relation.props.dash, "draw");
+  assert.equal(relationBindings(result.snapshot, relation.id).length, 2);
 });

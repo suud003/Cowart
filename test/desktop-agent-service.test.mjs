@@ -186,6 +186,9 @@ test('YogurtAgentService sends execution guidance as hidden application context 
   assert.equal(approvalsReviewerForExecutionMode('guided'), 'user')
   assert.match(executionModeEnvelope('autonomous'), /non-interactive execution/)
   assert.match(executionModeEnvelope('autonomous'), /approvalsReviewer=auto_review/)
+  assert.match(executionModeEnvelope('autonomous'), /native-diagram dry-run/)
+  assert.match(executionModeEnvelope('guided'), /native editable-diagram/)
+  assert.doesNotMatch(executionModeEnvelope('guided'), /cowart-auto-compose|composition reference|fan-out/)
 
   await service.sendTask({
     prompt: 'Compose this page.',

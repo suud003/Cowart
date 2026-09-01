@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileCode, LoaderCircle, Presentation, Sparkles } from 'lucide-react'
+import { LoaderCircle, Workflow } from 'lucide-react'
 import { useEditor, useToasts } from 'tldraw'
 import {
   getExcalidrawKeyboardAction,
@@ -9,6 +9,10 @@ import {
   PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE,
   PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
 } from './productBridgePrompt.js'
+import {
+  SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE,
+  SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
+} from './semanticDiagramPrompt.js'
 
 const PRODUCT_NAME = 'Yogurt AI'
 
@@ -23,7 +27,7 @@ function clickToolbarTool(toolId) {
   return Boolean(button)
 }
 
-function ExcalidrawShortcutBridge({ onCreateHtml, onCreateImage, onCreateSlides }) {
+function ExcalidrawShortcutBridge() {
   const editor = useEditor()
 
   useEffect(() => {
@@ -36,12 +40,6 @@ function ExcalidrawShortcutBridge({ onCreateHtml, onCreateImage, onCreateSlides 
         editor.updateInstanceState({
           isToolLocked: !editor.getInstanceState().isToolLocked
         })
-      } else if (action === 'cowart-ai-image') {
-        onCreateImage(editor)
-      } else if (action === 'cowart-ai-html') {
-        onCreateHtml(editor)
-      } else if (action === 'cowart-ai-slides') {
-        onCreateSlides(editor)
       } else if (!clickToolbarTool(action)) {
         editor.setCurrentTool(action)
       }
@@ -52,7 +50,7 @@ function ExcalidrawShortcutBridge({ onCreateHtml, onCreateImage, onCreateSlides 
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [editor, onCreateHtml, onCreateImage, onCreateSlides])
+  }, [editor])
 
   return null
 }
@@ -100,7 +98,8 @@ function CowartAiMenu({ brandIcon, items }) {
       })
     } catch (error) {
       if (
-        error?.code === PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE
+        error?.code === PRODUCT_BRIDGE_SCOPE_TOO_LARGE_CODE ||
+        error?.code === SEMANTIC_DIAGRAM_SCOPE_TOO_LARGE_CODE
       ) {
         addToast({
           title: '范围过大，请缩小选区',
@@ -110,12 +109,13 @@ function CowartAiMenu({ brandIcon, items }) {
         return
       }
       if (
-        error?.code === PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE
+        error?.code === PRODUCT_BRIDGE_FOLLOW_UP_UNAVAILABLE_CODE ||
+        error?.code === SEMANTIC_DIAGRAM_FOLLOW_UP_UNAVAILABLE_CODE
       ) {
         addToast({
           title: '当前是本地预览',
           description:
-            error.message || '生成交互 PRD 需要在 Codex 原生 Yogurt AI 画布中使用。',
+            error.message || '生成可编辑图需要在 Codex 原生 Yogurt AI 画布中使用。',
           severity: 'info'
         })
         return
@@ -151,7 +151,7 @@ function CowartAiMenu({ brandIcon, items }) {
         <div aria-label={PRODUCT_NAME} className="cowart-excalidraw-ai-popover" role="menu">
           <div className="cowart-excalidraw-ai-popover-heading">
             <strong>{PRODUCT_NAME}</strong>
-            <span>在画布中创建、整理和导出内容</span>
+            <span>AI 生成 Excalidraw 风格原生可编辑图</span>
           </div>
           {items.map((item) => (
             <button
@@ -182,88 +182,31 @@ function CowartAiMenu({ brandIcon, items }) {
 }
 
 export function ExcalidrawCowartChrome({
-  htmlIcon,
-  imageIcon,
-  onCreateHtml,
-  onCreateImage,
-  onCreateProductBridge,
-  onCreateSlides,
-  onExportCanvasHtml,
-  onExportCanvasPptx,
-  slidesIcon
+  onCreateSemanticDiagram
 }) {
   const editor = useEditor()
 
   const items = [
     {
-      id: 'image',
-      label: 'AI 图片',
-      description: '创建图片生成区域',
-      icon: imageIcon,
-      shortcut: '⇧ I',
-      onSelect: () => onCreateImage(editor)
-    },
-    {
-      id: 'html',
-      label: 'AI HTML',
-      description: '创建可编辑网页草稿',
-      icon: htmlIcon,
-      shortcut: '⇧ H',
-      onSelect: () => onCreateHtml(editor)
-    },
-    {
-      id: 'slides',
-      label: 'AI Slides',
-      description: '创建演示文稿画框',
-      icon: slidesIcon,
-      shortcut: '⇧ S',
-      onSelect: () => onCreateSlides(editor)
-    },
-    {
-      id: 'product-bridge',
-      label: '生成交互 PRD',
-      description: '将选区或整页整理成 PRD 与交互原型',
-      icon: <Sparkles aria-hidden="true" />,
-      badge: 'PRD',
-      onSelect: () => onCreateProductBridge(editor),
-      successTitle: '已发送给产品桥接 Agent',
+      id: 'editable-diagram',
+      label: '生成可编辑图',
+      description: '原生节点、文字和绑定箭头均可继续编辑',
+      icon: <Workflow aria-hidden="true" />,
+      badge: 'EDIT',
+      onSelect: () => onCreateSemanticDiagram(editor),
+      successTitle: '已发送给可编辑图 Agent',
       successDescription: (result) =>
         result?.scope === 'selection'
           ? `已携带当前选区的 ${result.selectedCount} 个对象。`
-          : '当前没有选中对象，已使用整页产品内容。',
-      errorTitle: '交互 PRD 生成任务发送失败'
-    },
-    {
-      id: 'export-html',
-      label: '整合为 HTML',
-      description: '导出可缩放全景与内容目录',
-      icon: <FileCode aria-hidden="true" />,
-      badge: 'HTML',
-      divider: true,
-      onSelect: () => onExportCanvasHtml(editor),
-      successTitle: '画布 HTML 已导出',
-      successDescription: (result) => result?.filePath || `${result?.itemCount || 0} 项内容已整合。`
-    },
-    {
-      id: 'export-pptx',
-      label: '整合为 PowerPoint',
-      description: '生成全景页与可编辑内容页',
-      icon: <Presentation aria-hidden="true" />,
-      badge: 'PPTX',
-      onSelect: () => onExportCanvasPptx(editor),
-      successTitle: '画布 PowerPoint 已导出',
-      successDescription: (result) => result?.filePath || `${result?.slideCount || 1} 页 PPTX 已生成。`
+          : '当前没有选中对象，已使用当前整页作为语义来源。',
+      errorTitle: '可编辑图生成任务发送失败'
     }
   ]
 
   return (
     <>
-      <ExcalidrawShortcutBridge
-        onCreateHtml={onCreateHtml}
-        onCreateImage={onCreateImage}
-        onCreateSlides={onCreateSlides}
-      />
-      <CowartAiMenu brandIcon={imageIcon} items={items} />
+      <ExcalidrawShortcutBridge />
+      <CowartAiMenu brandIcon={<Workflow aria-hidden="true" />} items={items} />
     </>
   )
 }

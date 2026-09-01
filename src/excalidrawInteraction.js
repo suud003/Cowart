@@ -11,12 +11,6 @@ export const EXCALIDRAW_TOOL_SHORTCUTS = Object.freeze({
   '9': 'asset'
 })
 
-const COWART_SHORTCUTS = Object.freeze({
-  h: 'cowart-ai-html',
-  i: 'cowart-ai-image',
-  s: 'cowart-ai-slides'
-})
-
 export function getExcalidrawKeyboardAction({
   altKey = false,
   ctrlKey = false,
@@ -27,7 +21,7 @@ export function getExcalidrawKeyboardAction({
   if (altKey || ctrlKey || metaKey) return null
 
   const normalizedKey = String(key).toLowerCase()
-  if (shiftKey) return COWART_SHORTCUTS[normalizedKey] ?? null
+  if (shiftKey) return null
   if (normalizedKey === 'q') return 'toggle-tool-lock'
   return EXCALIDRAW_TOOL_SHORTCUTS[normalizedKey] ?? null
 }

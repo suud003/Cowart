@@ -18,4 +18,8 @@ test('thinking review prompt preserves the user request and exact lasso scope', 
   assert.match(prompt, /Screenshot includes 3 shape\(s\) and is 800x400 pixels/)
   assert.match(prompt, /Never rewrite, move, or delete unrelated page content/)
   assert.match(prompt, /operation ID for undo/)
+  assert.match(prompt, /\$cowart-semantic-diagram/)
+  assert.match(prompt, /native editable cards, semantic zones, text, and bound relations/)
+  assert.match(prompt, /never fall back to image, HTML, SVG, Slides, Auto Compose, or PRD/)
+  assert.doesNotMatch(prompt, /\$cowart-thinking-agent/)
 })

@@ -814,7 +814,7 @@ textarea {
   color: var(--yogurt-signal);
 }
 
-.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="auto-compose"] {
+.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="editable-diagram"] {
   color: var(--yogurt-text);
   background: linear-gradient(90deg, rgb(255 104 79 / 15%), rgb(8 10 15 / 82%) 44%);
   border-color: rgb(255 104 79 / 45%);

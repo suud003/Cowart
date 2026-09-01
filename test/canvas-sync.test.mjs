@@ -4,8 +4,57 @@ import test from 'node:test'
 
 import {
   classifyRemoteCanvasRefresh,
+  collectNewSemanticDiagramRootIds,
   REMOTE_CANVAS_REFRESH_ACTION
 } from '../src/canvasSync.js'
+
+test('focuses only newly added top-level semantic diagram frames', () => {
+  const page = { id: 'page:one', typeName: 'page' }
+  const existing = {
+    id: 'shape:existing',
+    typeName: 'shape',
+    type: 'frame',
+    parentId: page.id,
+    meta: {
+      cowartSemanticZone: true,
+      cowartSemanticDiagram: { diagramId: 'diagram:existing' }
+    }
+  }
+  const created = {
+    id: 'shape:created',
+    typeName: 'shape',
+    type: 'frame',
+    parentId: page.id,
+    meta: {
+      cowartSemanticZone: true,
+      cowartSemanticDiagram: { diagramId: 'diagram:created' }
+    }
+  }
+  const nested = {
+    id: 'shape:nested',
+    typeName: 'shape',
+    type: 'frame',
+    parentId: created.id,
+    meta: {
+      cowartSemanticZone: true,
+      cowartSemanticDiagram: { diagramId: 'diagram:created' }
+    }
+  }
+
+  assert.deepEqual(
+    collectNewSemanticDiagramRootIds({
+      localStore: { [page.id]: page, [existing.id]: existing },
+      remoteStore: {
+        [page.id]: page,
+        [existing.id]: existing,
+        [created.id]: created,
+        [nested.id]: nested
+      },
+      pageId: page.id
+    }),
+    [created.id]
+  )
+})
 
 test('applies a remote refresh when there are no pending local edits', () => {
   assert.equal(

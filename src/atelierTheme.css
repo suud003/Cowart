@@ -1038,7 +1038,7 @@ body {
 
 .cowart-agent-quick-grid button > svg:first-child { color: var(--atelier-blue); }
 
-.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="auto-compose"] {
+.cowart-agent-welcome .cowart-agent-quick-grid button[data-kind="editable-diagram"] {
   color: var(--atelier-ink);
   background: var(--atelier-blue-soft);
   border-color: #b8caf1;

@@ -21,10 +21,10 @@ test('maps Excalidraw number shortcuts to the primary canvas tools', () => {
   })
 })
 
-test('keeps Cowart creation shortcuts behind shift modifiers', () => {
-  assert.equal(getExcalidrawKeyboardAction({ key: 'I', shiftKey: true }), 'cowart-ai-image')
-  assert.equal(getExcalidrawKeyboardAction({ key: 'h', shiftKey: true }), 'cowart-ai-html')
-  assert.equal(getExcalidrawKeyboardAction({ key: 'S', shiftKey: true }), 'cowart-ai-slides')
+test('disables legacy AI creation shortcuts while keeping the Excalidraw tool lock', () => {
+  assert.equal(getExcalidrawKeyboardAction({ key: 'I', shiftKey: true }), null)
+  assert.equal(getExcalidrawKeyboardAction({ key: 'h', shiftKey: true }), null)
+  assert.equal(getExcalidrawKeyboardAction({ key: 'S', shiftKey: true }), null)
   assert.equal(getExcalidrawKeyboardAction({ key: 'q' }), 'toggle-tool-lock')
 })
 

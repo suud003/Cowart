@@ -106,18 +106,19 @@ test('Agent panel tasks include stable page and selection IDs instead of screens
   assert.match(message.runtimeContext, /shape:ending/)
   assert.match(message.runtimeContext, /不要依赖截图坐标/)
   assert.match(message.runtimeContext, /当前选中的 2 个对象/)
-  assert.match(message.runtimeContext, /\$cowart-auto-compose/)
+  assert.match(message.runtimeContext, /\$cowart-semantic-diagram/)
+  assert.doesNotMatch(message.runtimeContext, /\$cowart-auto-compose/)
   assert.equal(message.executionMode, 'guided')
-  assert.match(message.runtimeContext, /接近成品的整页视觉预演/)
-  assert.match(message.runtimeContext, /结构化计划控制最终坐标和防碰撞/)
+  assert.match(message.runtimeContext, /原生可编辑图/)
+  assert.match(message.runtimeContext, /layoutEngine:"html-line-svg"/)
   assert.match(message.runtimeContext, /执行方式：分步确认/)
 })
 
 test('quick task presets stay in hidden application context instead of the persisted user prompt', () => {
-  const preset = 'INTERNAL AUTO COMPOSE PRESET: create a validated page plan.'
+  const preset = 'INTERNAL EDITABLE DIAGRAM PRESET: create a validated native graph.'
   const taskRequest = buildAgentPanelTaskRequest({
-    id: 'auto-compose',
-    label: '智能编排',
+    id: 'editable-diagram',
+    label: '生成可编辑图',
     prompt: preset
   }, '')
   const message = buildAgentPanelMessage(taskRequest.prompt, {
@@ -127,15 +128,15 @@ test('quick task presets stay in hidden application context instead of the persi
     applicationTask: taskRequest.applicationTask
   })
 
-  assert.equal(taskRequest.prompt, '执行“智能编排”。')
-  assert.deepEqual(taskRequest.invocation, { id: 'auto-compose', label: '智能编排' })
-  assert.equal(message.prompt, '执行“智能编排”。')
-  assert.doesNotMatch(message.prompt, /INTERNAL AUTO COMPOSE PRESET/)
-  assert.match(message.runtimeContext, /INTERNAL AUTO COMPOSE PRESET/)
+  assert.equal(taskRequest.prompt, '执行“生成可编辑图”。')
+  assert.deepEqual(taskRequest.invocation, { id: 'editable-diagram', label: '生成可编辑图' })
+  assert.equal(message.prompt, '执行“生成可编辑图”。')
+  assert.doesNotMatch(message.prompt, /INTERNAL EDITABLE DIAGRAM PRESET/)
+  assert.match(message.runtimeContext, /INTERNAL EDITABLE DIAGRAM PRESET/)
 
   const supplemented = buildAgentPanelTaskRequest({
-    id: 'auto-compose',
-    label: '智能编排',
+    id: 'editable-diagram',
+    label: '生成可编辑图',
     prompt: preset
   }, '优先梳理玩家核心循环')
   assert.equal(supplemented.prompt, '优先梳理玩家核心循环')
@@ -175,11 +176,11 @@ test('Agent execution mode is fail-closed, project-scoped, and explicit in each 
   assert.match(message.runtimeContext, /执行方式：自动执行/)
   assert.match(message.runtimeContext, /当前工作区内/)
   assert.match(message.runtimeContext, /不要请求交互式审批或表单/)
-  assert.match(message.runtimeContext, /图像预演最多尝试两次/)
-  assert.match(message.runtimeContext, /立即继续 html-line-svg 原生图和证据卡/)
-  assert.match(message.runtimeContext, /不要发起确认，也不要把整项任务判失败/)
-  assert.match(agentExecutionInstructions('guided'), /整页视觉预演后暂停一次/)
-  assert.match(agentExecutionInstructions('guided'), /结构化页面计划确认/)
+  assert.match(message.runtimeContext, /html-line-svg 布局验证/)
+  assert.match(message.runtimeContext, /只生成原生可编辑卡片/)
+  assert.doesNotMatch(message.runtimeContext, /图像预演|证据卡|整页视觉预演/)
+  assert.match(agentExecutionInstructions('guided'), /直接完成原生可编辑图/)
+  assert.match(agentExecutionInstructions('guided'), /不要生成视觉预演/)
 })
 
 test('Agent panel bounds structured shape context to 250 IDs', () => {
@@ -255,7 +256,7 @@ test('Agent panel presents desktop onboarding before generic connection state', 
   assert.equal(codexLoginButtonLabel('login-pending', true), '正在打开…')
 })
 
-test('Agent panel removes redundant diagram generation shortcuts from Agent surfaces', async () => {
+test('Agent panel exposes one focused editable-diagram task and hides unrelated generators', async () => {
   const state = {
     status: 'ready',
     capabilities: { available: true, provider: 'desktop' },
@@ -275,16 +276,15 @@ test('Agent panel removes redundant diagram generation shortcuts from Agent surf
   }))
   const actionMenuSource = await readFile('src/ExcalidrawWorkspace.jsx', 'utf8')
 
-  assert.match(markup, /整理选区/)
-  assert.match(markup, /生成 PRD/)
-  assert.match(markup, /智能编排/)
-  assert.match(markup, /整页规划，分区稳定生成/)
-  assert.match(markup, /先生成接近成品的整页视觉预演/)
-  assert.match(markup, /自动推进画布/)
+  assert.match(markup, /生成可编辑图/)
+  assert.match(markup, /Excalidraw 风格 · 节点和箭头都能改/)
+  assert.match(markup, /描述结构，直接生成可编辑图/)
+  assert.match(markup, /自动完成可编辑图/)
   assert.match(markup, /aria-pressed="false"/)
   assert.match(markup, /自动模式不弹审批；超出工作区、外部授权或敏感操作会停止并说明/)
-  assert.doesNotMatch(markup, /生成框线图/)
-  assert.doesNotMatch(actionMenuSource, /生成画布框线图/)
+  assert.doesNotMatch(markup, /智能编排|生成 PRD|整理选区|整页视觉预演/)
+  assert.match(actionMenuSource, /生成可编辑图/)
+  assert.doesNotMatch(actionMenuSource, /label: 'AI 图片'|label: 'AI HTML'|label: 'AI Slides'|label: '生成交互 PRD'/)
 })
 
 test('compact Agent panel exposes dialog semantics and a stable controlled id', () => {
