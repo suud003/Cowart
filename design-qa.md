@@ -84,9 +84,9 @@
 | --- | --- | --- |
 | `npm test` | PASS | 2026-09-02 本地实跑：`320/320` 通过，`0` 失败、`0` 跳过。 |
 | `npm run quality` | PASS | 插件元数据、语法检查、`320/320` 测试、生产构建、原生 MCP widget、analytics 与 GA4 探针全部通过。 |
-| `npm run dist:win` | PASS | 已生成 `Yogurt-AI-Beta-Setup-0.3.0-x64.exe`（`337,456,826` 字节）及 blockmap（`324,148` 字节）。 |
+| `npm run dist:win` | PASS | 已生成 `Yogurt-AI-Beta-Setup-0.3.0-x64.exe`（`337,456,758` 字节）及 blockmap（`324,158` 字节）。 |
 | `npm run verify:packaged` | PASS | 校验 `399` 个源码/打包文件，内置 Codex stdio 与 Yogurt MCP 可用；真实打包 renderer 以退出码 `0` 完成 `1424 × 895` 截图，无未捕获启动错误。 |
-| 安装包 SHA-256 | PASS | `4E3240915F60A6DF1A74FA06313B6901DEB1CA6B019980EE9083014E45194683`，已与 `.sha256.txt` 复核一致。 |
+| 安装包 SHA-256 | PASS | `783E03A97E7DA4E72FC298A5ACDABC1F2131F18E223CE15DE06422E1FD24CAB9`，已与 `.sha256.txt` 复核一致。 |
 | GitHub Release | 待发布 | 仅待最终提交进入 `main` 后创建 `v0.3.0+codex.20260902` 非预发布 Release，并明确上传 exe、blockmap 与 SHA-256 文件。 |
 
 ## 结论与剩余项
