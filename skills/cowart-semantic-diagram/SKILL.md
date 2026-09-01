@@ -1,6 +1,6 @@
 ---
 name: cowart-semantic-diagram
-description: Create or revise source-traceable, Excalidraw-style diagrams directly on the Yogurt AI canvas as native editable cards, semantic zones, text, and bound relations using html-line-svg's semantic and layout grammar. Never rasterize the diagram or turn it into HTML, SVG, Product Bridge, or PRD output.
+description: Create or revise source-traceable diagrams in the official Excalidraw editor as native editable rectangles with bound text, frames, and bound arrows using html-line-svg's semantic and layout grammar. Never rasterize the diagram or turn it into HTML, SVG, Product Bridge, or PRD output.
 ---
 
 # Yogurt Semantic Diagram
@@ -40,9 +40,10 @@ Use the relation grammar directly in native operations:
 
 The canvas engine derives color, dash, arrowheads, boundary anchors, and parallel lanes from those semantics. Do not override semantic relation styling with arbitrary color or dash values.
 
-Use the Excalidraw-style visual contract throughout:
+Use the official Excalidraw native-element contract throughout:
 
-- cards use `geo: "cowart-card"`, `dash: "draw"`, `font: "draw"`, `size: "s"`, and are unlocked;
+- cards are native `rectangle` elements with native bound `text`; sections are native `frame` elements and relations are native bound `arrow` elements;
+- keep the standard Excalidraw hand-drawn defaults unless the user asks for a precise style change;
 - default card fill is transparent; use `fill: "hachure"` only for a small number of meaningful emphasized nodes, never as decoration;
 - primary and unlabelled relations are neutral black `draw` strokes; alternatives are `dashed`;
 - warning and blocked states may use restrained orange or red; do not assign a different color to every category;
@@ -52,7 +53,7 @@ Treat every live editable style returned by `get_cowart_thinking_context` as use
 
 Call `apply_cowart_safe_thinking_operations` with `dryRun: true` and the captured revision. Require a matching `layoutReport` whose `engine` is `html-line-svg`, `layoutReport.valid` is true, `collisions` and `outOfBounds` are empty, and `layoutDigest` is present. Validate the real node/edge bounds returned by that dry run, not guessed placeholder geometry. Verify that every non-root card has the intended relation and that only the selected region changes. Apply the identical operation list through the same safe tool against the preview's `baseRevision`, then require the same layout digest. If the revision changed or the digest differs, discard the preview, re-read context, and recompute. The safe tool may update, move, or resize only Cowart-managed shapes and cannot accept `delete_shape` or `allowUserAuthoredEdits`.
 
-Use native relation labels only when the verb carries meaning not already clear from the hierarchy. Keep source-shape IDs and semantic IDs in the native semantic metadata; do not borrow Product Bridge zone/trace fields. Never write raw tldraw records.
+Use native relation labels only when the verb carries meaning not already clear from the hierarchy. Keep source-shape IDs and semantic IDs in the native semantic metadata; do not borrow Product Bridge zone/trace fields. Never hand-write raw Excalidraw element records or legacy tldraw records; use the typed Yogurt operations.
 
 To revise card or zone semantics, use the restricted `semantic` patch on `update_card` or `update_zone`; keep `diagramId` and `semanticId` stable and change only type, state, origin, order, or source mappings. To revise an existing relation's kind, direction, path, label, payload, origin, or source mappings, use safe `update_relation`; it preserves the relation ID, bindings, lane, live label text when no label is supplied, and every user-edited line or text style. Endpoint or lane changes are intentionally outside that semantic-only operation. If one of those structural changes truly requires replacement, keep the existing relation until the user explicitly authorizes destructive replacement; never route it through autonomous safe execution.
 

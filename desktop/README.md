@@ -17,12 +17,12 @@ Yogurt AI Desktop 把可编辑无限画布与 Codex Agent 工作台装进同一�
 
 - 当前本地 Beta 安装包未进行代码签名，Windows SmartScreen 可能显示“Windows 已保护你的电脑”。仅运行来自可信渠道、文件名和校验信息与维护者提供内容一致的安装包。
 - 卸载应用不会删除用户选择的工作区或其中的画布数据。
-- 当前构建使用 tldraw。公开或商业分发前必须取得适用的 tldraw 许可并配置合法 license key；本地 Beta 中出现的授权水印不是应用故障。
+- 当前 Windows 构建使用官方 `@excalidraw/excalidraw@0.18.1` 作为画布运行时；关闭 AI 模式时就是原生 Excalidraw 编辑器，开启 AI 模式后才显示 Yogurt Agent。旧 tldraw 代码仅保留给开发期兼容测试，不会进入安装包。
 - Codex App Server 仍可能随 Codex 版本演进，因此安装包固定并验证配套运行时，而不是依赖用户电脑中的随机全局版本。
 
 ## 本地数据与安全边界
 
-画布数据保存在 `<workspace>/canvas/`，Codex 项目会话引用保存在 `<workspace>/canvas/.yogurt-agent-session.json`。Yogurt AI 不会把启动终端的当前目录默认为用户项目；首次选择会持久化到应用设置中。
+标准 Excalidraw 画布保存在 `<workspace>/canvas/yogurt.excalidraw`，Codex 项目会话引用保存在 `<workspace>/canvas/.yogurt-agent-session.json`。Yogurt AI 不会把启动终端的当前目录默认为用户项目；首次选择会持久化到应用设置中。
 
 桌面桥接的边界如下：
 

@@ -1,0 +1,6 @@
+{
+  "sourcePackage": "@excalidraw/excalidraw",
+  "sourceVersion": "0.18.1",
+  "sourceRepository": "https://github.com/excalidraw/excalidraw",
+  "copiedFrom": "dist/prod/fonts"
+}

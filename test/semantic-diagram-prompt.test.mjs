@@ -38,8 +38,8 @@ test('semantic diagram prompt freezes the selected Yogurt scope and requests a n
   assert.match(prompt, /semanticDiagram/)
   assert.match(prompt, /direction:"bidirectional"/)
   assert.match(prompt, /连线必须绑定源\/目标边界/)
-  assert.match(prompt, /Excalidraw 风格视觉契约/)
-  assert.match(prompt, /手绘 draw 描边与字体/)
+  assert.match(prompt, /Excalidraw 官方原生样式/)
+  assert.match(prompt, /标准手绘描边与字体/)
   assert.match(prompt, /每个节点、文字和箭头都可单独编辑/)
   assert.match(prompt, /不要创建图片、整页视觉预演、PRD 页面、HTML 或 SVG/)
   assert.match(prompt, /12 个节点以内/)
@@ -53,9 +53,9 @@ test('semantic diagram prompt freezes the selected Yogurt scope and requests a n
 
 test('semantic diagram quick route stays native-only and keeps presets hidden from user text', () => {
   assert.match(SEMANTIC_DIAGRAM_QUICK_PROMPT, /\$cowart-semantic-diagram/)
-  assert.match(SEMANTIC_DIAGRAM_QUICK_PROMPT, /Excalidraw 风格/)
+  assert.match(SEMANTIC_DIAGRAM_QUICK_PROMPT, /官方 Excalidraw 原生矩形/)
   assert.match(SEMANTIC_DIAGRAM_QUICK_PROMPT, /每个节点和箭头都必须可以单独选择/)
-  assert.match(SEMANTIC_DIAGRAM_ROUTING_HINT, /原生 tldraw\/Excalidraw 风格对象/)
+  assert.match(SEMANTIC_DIAGRAM_ROUTING_HINT, /官方 Excalidraw 原生对象/)
   assert.match(SEMANTIC_DIAGRAM_ROUTING_HINT, /禁止调用自动编排、图片生成/)
   assert.doesNotMatch(SEMANTIC_DIAGRAM_ROUTING_HINT, /\$cowart-auto-compose/)
   assert.match(SEMANTIC_DIAGRAM_ROUTING_HINT, /不要手写节点坐标/)

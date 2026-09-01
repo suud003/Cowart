@@ -6,6 +6,10 @@ import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'nod
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 
 import { desktopCspPlugin } from './desktop/content-security-policy.mjs'
+import {
+  readCowartCanvasState as readPersistentCanvasState,
+  saveCowartCanvasSnapshot as savePersistentCanvasSnapshot
+} from './mcp/lib/canvas-storage.mjs'
 
 const projectDir = resolve(process.env.COWART_PROJECT_DIR ?? process.cwd())
 const cowartWidgetBuild = process.env.COWART_WIDGET_BUILD === '1'
@@ -14,6 +18,7 @@ const cowartAppVersion = JSON.parse(
 ).version
 const canvasDir = resolve(process.env.COWART_CANVAS_DIR ?? join(projectDir, 'canvas'))
 const canvasFile = join(canvasDir, 'cowart-canvas.json')
+const excalidrawFile = join(canvasDir, 'yogurt.excalidraw')
 const selectionFile = join(canvasDir, 'cowart-selection.json')
 const viewStateFile = join(canvasDir, 'cowart-view-state.json')
 const canvasPagesDir = join(canvasDir, 'pages')
@@ -25,7 +30,6 @@ const globalAssetsRoute = '/assets/'
 const pageAssetsRoute = '/page-assets/'
 const canvasEventClients = new Set()
 let canvasEventVersion = 0
-let canvasSnapshotSanitizerPromise = null
 
 const mimeTypes = new Map([
   ['.apng', 'image/apng'],
@@ -94,10 +98,14 @@ function isCanvasSnapshot(value) {
   return value && typeof value === 'object' && value.store && value.schema
 }
 
-async function sanitizeCanvasSnapshotForServer(snapshot) {
-  canvasSnapshotSanitizerPromise ??= import('./src/canvasSnapshot.js')
-  const { sanitizeCanvasSnapshotForTldraw } = await canvasSnapshotSanitizerPromise
-  return sanitizeCanvasSnapshotForTldraw(snapshot)
+function isExcalidrawSnapshot(value) {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    value.type === 'excalidraw' &&
+    Array.isArray(value.elements) &&
+    (!value.files || typeof value.files === 'object')
+  )
 }
 
 function isSelectionState(value) {
@@ -474,6 +482,16 @@ async function readPageSnapshots() {
 }
 
 async function loadCanvasSnapshot() {
+  try {
+    const snapshot = await readJsonFile(excalidrawFile)
+    if (!isExcalidrawSnapshot(snapshot)) {
+      throw new Error(`Invalid Excalidraw document in ${excalidrawFile}`)
+    }
+    return { snapshot, path: excalidrawFile, storage: 'excalidraw' }
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+
   const pageSnapshots = await readPageSnapshots()
   if (pageSnapshots.length > 0) {
     const [{ snapshot: firstSnapshot }] = pageSnapshots
@@ -514,6 +532,11 @@ async function writeJsonAtomic(filePath, payload) {
 }
 
 async function saveCanvasSnapshot(snapshot) {
+  if (isExcalidrawSnapshot(snapshot)) {
+    await writeJsonAtomic(excalidrawFile, snapshot)
+    return { storage: 'excalidraw', paths: [excalidrawFile] }
+  }
+
   const pages = getPageRecords(snapshot)
   if (pages.length === 0) {
     await writeJsonAtomic(canvasFile, snapshot)
@@ -728,30 +751,49 @@ function canvasStoragePlugin() {
       server.middlewares.use('/api/canvas', async (req, res) => {
         try {
           if (req.method === 'GET') {
-            const result = await loadCanvasSnapshot()
+            const url = new URL(req.url, 'http://127.0.0.1')
+            const result = await readPersistentCanvasState(
+              { projectDir, canvasDir },
+              { hydrateAssets: url.searchParams.get('hydrateAssets') === 'true' }
+            )
             sendJson(res, 200, result)
             return
           }
 
           if (req.method === 'PUT') {
             const body = await readRequestBody(req)
-            const snapshot = JSON.parse(body)
-            if (!isCanvasSnapshot(snapshot)) {
-              sendJson(res, 400, { error: 'Expected a tldraw store snapshot.' })
+            const payload = JSON.parse(body)
+            const isSnapshotPayload = isCanvasSnapshot(payload) || isExcalidrawSnapshot(payload)
+            const snapshot = isSnapshotPayload ? payload : payload?.snapshot
+            if (!isCanvasSnapshot(snapshot) && !isExcalidrawSnapshot(snapshot)) {
+              sendJson(res, 400, { error: 'Expected an Excalidraw document or legacy tldraw snapshot.' })
               return
             }
 
-            const sanitized = await sanitizeCanvasSnapshotForServer(snapshot)
-            if (!sanitized.snapshot) {
-              sendJson(res, 400, {
-                error: 'Invalid tldraw store snapshot.',
-                skippedRecords: sanitized.skippedRecords
-              })
+            const headerRevision = Array.isArray(req.headers['if-match'])
+              ? req.headers['if-match'][0]
+              : req.headers['if-match']
+            const baseRevision = isSnapshotPayload
+              ? headerRevision
+              : payload?.baseRevision ?? headerRevision
+            const result = await savePersistentCanvasSnapshot(
+              {
+                projectDir,
+                canvasDir,
+                baseRevision,
+                protectImageRecords: isSnapshotPayload ? undefined : payload?.protectImageRecords,
+                acknowledgedImageShapeDeletes: isSnapshotPayload
+                  ? undefined
+                  : payload?.acknowledgedImageShapeDeletes
+              },
+              snapshot
+            )
+            if (!result.ok) {
+              sendJson(res, result.storage === 'revision-conflict' ? 409 : 400, result)
               return
             }
 
-            const result = await saveCanvasSnapshot(sanitized.snapshot)
-            sendJson(res, 200, { ok: true, ...result, skippedRecords: sanitized.skippedRecords })
+            sendJson(res, 200, result)
             broadcastCanvasChanged(result)
             return
           }
@@ -770,20 +812,25 @@ function canvasStoragePlugin() {
 export default defineConfig(({ command }) => ({
   base: './',
   plugins: [react(), desktopCspPlugin({ widgetBuild: cowartWidgetBuild }), canvasStoragePlugin()],
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'es2022',
+      treeShaking: true
+    }
+  },
   define: {
     __COWART_WIDGET_BUILD__: JSON.stringify(cowartWidgetBuild),
     __COWART_APP_VERSION__: JSON.stringify(cowartAppVersion),
     'process.env.NODE_ENV': JSON.stringify(command === 'serve' ? 'development' : 'production')
   },
   build: {
+    target: 'es2022',
     modulePreload: false,
     assetsInlineLimit: Number.MAX_SAFE_INTEGER,
     cssCodeSplit: false,
-    rollupOptions: {
-      output: {
-        inlineDynamicImports: true
-      }
-    }
+    rollupOptions: cowartWidgetBuild
+      ? { output: { inlineDynamicImports: true } }
+      : undefined
   },
   server: {
     host: '127.0.0.1',

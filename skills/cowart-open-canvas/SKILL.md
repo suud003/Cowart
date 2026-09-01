@@ -1,6 +1,6 @@
 ---
 name: cowart-open-canvas
-description: Open the native Yogurt AI Codex widget, a tldraw-powered infinite canvas. Use when the user asks to open, launch, view, or work in Yogurt AI or wants an editable non-linear thinking canvas inside Codex.
+description: Open the native Yogurt AI Codex widget powered by the official Excalidraw editor. Use when the user asks to open, launch, view, or work in Yogurt AI or wants an editable non-linear thinking canvas inside Codex.
 ---
 
 # Yogurt AI: Open Canvas
@@ -20,8 +20,7 @@ The tool returns `openai/outputTemplate: ui://widget/cowart/canvas.html`, which 
 2. Confirm the widget opens for the user. The canvas data is stored in the active project:
 
 ```text
-canvas/pages/<page-id>/cowart-canvas.json
-canvas/pages/<page-id>/assets/
+canvas/yogurt.excalidraw
 canvas/materials/
 canvas/thinking-history/
 ```

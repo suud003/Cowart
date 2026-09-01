@@ -144,7 +144,7 @@ test('quick task presets stay in hidden application context instead of the persi
   assert.equal(supplemented.applicationTask, preset)
 })
 
-test('Agent execution mode is fail-closed, project-scoped, and explicit in each task envelope', () => {
+test('Agent execution mode defaults to autonomous, remains project-scoped, and is explicit in each task envelope', () => {
   const memory = new Map()
   const storage = {
     getItem: (key) => memory.get(key) ?? null,
@@ -153,18 +153,20 @@ test('Agent execution mode is fail-closed, project-scoped, and explicit in each 
 
   assert.equal(normalizeAgentExecutionMode(undefined), 'guided')
   assert.equal(normalizeAgentExecutionMode('invalid'), 'guided')
-  assert.equal(readAgentExecutionMode(storage, 'Project A'), 'guided')
+  assert.equal(readAgentExecutionMode(storage, 'Project A'), 'autonomous')
   assert.equal(agentExecutionModeStorageKey('Project A').includes('Project%20A'), true)
   persistAgentExecutionMode('autonomous', storage, 'Project A')
   assert.equal(readAgentExecutionMode(storage, 'Project A'), 'autonomous')
-  assert.equal(readAgentExecutionMode(storage, 'Project B'), 'guided')
+  assert.equal(readAgentExecutionMode(storage, 'Project B'), 'autonomous')
   assert.equal(agentExecutionModeScope({ projectScopeId: 'project:aaa', projectName: 'Same' }), 'project:aaa')
   assert.equal(resolveAgentExecutionModeForTask({
     currentMode: 'autonomous',
     currentProjectScope: 'project:aaa',
     taskContext: { projectScopeId: 'project:bbb', projectName: 'Same' },
     storage
-  }), 'guided')
+  }), 'autonomous')
+  persistAgentExecutionMode('guided', storage, 'Project B')
+  assert.equal(readAgentExecutionMode(storage, 'Project B'), 'guided')
 
   const message = buildAgentPanelMessage('自动编排这个需求', {
     projectName: 'Project A',
@@ -277,10 +279,10 @@ test('Agent panel exposes one focused editable-diagram task and hides unrelated 
   const actionMenuSource = await readFile('src/ExcalidrawWorkspace.jsx', 'utf8')
 
   assert.match(markup, /生成可编辑图/)
-  assert.match(markup, /Excalidraw 风格 · 节点和箭头都能改/)
+  assert.match(markup, /官方 Excalidraw 原生元素/)
   assert.match(markup, /描述结构，直接生成可编辑图/)
   assert.match(markup, /自动完成可编辑图/)
-  assert.match(markup, /aria-pressed="false"/)
+  assert.match(markup, /aria-pressed="true"/)
   assert.match(markup, /自动模式不弹审批；超出工作区、外部授权或敏感操作会停止并说明/)
   assert.doesNotMatch(markup, /智能编排|生成 PRD|整理选区|整页视觉预演/)
   assert.match(actionMenuSource, /生成可编辑图/)

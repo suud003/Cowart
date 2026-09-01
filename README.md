@@ -4,9 +4,9 @@
   <img src="assets/app-icon.png" width="84" alt="Yogurt AI 图标">
 </p>
 
-<p align="center"><strong>说出你想表达的结构，AI 直接生成一张真正能继续编辑的图。</strong></p>
+<p align="center"><strong>官方 Excalidraw 编辑器，需要时再打开 AI。</strong></p>
 
-<p align="center">Excalidraw 风格 · 原生可编辑 · Codex Agent 驱动 · 本地项目持久化</p>
+<p align="center">官方 Excalidraw 编辑器 · AI 生成原生可编辑图 · Codex Agent · 项目本地保存</p>
 
 <p align="center">
   <a href="README.en.md">English</a> ·
@@ -15,101 +15,83 @@
   <a href="#本地开发">本地开发</a>
 </p>
 
-Yogurt AI 把一段自然语言、当前页面或精确选区，转换成 Excalidraw 风格的原生关系图。结果不是一张图片，也不是一个无法拆开的 SVG：卡片、文字、分区和箭头都是画布里的真实对象，可以逐项移动、改字、缩放、删除和重新连接。
+Yogurt AI 内嵌官方 [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) runtime 与 UI。关闭 AI 时，界面、工具栏、快捷键、样式面板与 `.excalidraw` 数据模型都由官方编辑器组件提供。
+
+需要 AI 时，通过应用菜单或快捷键打开 Codex Agent。Agent 生成的卡片、文字、分区和绑定箭头仍然是 Excalidraw 原生元素，可以继续选择、移动、改字、改色、缩放、重连、撤销和导出。
 
 <p align="center">
-  <img src="docs/images/yogurt-ai-semantic-layout.png" width="100%" alt="Yogurt AI 生成的原生可编辑关系图">
+  <img src="docs/images/yogurt-ai-native-editable-diagram.png" width="100%" alt="Yogurt AI 中选中的原生 Excalidraw 卡片与官方样式面板">
 </p>
-<p align="center"><sub>原生画布结果：节点、标签、分区与绑定箭头都能继续编辑。</sub></p>
 
-## 一句话完成什么
+## 两种模式，同一张画布
 
-```text
-把登录、权限校验、失败回退和重试机制画成一张可编辑流程图。
-```
+### AI 关闭：仅官方 Excalidraw 编辑器
 
-Yogurt AI 会完成四件事：
+- 只显示官方 Excalidraw 编辑器，不出现 Yogurt 按钮、侧栏或预制提示词；
+- 使用官方选择、手绘、矩形、菱形、椭圆、箭头、文字、图片、橡皮擦和画框工具；
+- 选中元素后，通过官方样式面板调整字体、字号、文字色、描边色、填充色、线宽、线型、粗糙度、透明度与箭头样式；
+- 保留 Excalidraw 的撤销/重做、缩放、快捷键、导入导出和原生编辑体验。
 
-1. 读取当前页面或选区中的真实文字和稳定对象 ID。
-2. 提炼唯一核心判断，识别节点、关系、状态与阅读顺序。
-3. 使用 `html-line-svg` 语义与布局规则计算层级、间距、端口和避障路径。
-4. 先 dry-run 检查碰撞与越界，再把原生对象写入当前画布。
+<p align="center">
+  <img src="docs/images/yogurt-ai-official-excalidraw.png" width="100%" alt="AI 关闭时的官方 Excalidraw 编辑器">
+</p>
 
-```mermaid
-flowchart LR
-  A["自然语言 / 当前页面 / 精确选区"] --> B["识别节点、关系与阅读顺序"]
-  B --> C["html-line-svg 确定性布局"]
-  C --> D{"碰撞、越界与端口检查"}
-  D -->|通过| E["写入原生可编辑图"]
-  D -->|过密| F["拆成多张相邻关系图"]
-  E --> G["改字 / 移动 / 缩放 / 重连 / 撤销"]
-```
+### AI 开启：Excalidraw + Codex Agent
 
-## 真正可编辑，而不只是“看起来像”
+从系统菜单选择 `Yogurt AI → 切换 AI 模式`，或按：
 
-| 能力 | Yogurt AI 的结果 |
+- Windows / Linux：`Ctrl + Shift + A`
+- macOS：`Cmd + Shift + A`
+
+Agent 面板会在同一个编辑器旁打开；关闭后立即回到纯净画布。
+
+<p align="center">
+  <img src="docs/images/yogurt-ai-agent-mode.png" width="100%" alt="官方 Excalidraw 编辑器旁打开 Yogurt AI Codex Agent">
+</p>
+
+## AI 生成的也是 Excalidraw 原生元素
+
+| 内容 | 生成结果 |
 | --- | --- |
-| 节点 | 原生 tldraw geo shape，双击即可修改中英文文字 |
-| 连线 | 原生 arrow，并与起点、终点保持真实 binding |
-| 分区 | 原生 frame；移动分区时子节点一起移动 |
-| 样式 | 可分别调整字体、字号、文字色、描边/线条色、填充、线型、粗细、透明度和箭头样式 |
-| 布局 | 按阅读顺序分层；同级对齐；标签、节点与长连线避障 |
-| 修改 | 用户手改过的文字与视觉样式会成为下一轮 AI 的最新上下文，不会被旧 metadata 覆盖 |
-| 追溯 | 每个对象保留稳定 semantic ID 与来源 shape ID |
-| 安全写入 | dry-run 与 revision 校验通过后才提交；可使用受保护的 Agent 撤销 |
+| 卡片 | 原生 `rectangle` 与绑定文字 |
+| 分区 | 原生 `frame`，用于组织一组相关元素 |
+| 关系 | 原生 `arrow`，绑定起点、终点与可编辑标签 |
+| 布局 | 自动处理阅读顺序、层级、间距、端口与避障 |
+| 样式 | 完整交给 Excalidraw 官方样式面板继续编辑 |
+| 后续修改 | AI 更新语义时保留用户已调整的字体、颜色、线框和几何位置 |
+| 追溯 | AI 元素保留稳定 semantic ID 与来源信息，便于继续整理 |
 
-主流程默认只生成原生可编辑图。复杂需求会拆成多张相邻的图，不会降级成位图、整页视觉预演、HTML/SVG 图块或 PRD 页面。
-
-## 纯画布与 AI 模式
-
-Yogurt AI 启动时默认进入纯画布：使用原生绘图工具、菜单、快捷键和样式面板，不加载侧栏、Agent、智能圈选、批注或生成入口。右上角的 `AI` 按钮是唯一的模式入口。
-
-开启 AI 模式后才会显示 Yogurt 导航与 Codex Agent。关闭 AI 模式会立即返回纯画布；切换过程复用同一个编辑器和画布数据，因此对象、选区、相机位置与撤销历史不会被重建。AI 更新文字、语义或布局时会保留当前人工样式，只有明确要求改色或改字体时才会改变对应属性。
+每个生成元素都可以独立选择与编辑，并继续使用 Excalidraw 的移动、样式、绑定、撤销和导出能力。
 
 ## 如何使用
 
-### 1. 打开一个项目
-
-从桌面快捷方式打开 Yogurt AI，首次启动时选择项目文件夹。画布数据会保存在该项目的 `canvas/` 目录。
-
-### 2. 描述你想画的内容
-
-展开右下角 Codex Agent，直接输入需求，或点击唯一快捷任务 `生成可编辑图`。
-
-没有选中对象时，Agent 使用当前整页作为语义来源；有选区时，只读取冻结的选区范围，并把新图放在来源旁边。
-
-可直接尝试：
+1. 从桌面快捷方式打开 Yogurt AI，首次启动时选择一个项目文件夹。
+2. 直接使用 Excalidraw 绘图；需要调整样式时，选中元素并使用官方样式面板。
+3. 需要 AI 时，按 `Ctrl + Shift + A`，或从 `Yogurt AI` 菜单开启 AI 模式。
+4. 描述要生成或整理的结构，例如：
 
 ```text
-画出“用户提交需求 → AI 识别意图 → 生成草稿 → 用户修改 → 再生成”的闭环。
+把“用户提交需求 → AI 识别意图 → 生成草稿 → 用户修改 → 再生成”
+画成从左到右的可编辑闭环，并为失败路径使用虚线。
 ```
 
 ```text
-把选中的卡片整理成从左到右的系统架构图，主链路用实义箭头，
-异常路径用虚线，保留我已经改过的文字。
+整理选中的卡片：保留我改过的文字与颜色，重新分层，
+让箭头避开节点，并把异常流程放到单独的画框中。
 ```
 
-```text
-这张图太挤了。保持对象 ID 和文字不变，重新排版并让箭头避开节点。
-```
+5. 关闭 AI 模式，继续使用完整的 Excalidraw 工具编辑、导出或分享文件。
 
-### 3. 在画布里继续编辑
-
-- 双击卡片修改文字；
-- 拖动节点，绑定箭头会跟随；
-- 使用样式面板分别修改字体、字号、文字色、线框/连线色、填充、线型与透明度；
-- 框选或 Shift 多选后整体移动；
-- 使用画布撤销/重做处理手工编辑；
-- 圈选已有图后，继续让 Agent 补节点、改关系或重新布局。
+当前 Beta 专注于“官方 Excalidraw 编辑器 + AI 生成原生可编辑图”。
 
 ## Windows 桌面应用
 
 普通用户不需要安装 Node.js、Git 或全局 Codex CLI。
 
-1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.2.14](https://github.com/suud003/Cowart/releases/tag/v0.2.14%2Bcodex.20260901) 的 `Yogurt-AI-Beta-Setup-0.2.14-x64.exe`。
+1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.3.0](https://github.com/suud003/Cowart/releases/tag/v0.3.0%2Bcodex.20260902) 的 `Yogurt-AI-Beta-Setup-0.3.0-x64.exe`。
 2. 双击安装包并完成安装。
 3. 首次打开时选择项目文件夹。
-4. 展开 Codex Agent；如果尚未登录，点击“登录 Codex”并在官方浏览器页面完成授权。
+4. 按 `Ctrl + Shift + A` 打开 Codex Agent；如果尚未登录，请在官方浏览器页面完成 Codex 授权。
 
 当前 Beta 安装包尚未进行代码签名，Windows SmartScreen 可能显示保护提示。请只从本仓库 Releases 下载，并核对 Release 页面公布的 SHA-256。
 
@@ -124,13 +106,13 @@ codex plugin marketplace add .
 codex plugin add cowart-thinking-canvas@cowart-thinking-github
 ```
 
-安装后可以这样开始：
+安装后可以直接描述要生成的图：
 
 ```text
-打开 Yogurt AI，把当前需求生成成 Excalidraw 风格的原生可编辑图。
+打开 Yogurt AI，把当前需求整理成一张原生可编辑的 Excalidraw 流程图。
 ```
 
-插件的默认 Agent 是 `cowart-semantic-diagram`。图片、整页编排、PRD、HTML 与 Slides 能力不会隐式抢占普通画图请求。
+`cowart-semantic-diagram` 会把结构写成 Excalidraw 原生元素，并使用 `html-line-svg` 的布局规则保持层级、间距和连线可读。
 
 ## 本地开发
 
@@ -156,30 +138,28 @@ npm test
 npm run build
 ```
 
-本地 Vite 页面只用于画布 UI 开发；`npm run desktop` 才会启动带 Codex Agent 桥接的完整桌面体验。更多桌面实现与排错信息见 [desktop/README.md](desktop/README.md)。
+本地 Vite 页面用于编辑器 UI 开发；`npm run desktop` 会启动带 Codex Agent 桥接的完整桌面应用。更多桌面实现与排错信息见 [desktop/README.md](desktop/README.md)。
 
 ## 数据与安全
 
-- 画布数据保存在当前项目的 `canvas/pages/<page-id>/`。
-- 生成图使用稳定对象 ID、来源 shape ID 与 snapshot revision，避免按截图坐标错位。
-- 普通新增与更新使用安全 operation 工具；删除用户内容或编辑非 Agent 对象需要更高权限。
+- 当前项目的画布保存在 `canvas/yogurt.excalidraw`，内容采用标准 Excalidraw 文档结构。
+- 保存使用 revision 校验与原子写入，避免两个更新静默覆盖同一版本。
+- AI 操作写入原生元素；用户手动调整后的字体、颜色、线条与位置会成为后续操作的最新状态。
 - 自动模式只连续完成当前工作区内的可逆画布操作，不会自动放行外部授权、凭据、付费或破坏性动作。
-- 桌面应用通过本机 stdio 连接 Codex App Server，不调用 `chatgpt.com/backend-api/...` 内部接口。
-- 未来若增加直接模型 API 集成，将使用公开的 `https://api.openai.com/v1/responses` 与 API Key 鉴权。
+- 桌面应用通过本机 stdio 连接 Codex App Server。
 
 ## 技术与致谢
 
-Yogurt AI 使用 [tldraw](https://github.com/tldraw/tldraw) 作为原生无限画布与编辑运行时，并参考 [Excalidraw](https://github.com/excalidraw/excalidraw) 的手绘视觉语言、工具交互和箭头绑定体验。Excalidraw 是设计参考，不是本项目运行时依赖。
+Yogurt AI 使用官方 [Excalidraw](https://github.com/excalidraw/excalidraw) React 包作为编辑器与画布运行时，而不是重新实现一套相似界面。
 
+- `@excalidraw/excalidraw`：官方编辑器 UI、工具、原生元素模型、样式面板与序列化能力；
 - `cowart-semantic-diagram`：将来源内容转换为原生可编辑语义图；
-- `html-line-svg`：提供 teaching claim、关系语法、阅读顺序、层级、间距、端口与避障规则；
+- `html-line-svg`：提供关系语法、阅读顺序、层级、间距、端口与避障规则；
 - Excalifont、Xiaolai 与 Assistant 字体采用 SIL Open Font License 1.1；
-- tldraw 使用其独立许可，公开或商业分发前需配置适用 license key，详见 [licenses/TLDRAW-LICENSE.md](licenses/TLDRAW-LICENSE.md)。
+- Excalidraw 使用 MIT License，详见 [licenses/EXCALIDRAW-LICENSE.md](licenses/EXCALIDRAW-LICENSE.md)。
 
 本仓库是 [zhongerxin/Cowart](https://github.com/zhongerxin/Cowart) 的公开 Fork，当前维护于 [suud003/Cowart](https://github.com/suud003/Cowart)。完整第三方说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## 开发者
+## 维护
 
-ZHONG XIN  
-zhongxin123456@gmail.com  
-https://www.jiqiren.ai
+Yogurt AI 由 [suud003/Cowart](https://github.com/suud003/Cowart) 维护，并保留原项目作者与许可证信息。

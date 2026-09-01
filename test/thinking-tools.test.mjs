@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { z } from "zod";
 
-import { getThinkingContext } from "../mcp/lib/thinking-canvas.mjs";
+import { getThinkingContext } from "../mcp/lib/thinking-runtime.mjs";
 import {
   AUTO_COMPOSE_DEGRADATION_POLICY,
   registerCowartThinkingTools,

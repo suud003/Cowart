@@ -268,126 +268,23 @@ try {
     throw new Error("Cowart thinking undo did not restore the original revision.");
   }
 
-  const semanticHtml = semanticProbeHtml(thinkingRevision);
-  const semanticDiagram = {
-    version: "1",
-    teachingClaim: "A source-grounded idea becomes a reviewable semantic object.",
-    readingOrder: "left-to-right",
-    diagramType: "flow",
-    sourceShapeIds: [],
-    objectCount: 1,
-    relationCount: 0,
-    specDigest: "probe-spec",
-  };
-  const rejectedSemantic = await client.callTool({
+  const legacyHtmlAttempt = await client.callTool({
     name: "insert_cowart_html_draft",
     arguments: {
       projectDir,
-      htmlContent: semanticHtml.replace("</body>", "<script>globalThis.bad=true</script></body>"),
-      fileName: "rejected-semantic.html",
-      semanticDiagram,
+      htmlContent: semanticProbeHtml(thinkingRevision),
+      fileName: "legacy-semantic-probe.html",
       dryRun: true,
     },
   });
-  if (rejectedSemantic.isError !== true) {
-    throw new Error("Semantic HTML insertion must reject active script content on the server.");
-  }
-
-  const overflowedSemantic = await client.callTool({
-    name: "insert_cowart_html_draft",
-    arguments: {
-      projectDir,
-      htmlContent: semanticHtml.replace(
-        'x="80" y="50" width="240"',
-        'x="300" y="50" width="240"',
-      ),
-      fileName: "overflowed-semantic.html",
-      semanticDiagram,
-      dryRun: true,
-    },
-  });
-  if (overflowedSemantic.isError !== true) {
-    throw new Error("Semantic HTML insertion must reject geometry outside the SVG viewBox.");
-  }
-
-  const semanticPreviewArguments = {
-    projectDir,
-    htmlContent: semanticHtml.replace('viewBox="0 0 400 180"', 'viewBox="0 0 400 800"'),
-    fileName: "semantic-probe.html",
-    displayWidth: 300,
-    displayHeight: 100,
-    matchAnchor: false,
-    updateExistingDraft: false,
-    replaceDraftHolder: false,
-    semanticDiagram,
-    shapeMeta: {
-      cowartHtmlDraft: false,
-      cowartHtmlDraftAssetUrl: "/page-assets/evil.html",
-      cowartSemanticDiagram: { version: "bypass" },
-    },
-    dryRun: true,
-  };
-  const semanticPreview = await client.callTool({
-    name: "insert_cowart_html_draft",
-    arguments: semanticPreviewArguments,
-  });
+  const legacyHtmlMessage = legacyHtmlAttempt.content
+    ?.map((item) => item?.text || "")
+    .join("\n");
   if (
-    semanticPreview.isError ||
-    semanticPreview.structuredContent?.dryRun !== true ||
-    semanticPreview.structuredContent?.baseRevision !== thinkingRevision ||
-    semanticPreview.structuredContent?.bounds?.w !== 300 ||
-    semanticPreview.structuredContent?.bounds?.h < 624
+    legacyHtmlAttempt.isError !== true ||
+    !/unavailable in the official Excalidraw runtime/i.test(legacyHtmlMessage || "")
   ) {
-    throw new Error("Semantic HTML insertion did not return a revisioned, aspect-safe dry-run preview.");
-  }
-
-  const staleThinkingApply = await client.callTool({
-    name: "apply_cowart_thinking_operations",
-    arguments: {
-      projectDir,
-      baseRevision: thinkingRevision,
-      operations: [{ type: "create_card", role: "question", title: "Stale guard probe" }],
-    },
-  });
-  const staleSemanticApply = await client.callTool({
-    name: "insert_cowart_html_draft",
-    arguments: {
-      ...semanticPreviewArguments,
-      baseRevision: semanticPreview.structuredContent.baseRevision,
-      dryRun: false,
-    },
-  });
-  if (staleSemanticApply.isError !== true) {
-    throw new Error("Semantic HTML insertion must reject a stale dry-run revision.");
-  }
-  await client.callTool({
-    name: "undo_cowart_thinking_operation",
-    arguments: { projectDir, operationId: staleThinkingApply.structuredContent?.operationId },
-  });
-
-  const semanticApply = await client.callTool({
-    name: "insert_cowart_html_draft",
-    arguments: {
-      ...semanticPreviewArguments,
-      baseRevision: semanticPreview.structuredContent.baseRevision,
-      dryRun: false,
-    },
-  });
-  const semanticShapeId = semanticApply.structuredContent?.shapeId;
-  if (semanticApply.isError || !semanticShapeId || !semanticApply.structuredContent?.resultRevision) {
-    throw new Error("Semantic HTML insertion did not persist the validated diagram.");
-  }
-  const semanticContext = await client.callTool({
-    name: "get_cowart_thinking_context",
-    arguments: { projectDir, scope: "page" },
-  });
-  const semanticShape = semanticContext.structuredContent?.shapes?.find((shape) => shape.id === semanticShapeId);
-  if (
-    semanticShape?.visual?.kind !== "semantic-line-svg" ||
-    semanticShape.visual.semanticDiagram?.teachingClaim !== semanticDiagram.teachingClaim ||
-    semanticShape.visual.assetUrl === "/page-assets/evil.html"
-  ) {
-    throw new Error("Semantic HTML insertion did not preserve constrained metadata or block reserved shapeMeta overrides.");
+    throw new Error("The official Excalidraw runtime must reject legacy HTML draft insertion.");
   }
 
   const probePageAssetDir = path.join(projectDir, "canvas", "pages", "probe-page", "assets");
@@ -523,8 +420,8 @@ try {
   }
 
   const widgetHtml = resource.contents?.[0]?.text || "";
-  if (!widgetHtml.includes("window.cowartMcp") || !widgetHtml.includes("Yogurt AI Canvas")) {
-    throw new Error("Yogurt AI widget HTML does not include the expected bridge and app shell.");
+  if (!widgetHtml.includes("EXCALIDRAW_ASSET_PATH") || !widgetHtml.includes("native-excalidraw-app")) {
+    throw new Error("Yogurt AI widget HTML does not include the expected official Excalidraw runtime and app shell.");
   }
   if (/<script\b[^>]*\btype="module"/i.test(widgetHtml)) {
     throw new Error("Cowart widget HTML should use classic inline scripts for host compatibility.");

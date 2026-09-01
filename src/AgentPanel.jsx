@@ -71,9 +71,12 @@ export function resolveAgentExecutionModeForTask({
 
 export function readAgentExecutionMode(storage = globalThis.window?.localStorage, projectName) {
   try {
-    return normalizeAgentExecutionMode(storage?.getItem?.(agentExecutionModeStorageKey(projectName)))
+    const stored = storage?.getItem?.(agentExecutionModeStorageKey(projectName))
+    return stored === null || stored === undefined
+      ? 'autonomous'
+      : normalizeAgentExecutionMode(stored)
   } catch {
-    return 'guided'
+    return 'autonomous'
   }
 }
 
@@ -129,7 +132,7 @@ const QUICK_TASKS = [
     icon: Workflow,
     kind: 'editable-diagram',
     label: '生成可编辑图',
-    description: 'Excalidraw 风格 · 节点和箭头都能改',
+    description: '官方 Excalidraw 原生元素',
     prompt: SEMANTIC_DIAGRAM_QUICK_PROMPT
   }
 ]
@@ -2209,7 +2212,7 @@ export function CowartAgentPanel({
           <section className="cowart-agent-welcome" aria-labelledby="cowart-agent-welcome-title">
             <span className="cowart-agent-welcome-icon" aria-hidden="true"><Sparkles size={19} /></span>
             <h2 id="cowart-agent-welcome-title">描述结构，直接生成可编辑图</h2>
-            <p>AI 会把需求组织成 Excalidraw 风格的原生节点、文字和绑定箭头；每一项都能移动、改字和重新连接。</p>
+            <p>AI 会把需求组织成官方 Excalidraw 原生节点、文字和绑定箭头；每一项都能移动、改字和重新连接。</p>
             <div className="cowart-agent-welcome-context" aria-label="当前工作范围">
               <span><FileText aria-hidden="true" size={13} />{context?.pageName || '未命名页面'}</span>
               <span data-selection={selectedCount > 0 ? 'true' : 'false'}>{scopeLabel}</span>

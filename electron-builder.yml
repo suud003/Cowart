@@ -1,6 +1,6 @@
 appId: com.yogurtai.desktop
 productName: Yogurt AI Beta
-copyright: Copyright © 2026 Twox
+copyright: Copyright © 2026 Yogurt AI contributors
 
 asar: true
 npmRebuild: false
@@ -31,6 +31,22 @@ files:
   - LICENSE
   - licenses/**/*
   - node_modules/**/*
+  # tldraw remains available only to source-level legacy tests and migration work.
+  # The production desktop runs the official Excalidraw package and must not ship
+  # the tldraw runtime or the retired tldraw application entry points.
+  - "!node_modules/tldraw/**/*"
+  - "!node_modules/@tldraw/**/*"
+  - "!mcp/lib/thinking-canvas.mjs"
+  - "!src/App.jsx"
+  - "!src/ExcalidrawWorkspace.jsx"
+  - "!src/ThinkingReviewToolbar.jsx"
+  - "!src/agentLasso.js"
+  - "!src/annotationContext.js"
+  - "!src/canvasSnapshot.js"
+  - "!src/cowartGeoTypes.js"
+  - "!src/cowartTheme.js"
+  - "!src/cowartTldrawAssets.js"
+  - "!licenses/TLDRAW-LICENSE.md"
   - "!**/{test,tests,__tests__}/**/*"
   - "!**/*.{map,tsbuildinfo}"
 
@@ -52,6 +68,19 @@ asarUnpack:
   - LICENSE
   - licenses/**/*
   - node_modules/**/*
+  - "!node_modules/tldraw/**/*"
+  - "!node_modules/@tldraw/**/*"
+  - "!mcp/lib/thinking-canvas.mjs"
+  - "!src/App.jsx"
+  - "!src/ExcalidrawWorkspace.jsx"
+  - "!src/ThinkingReviewToolbar.jsx"
+  - "!src/agentLasso.js"
+  - "!src/annotationContext.js"
+  - "!src/canvasSnapshot.js"
+  - "!src/cowartGeoTypes.js"
+  - "!src/cowartTheme.js"
+  - "!src/cowartTldrawAssets.js"
+  - "!licenses/TLDRAW-LICENSE.md"
 
 # electron-builder intentionally omits npm lockfiles from app.asar. The MCP
 # widget source hash includes this file, so place the exact lockfile beside the
@@ -80,6 +109,6 @@ nsis:
   uninstallDisplayName: Yogurt AI Beta
   runAfterFinish: true
   deleteAppDataOnUninstall: false
-  license: packaging/TLDRAW-LICENSE.txt
+  license: LICENSE
 
 publish: null

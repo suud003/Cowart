@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -8,6 +8,7 @@ import { YogurtAgentService } from './agent-service.mjs'
 import { createAgentAttentionController } from './agent-attention.mjs'
 import { persistThreadId, readPersistedThreadId } from './agent-session.mjs'
 import { CodexAppServerClient } from './codex-app-server-client.mjs'
+import { installYogurtApplicationMenu } from './ai-mode-menu.mjs'
 import { registerYogurtAgentIpc, YogurtDesktopRuntime } from './ipc-bridge.mjs'
 import {
   createYogurtCodexArgs,
@@ -298,29 +299,41 @@ async function captureDesktopIfRequested() {
   await new Promise((resolve) => setTimeout(resolve, delayMs))
   const captureAgentPanel = process.env.YOGURT_DESKTOP_CAPTURE_AGENT_PANEL === '1'
   const captureAutoAdvance = process.env.YOGURT_DESKTOP_CAPTURE_AUTO_ADVANCE === '1'
+  const captureSelectionId = String(process.env.YOGURT_DESKTOP_CAPTURE_SELECT_ELEMENT_ID || '').trim()
   if (captureAgentPanel || captureAutoAdvance) {
     const captureState = await mainWindow.webContents.executeJavaScript(`
       (async () => {
         const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
         const shouldOpenPanel = ${JSON.stringify(captureAgentPanel || captureAutoAdvance)}
         const shouldEnableAutoAdvance = ${JSON.stringify(captureAutoAdvance)}
-        const pureCanvasReady = Boolean(
+        const nativeExcalidrawReady = Boolean(
+          document.querySelector('.native-excalidraw-app[data-ai-mode="off"] .excalidraw') &&
+          !document.querySelector('.tl-container')
+        )
+        const legacyCanvasReady = Boolean(
           document.querySelector('.cowart-native-workbench .tl-container') &&
           document.querySelector('.cowart-ai-mode-entry')
         )
+        const pureCanvasReady = nativeExcalidrawReady || legacyCanvasReady
         if (shouldOpenPanel) {
-          document.querySelector('.cowart-ai-mode-entry')?.click()
-          let opener = null
-          for (let attempt = 0; attempt < 40; attempt += 1) {
-            opener = document.querySelector('.yogurt-app-agent-toggle')
-            if (opener) break
-            await sleep(100)
+          if (nativeExcalidrawReady) {
+            window.dispatchEvent(new CustomEvent('yogurt:toggle-ai-mode'))
+          } else {
+            document.querySelector('.cowart-ai-mode-entry')?.click()
+            let opener = null
+            for (let attempt = 0; attempt < 40; attempt += 1) {
+              opener = document.querySelector('.yogurt-app-agent-toggle')
+              if (opener) break
+              await sleep(100)
+            }
+            if (opener?.getAttribute('aria-expanded') !== 'true') opener?.click()
           }
-          if (opener?.getAttribute('aria-expanded') !== 'true') opener?.click()
         }
         let executionToggle = null
         for (let attempt = 0; attempt < 40; attempt += 1) {
-          executionToggle = document.querySelector('.cowart-agent-execution-mode > button')
+          const shadowRoot = document.querySelector('.native-excalidraw-agent-host')?.shadowRoot
+          executionToggle = shadowRoot?.querySelector('.cowart-agent-execution-mode > button') ||
+            document.querySelector('.cowart-agent-execution-mode > button')
           if (executionToggle) break
           await sleep(100)
         }
@@ -334,12 +347,32 @@ async function captureDesktopIfRequested() {
         }
         return {
           pureCanvasReady,
-          aiModeEnabled: document.querySelector('.cowart-workbench[data-ai-mode="on"]') !== null,
-          agentPanelOpen: document.querySelector('.yogurt-app-agent-toggle')?.getAttribute('aria-expanded') === 'true',
-          autoAdvanceEnabled: executionToggle?.getAttribute('aria-pressed') === 'true'
+          innerWidth: window.innerWidth,
+          devicePixelRatio: window.devicePixelRatio,
+          compactAgentLayout: window.matchMedia('(max-width: 600px)').matches,
+          canvasBounds: document.querySelector('.native-excalidraw-canvas')?.getBoundingClientRect().toJSON?.() || null,
+          agentBounds: document.querySelector('.native-excalidraw-agent-host')?.getBoundingClientRect().toJSON?.() || null,
+          agentPanelBounds: document.querySelector('.native-excalidraw-agent-host')?.shadowRoot?.querySelector('.cowart-agent-panel')?.getBoundingClientRect().toJSON?.() || null,
+          fixedAgentElements: [...(document.querySelector('.native-excalidraw-agent-host')?.shadowRoot?.querySelectorAll('*') || [])]
+            .filter((element) => getComputedStyle(element).position === 'fixed')
+            .slice(0, 12)
+            .map((element) => ({ className: element.className, bounds: element.getBoundingClientRect().toJSON?.() || null })),
+          aiModeEnabled: document.querySelector('.native-excalidraw-app[data-ai-mode="on"]') !== null ||
+            document.querySelector('.cowart-workbench[data-ai-mode="on"]') !== null,
+          agentPanelOpen: document.querySelector('.native-excalidraw-agent-host') !== null ||
+            document.querySelector('.yogurt-app-agent-toggle')?.getAttribute('aria-expanded') === 'true',
+          autoAdvanceEnabled: executionToggle?.getAttribute('aria-pressed') === 'true',
+          excalidrawViewport: window.__cowartExcalidrawAPI?.getAppState?.()
+            ? {
+                zoom: window.__cowartExcalidrawAPI.getAppState().zoom,
+                scrollX: window.__cowartExcalidrawAPI.getAppState().scrollX,
+                scrollY: window.__cowartExcalidrawAPI.getAppState().scrollY
+              }
+            : null
         }
       })()
     `)
+    console.log(`Desktop capture state: ${JSON.stringify(captureState)}`)
     if (captureState?.pureCanvasReady !== true) {
       throw new Error('Requested desktop capture did not start in pure canvas mode.')
     }
@@ -351,6 +384,41 @@ async function captureDesktopIfRequested() {
     }
     if (captureAutoAdvance && captureState?.autoAdvanceEnabled !== true) {
       throw new Error('Requested desktop capture could not enable Auto-advance canvas.')
+    }
+  }
+  const captureZoom = Number(process.env.YOGURT_DESKTOP_CAPTURE_ZOOM)
+  if (Number.isFinite(captureZoom) && captureZoom > 0) {
+    const zoomState = await mainWindow.webContents.executeJavaScript(`
+      (async () => {
+        const api = window.__cowartExcalidrawAPI
+        api?.updateScene?.({ appState: { zoom: { value: ${JSON.stringify(captureZoom)} } } })
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        return api?.getAppState?.().zoom || null
+      })()
+    `)
+    console.log(`Desktop capture zoom: ${JSON.stringify(zoomState)}`)
+  }
+  if (captureSelectionId) {
+    const selectionState = await mainWindow.webContents.executeJavaScript(`
+      (async () => {
+        const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+        const elementId = ${JSON.stringify(captureSelectionId)}
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const api = window.__cowartExcalidrawAPI
+          const element = api?.getSceneElements?.().find((candidate) => candidate.id === elementId)
+          if (api && element) {
+            api.updateScene({ appState: { selectedElementIds: { [elementId]: true } } })
+            api.scrollToContent?.([element], { fitToContent: false, animate: false })
+            await sleep(350)
+            return { selected: api.getAppState?.().selectedElementIds?.[elementId] === true }
+          }
+          await sleep(100)
+        }
+        return { selected: false }
+      })()
+    `)
+    if (selectionState?.selected !== true) {
+      throw new Error(`Requested desktop capture could not select Excalidraw element ${captureSelectionId}.`)
     }
   }
   const image = await mainWindow.webContents.capturePage()
@@ -368,6 +436,7 @@ desktopRuntime.start().catch((error) => {
   console.error('Yogurt AI Codex sidecar failed to start:', error)
 })
 await createMainWindow()
+installYogurtApplicationMenu({ Menu, getWindow: () => mainWindow })
 await captureDesktopIfRequested()
 
 app.on('activate', () => {

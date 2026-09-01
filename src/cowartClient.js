@@ -108,7 +108,14 @@ async function callCowartServerTool(name, args = {}, options = {}) {
 async function fetchJson(url, options = {}) {
   const response = await window.fetch(url, options)
   if (!response.ok) {
-    throw new Error(`Yogurt AI request failed: ${response.status} - ${response.statusText}`)
+    const details = await response.json().catch(() => null)
+    const error = new Error(
+      details?.message || details?.error ||
+      `Yogurt AI request failed: ${response.status} - ${response.statusText}`
+    )
+    error.code = response.status === 409 ? 'COWART_REVISION_CONFLICT' : 'COWART_HTTP_ERROR'
+    error.details = details
+    throw error
   }
   return response.json()
 }
@@ -185,7 +192,12 @@ export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
   return fetchJson(CANVAS_ENDPOINT, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(snapshot)
+    body: JSON.stringify({
+      snapshot,
+      baseRevision: options.baseRevision,
+      protectImageRecords: options.protectImageRecords,
+      acknowledgedImageShapeDeletes: options.acknowledgedImageShapeDeletes
+    })
   })
 }
 

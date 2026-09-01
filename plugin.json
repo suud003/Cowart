@@ -1,21 +1,20 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cowart-thinking-canvas",
-  "version": "0.2.14+codex.20260901",
-  "description": "An AI canvas that turns requests into Excalidraw-style native editable diagrams.",
+  "version": "0.3.0+codex.20260902",
+  "description": "The official Excalidraw editor with optional Codex Agent generation of native editable diagrams.",
   "author": {
-    "name": "ZHONG XIN",
-    "email": "zhongxin123456@gmail.com",
-    "url": "https://www.jiqiren.ai"
+    "name": "Yogurt AI",
+    "url": "https://github.com/suud003/Cowart"
   },
-  "homepage": "https://www.jiqiren.ai",
+  "homepage": "https://github.com/suud003/Cowart",
   "repository": "https://github.com/suud003/Cowart",
   "license": "MIT",
   "keywords": [
     "canvas",
-    "tldraw",
+    "excalidraw",
     "whiteboard",
-    "excalidraw-style",
+    "official-excalidraw",
     "editable-diagram",
     "diagram-layout",
     "codex-agent",

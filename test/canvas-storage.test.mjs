@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -32,6 +32,33 @@ function snapshotWithPageName(name) {
         meta: {}
       }
     }
+  }
+}
+
+function excalidrawScene(label, elements = null) {
+  return {
+    type: 'excalidraw',
+    version: 2,
+    source: 'https://github.com/suud003/Cowart',
+    elements: elements ?? [
+      {
+        id: `element-${label}`,
+        type: 'rectangle',
+        x: 20,
+        y: 30,
+        width: 240,
+        height: 120,
+        strokeColor: '#1b1b1f',
+        backgroundColor: 'transparent',
+        version: 1,
+        versionNonce: 101
+      }
+    ],
+    appState: {
+      viewBackgroundColor: '#ffffff',
+      name: label
+    },
+    files: {}
   }
 }
 
@@ -218,6 +245,226 @@ test('snapshot revisions ignore JSON object insertion order across canvas consum
   const changedPrototypeKey = structuredClone(second)
   changedPrototypeKey.store['page:test'].meta = JSON.parse('{"__proto__":{"value":1}}')
   assert.notEqual(cowartSnapshotRevision(second), cowartSnapshotRevision(changedPrototypeKey))
+})
+
+test('Excalidraw revisions canonicalize object keys but preserve element z-order', () => {
+  const back = {
+    id: 'back',
+    type: 'rectangle',
+    x: 0,
+    y: 0,
+    width: 200,
+    height: 100,
+    version: 1
+  }
+  const front = {
+    id: 'front',
+    type: 'text',
+    x: 20,
+    y: 20,
+    width: 100,
+    height: 30,
+    text: 'Front',
+    version: 1
+  }
+  const first = excalidrawScene('Stable', [back, front])
+  first.files = { image: { mimeType: 'image/png', id: 'image' } }
+
+  const sameSceneWithDifferentObjectKeyOrder = {
+    files: { image: { id: 'image', mimeType: 'image/png' } },
+    appState: { name: 'Stable', viewBackgroundColor: '#ffffff' },
+    elements: [
+      {
+        version: 1,
+        height: 100,
+        width: 200,
+        y: 0,
+        x: 0,
+        type: 'rectangle',
+        id: 'back'
+      },
+      {
+        version: 1,
+        text: 'Front',
+        height: 30,
+        width: 100,
+        y: 20,
+        x: 20,
+        type: 'text',
+        id: 'front'
+      }
+    ],
+    source: first.source,
+    version: 2,
+    type: 'excalidraw'
+  }
+
+  assert.equal(
+    cowartSnapshotRevision(first),
+    cowartSnapshotRevision(sameSceneWithDifferentObjectKeyOrder)
+  )
+
+  const reordered = structuredClone(first)
+  reordered.elements.reverse()
+  assert.notEqual(cowartSnapshotRevision(first), cowartSnapshotRevision(reordered))
+})
+
+test('Excalidraw scenes save atomically to yogurt.excalidraw and take read priority', async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-excalidraw-priority-'))
+  try {
+    const legacySnapshot = snapshotWithPageName('Legacy tldraw page')
+    const legacySave = await saveCowartCanvasSnapshot({ projectDir }, legacySnapshot)
+    assert.equal(legacySave.ok, true)
+
+    const canvasDir = path.join(projectDir, 'canvas')
+    const legacySingleFile = path.join(canvasDir, 'cowart-canvas.json')
+    await writeFile(legacySingleFile, `${JSON.stringify(legacySnapshot, null, 2)}\n`)
+    const legacyPageFile = legacySave.paths[0]
+    const legacySingleBefore = await readFile(legacySingleFile, 'utf8')
+    const legacyPageBefore = await readFile(legacyPageFile, 'utf8')
+
+    const beforeMigration = await readCowartCanvasState({ projectDir })
+    assert.equal(beforeMigration.storage, 'per-page')
+
+    const scene = excalidrawScene('Native scene')
+    const saved = await saveCowartCanvasSnapshot(
+      { projectDir, baseRevision: beforeMigration.revision },
+      scene
+    )
+    const scenePath = path.join(canvasDir, 'yogurt.excalidraw')
+    assert.equal(saved.ok, true)
+    assert.equal(saved.storage, 'excalidraw')
+    assert.deepEqual(saved.paths, [scenePath])
+    assert.deepEqual(JSON.parse(await readFile(scenePath, 'utf8')), scene)
+
+    const storedNames = await readdir(canvasDir)
+    assert.equal(storedNames.some((name) => name.endsWith('.tmp')), false)
+
+    const loaded = await readCowartCanvasState({ projectDir })
+    assert.equal(loaded.storage, 'excalidraw')
+    assert.equal(loaded.path, scenePath)
+    assert.deepEqual(loaded.snapshot, scene)
+    assert.equal(loaded.revision, saved.revision)
+
+    assert.equal(await readFile(legacySingleFile, 'utf8'), legacySingleBefore)
+    assert.equal(await readFile(legacyPageFile, 'utf8'), legacyPageBefore)
+  } finally {
+    await rm(projectDir, { recursive: true, force: true })
+  }
+})
+
+test('Excalidraw hydrateAssets reads native files without tldraw assumptions', async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-excalidraw-hydrate-'))
+  try {
+    const scene = excalidrawScene('Hydrated')
+    scene.files = {
+      'file-1': {
+        id: 'file-1',
+        mimeType: 'image/png',
+        dataURL: ONE_PIXEL_PNG,
+        created: 1
+      }
+    }
+    const saved = await saveCowartCanvasSnapshot({ projectDir }, scene)
+    assert.equal(saved.ok, true)
+
+    const hydrated = await readCowartCanvasState({ projectDir }, { hydrateAssets: true })
+    assert.deepEqual(hydrated.snapshot, scene)
+    assert.deepEqual(hydrated.hydratedAssets, [])
+  } finally {
+    await rm(projectDir, { recursive: true, force: true })
+  }
+})
+
+test('Excalidraw saves enforce CAS and keep the winning scene intact', async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-excalidraw-cas-'))
+  try {
+    const initial = await readCowartCanvasState({ projectDir })
+    const winner = await saveCowartCanvasSnapshot(
+      { projectDir, baseRevision: initial.revision },
+      excalidrawScene('Winner')
+    )
+    assert.equal(winner.ok, true)
+
+    const stale = await saveCowartCanvasSnapshot(
+      { projectDir, baseRevision: initial.revision },
+      excalidrawScene('Stale')
+    )
+    assert.equal(stale.ok, false)
+    assert.equal(stale.storage, 'revision-conflict')
+    assert.equal(stale.expectedRevision, initial.revision)
+    assert.equal(stale.currentRevision, winner.revision)
+
+    const persisted = await readCowartCanvasState({ projectDir })
+    assert.equal(persisted.snapshot.appState.name, 'Winner')
+    assert.equal(persisted.revision, winner.revision)
+  } finally {
+    await rm(projectDir, { recursive: true, force: true })
+  }
+})
+
+test('Vite canvas API persists Excalidraw scenes and returns HTTP 409 for stale CAS', { timeout: 20_000 }, async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-excalidraw-vite-cas-'))
+  const previousProjectDir = process.env.COWART_PROJECT_DIR
+  let server
+  try {
+    process.env.COWART_PROJECT_DIR = projectDir
+    const { createServer } = await import('vite')
+    server = await createServer({
+      configFile: path.resolve('vite.config.js'),
+      logLevel: 'silent',
+      optimizeDeps: { noDiscovery: true, include: [] },
+      server: { host: '127.0.0.1', port: 0 }
+    })
+    await server.listen()
+    const address = server.httpServer.address()
+    assert.equal(typeof address, 'object')
+    const endpoint = `http://127.0.0.1:${address.port}/api/canvas`
+
+    const initialResponse = await fetch(endpoint)
+    assert.equal(initialResponse.status, 200)
+    const initial = await initialResponse.json()
+    assert.equal(typeof initial.revision, 'string')
+
+    const winnerResponse = await fetch(endpoint, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        snapshot: excalidrawScene('Vite winner'),
+        baseRevision: initial.revision
+      })
+    })
+    assert.equal(winnerResponse.status, 200)
+    const winner = await winnerResponse.json()
+    assert.equal(winner.ok, true)
+    assert.equal(winner.storage, 'excalidraw')
+
+    const staleResponse = await fetch(endpoint, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        snapshot: excalidrawScene('Vite stale'),
+        baseRevision: initial.revision
+      })
+    })
+    assert.equal(staleResponse.status, 409)
+    const stale = await staleResponse.json()
+    assert.equal(stale.ok, false)
+    assert.equal(stale.storage, 'revision-conflict')
+    assert.equal(stale.currentRevision, winner.revision)
+
+    const persistedResponse = await fetch(`${endpoint}?hydrateAssets=true`)
+    assert.equal(persistedResponse.status, 200)
+    const persisted = await persistedResponse.json()
+    assert.equal(persisted.snapshot.appState.name, 'Vite winner')
+    assert.equal(persisted.revision, winner.revision)
+    assert.deepEqual(persisted.hydratedAssets, [])
+  } finally {
+    await server?.close()
+    if (previousProjectDir === undefined) delete process.env.COWART_PROJECT_DIR
+    else process.env.COWART_PROJECT_DIR = previousProjectDir
+    await rm(projectDir, { recursive: true, force: true })
+  }
 })
 
 test('multi-page persistence returns the same canonical revision that the next read observes', async () => {

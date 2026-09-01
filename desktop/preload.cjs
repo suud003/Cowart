@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 const CHANNELS = Object.freeze({
   bootstrap: 'yogurt-agent:bootstrap',
+  aiModeToggle: 'yogurt-desktop:toggle-ai-mode',
   callCowartTool: 'yogurt-agent:call-cowart-tool',
   event: 'yogurt-agent:event',
   getState: 'yogurt-agent:get-state',
@@ -20,6 +21,7 @@ const bootstrap = ipcRenderer.sendSync(CHANNELS.bootstrap) || {}
 if (bootstrap.error) throw new Error(bootstrap.error)
 
 const callbacks = new Set()
+const aiModeToggleCallbacks = new Set()
 const deliveredElicitations = new WeakMap()
 const resolvedElicitationIds = new Set()
 
@@ -59,6 +61,18 @@ const dispatchEvent = (_event, payload) => {
   }
 }
 ipcRenderer.on(CHANNELS.event, dispatchEvent)
+
+const dispatchAiModeToggle = (_event, payload) => {
+  if (payload?.type !== 'toggle' || payload?.source !== 'application-menu') return
+  for (const callback of aiModeToggleCallbacks) {
+    try {
+      callback()
+    } catch {
+      // A renderer listener cannot break delivery to the remaining listeners.
+    }
+  }
+}
+ipcRenderer.on(CHANNELS.aiModeToggle, dispatchAiModeToggle)
 
 const yogurtAgent = Object.freeze({
   capabilities: bootstrap.capabilities || null,
@@ -125,6 +139,17 @@ const openai = Object.freeze({
   })
 })
 
+const yogurtDesktop = Object.freeze({
+  subscribeAiModeToggle(callback) {
+    if (typeof callback !== 'function') {
+      throw new TypeError('subscribeAiModeToggle requires a function.')
+    }
+    aiModeToggleCallbacks.add(callback)
+    return () => aiModeToggleCallbacks.delete(callback)
+  }
+})
+
 contextBridge.exposeInMainWorld('yogurtAgent', yogurtAgent)
 contextBridge.exposeInMainWorld('cowartMcp', cowartMcp)
 contextBridge.exposeInMainWorld('openai', openai)
+contextBridge.exposeInMainWorld('yogurtDesktop', yogurtDesktop)

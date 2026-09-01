@@ -1,4 +1,4 @@
 interface:
   display_name: "Yogurt AI Open Canvas"
-  short_description: "Open the Yogurt AI infinite-canvas widget"
+  short_description: "Open the official Excalidraw editor in Yogurt AI"
   default_prompt: "Use $cowart-thinking-canvas:cowart-open-canvas to open the Yogurt AI widget."

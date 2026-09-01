@@ -31,6 +31,6 @@ export function buildThinkingReviewPrompt({
     '4. Apply that same batch only to the selected region. Never rewrite, move, or delete unrelated page content.',
     '5. An explicit request to delete selected content is authorization for that selected content only; never infer deletion.',
     '6. Explain what changed, the evidence used, and provide the operation ID for undo.',
-    'Use only native editable cards, semantic zones, text, and bound relations. Keep the Excalidraw-style draw stroke and font, and never fall back to image, HTML, SVG, Slides, Auto Compose, or PRD output.'
+    'Use only native editable Excalidraw rectangles, frames, text, and bound arrows. Preserve user-edited text, colors, strokes, fonts, and geometry.'
   ].join('\n')
 }

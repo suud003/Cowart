@@ -5,7 +5,7 @@ import {
   getThinkingContext,
   importThinkingMaterial,
   undoThinkingOperation,
-} from "./thinking-canvas.mjs";
+} from "./thinking-runtime.mjs";
 import {
   digestAutoComposePagePlan,
   validateAutoComposePagePlan,
@@ -288,6 +288,7 @@ const updateRelationSchema = z.object({
   direction: z.enum(["forward", "bidirectional", "none"]).optional(),
   path: z.enum(["primary", "alternative"]).optional(),
   payload: z.string().max(300).nullable().optional(),
+  lane: z.number().int().min(-8).max(8).optional(),
   origin: z.enum([
     "source",
     "user",
@@ -353,7 +354,7 @@ export function registerCowartThinkingTools(server) {
     {
       title: "Inspect Yogurt AI Thinking Context",
       description:
-        "Read a compact, source-aware representation of the current Yogurt AI page or selection. When the UI captured a selection, pass its frozen shapeIds with scope=selection so later shared-selection changes cannot alter the request; selected frames and groups include their descendants. Use before planning any thinking-canvas edit; do not ask for the raw tldraw snapshot.",
+        "Read a compact, source-aware representation of the current Yogurt AI Excalidraw document or selection. When the UI captured a selection, pass its frozen shapeIds with scope=selection so later shared-selection changes cannot alter the request; selected frames and groups include their descendants. Use before planning an edit; do not request the full raw document.",
       inputSchema: {
         ...projectArgsSchema,
         pageId: z.string().trim().optional(),

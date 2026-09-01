@@ -29,6 +29,7 @@ const requiredPaths = [
   path.join(resourcesDir, 'app.asar'),
   path.join(runtimeRoot, 'desktop', 'launcher.cjs'),
   path.join(runtimeRoot, 'desktop', 'main.mjs'),
+  path.join(runtimeRoot, 'desktop', 'ai-mode-menu.mjs'),
   path.join(runtimeRoot, 'desktop', 'agent-service.mjs'),
   path.join(runtimeRoot, 'desktop', 'codex-app-server-client.mjs'),
   path.join(runtimeRoot, 'desktop', 'ipc-bridge.mjs'),
@@ -39,11 +40,17 @@ const requiredPaths = [
   path.join(runtimeRoot, 'package-lock.json'),
   path.join(runtimeRoot, 'mcp', 'server.mjs'),
   path.join(runtimeRoot, 'mcp', 'lib', 'auto-compose-plan.mjs'),
+  path.join(runtimeRoot, 'mcp', 'lib', 'canvas-runtime-helpers.mjs'),
+  path.join(runtimeRoot, 'mcp', 'lib', 'excalidraw-thinking-canvas.mjs'),
   path.join(runtimeRoot, 'mcp', 'lib', 'semantic-layout.mjs'),
   path.join(runtimeRoot, 'mcp', 'lib', 'thinking-layout.mjs'),
+  path.join(runtimeRoot, 'mcp', 'lib', 'thinking-runtime.mjs'),
   path.join(runtimeRoot, 'scripts', 'start-mcp.mjs'),
   path.join(runtimeRoot, 'scripts', 'vite-build-once.mjs'),
   path.join(runtimeRoot, 'src', 'main.jsx'),
+  path.join(runtimeRoot, 'src', 'NativeExcalidrawApp.jsx'),
+  path.join(runtimeRoot, 'src', 'excalidrawDocument.js'),
+  path.join(runtimeRoot, 'src', 'nativeExcalidraw.css'),
   path.join(runtimeRoot, 'public', 'cowart-logo.svg'),
   path.join(runtimeRoot, 'skills', 'cowart-auto-compose', 'SKILL.md'),
   path.join(runtimeRoot, 'skills', 'cowart-auto-compose', 'references', 'routing-contract.md'),
@@ -51,7 +58,9 @@ const requiredPaths = [
   path.join(runtimeRoot, 'skills', 'cowart-thinking-agent', 'SKILL.md'),
   path.join(runtimeRoot, '.codex-plugin', 'plugin.json'),
   path.join(runtimeRoot, 'plugin.json'),
-  path.join(runtimeRoot, 'licenses', 'TLDRAW-LICENSE.md'),
+  path.join(runtimeRoot, 'licenses', 'EXCALIDRAW-LICENSE.md'),
+  path.join(runtimeRoot, 'public', 'excalidraw-assets', 'SOURCE.json'),
+  path.join(runtimeRoot, 'node_modules', '@excalidraw', 'excalidraw', 'package.json'),
   path.join(runtimeRoot, 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json'),
   path.join(runtimeRoot, 'node_modules', '@openai', 'codex', 'bin', 'codex.js'),
   path.join(runtimeRoot, 'node_modules', '@openai', 'codex-win32-x64', 'package.json'),
@@ -63,6 +72,20 @@ const requiredPaths = [
 const missingPaths = requiredPaths.filter((target) => !existsSync(target))
 if (missingPaths.length > 0) {
   throw new Error(`Packaged runtime is incomplete:\n${missingPaths.join('\n')}`)
+}
+
+const forbiddenLegacyPaths = [
+  path.join(runtimeRoot, 'node_modules', 'tldraw', 'package.json'),
+  path.join(runtimeRoot, 'node_modules', '@tldraw', 'assets', 'package.json'),
+  path.join(runtimeRoot, 'node_modules', '@tldraw', 'store', 'package.json'),
+  path.join(runtimeRoot, 'node_modules', '@tldraw', 'tlschema', 'package.json'),
+  path.join(runtimeRoot, 'mcp', 'lib', 'thinking-canvas.mjs'),
+  path.join(runtimeRoot, 'src', 'App.jsx'),
+  path.join(runtimeRoot, 'licenses', 'TLDRAW-LICENSE.md')
+]
+const shippedLegacyPaths = forbiddenLegacyPaths.filter((target) => existsSync(target))
+if (shippedLegacyPaths.length > 0) {
+  throw new Error(`Packaged runtime unexpectedly includes legacy tldraw files:\n${shippedLegacyPaths.join('\n')}`)
 }
 
 const [installerStat, installerBlockmapStat, packagedExecutableStat, packagedAsarStat] = await Promise.all([
@@ -94,18 +117,25 @@ const sourceParityPaths = [
   path.join('.codex-plugin', 'plugin.json'),
   path.join('mcp', 'server.mjs'),
   path.join('mcp', 'lib', 'auto-compose-plan.mjs'),
+  path.join('mcp', 'lib', 'canvas-runtime-helpers.mjs'),
+  path.join('mcp', 'lib', 'excalidraw-thinking-canvas.mjs'),
   path.join('mcp', 'lib', 'semantic-layout.mjs'),
-  path.join('mcp', 'lib', 'thinking-canvas.mjs'),
   path.join('mcp', 'lib', 'thinking-layout.mjs'),
+  path.join('mcp', 'lib', 'thinking-runtime.mjs'),
   path.join('mcp', 'lib', 'thinking-tools.mjs'),
+  path.join('desktop', 'ai-mode-menu.mjs'),
   path.join('desktop', 'agent-service.mjs'),
   path.join('desktop', 'codex-app-server-client.mjs'),
   path.join('desktop', 'ipc-bridge.mjs'),
   path.join('desktop', 'main.mjs'),
   path.join('desktop', 'preload.cjs'),
-  path.join('src', 'App.jsx'),
   path.join('src', 'AgentPanel.jsx'),
+  path.join('src', 'NativeExcalidrawApp.jsx'),
   path.join('src', 'autoComposePrompt.js'),
+  path.join('src', 'excalidrawDocument.js'),
+  path.join('src', 'nativeExcalidraw.css'),
+  path.join('licenses', 'EXCALIDRAW-LICENSE.md'),
+  path.join('public', 'excalidraw-assets', 'SOURCE.json'),
   path.join('skills', 'cowart-auto-compose', 'SKILL.md'),
   path.join('skills', 'cowart-auto-compose', 'references', 'routing-contract.md'),
   path.join('skills', 'cowart-auto-compose', 'agents', 'openai.yaml'),

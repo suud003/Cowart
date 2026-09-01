@@ -78,9 +78,9 @@ Store one JSON object in the template carrying data-cowart-diagram-spec and pres
 
 Required object roles are selected from interface, agent, task, container, document, state, claim, evidence, question, decision, zone, and system. Required origins are source, user, synthesis, inference, or unknown. Use unknown only while keeping the uncertainty visible.
 
-For the native route, put the batch trace in `semanticDiagram`, object trace in each `semantic` object, and relation trace directly on each `create_relation` operation. A native relation carries `semanticId`, `kind`, `direction`, `path`, optional `payload`, `lane`, `origin`, `sourceShapeIds`, and `sourceIds`. Real tldraw start/end bindings are the authoritative endpoints after a user reconnects an arrow; stale compatibility metadata must not revive a missing terminal or cross a diagram boundary. Do not reuse Product Bridge `bridge`, `zoneId`, requirement, page, or annotation fields. Keep the single-line semantic-zone title short; show a necessary teaching claim in a wrap-capable claim card and retain the full value in metadata.
+For the native route, put the batch trace in `semanticDiagram`, object trace in each `semantic` object, and relation trace directly on each `create_relation` operation. A native relation carries `semanticId`, `kind`, `direction`, `path`, optional `payload`, `lane`, `origin`, `sourceShapeIds`, and `sourceIds`. Real Excalidraw `startBinding` and `endBinding` values are the authoritative endpoints after a user reconnects an arrow; stale compatibility metadata must not revive a missing terminal or cross a diagram boundary. Do not reuse Product Bridge `bridge`, `zoneId`, requirement, page, or annotation fields. Keep the single-line semantic-zone title short; show a necessary teaching claim in a wrap-capable claim card and retain the full value in metadata.
 
-Native semantic card and zone revisions may patch type, state, origin, reading order, and source mappings, but must preserve their `diagramId` and `semanticId`. A relation revision is one ordered batch containing `delete_shape` followed by `create_relation` with the same stable `semanticId`; there is no `update_relation` shortcut.
+Native semantic card and zone revisions may patch type, state, origin, reading order, and source mappings, but must preserve their `diagramId` and `semanticId`. Revise relation semantics and labels with `update_relation`; it preserves the stable relation ID, live bindings, user-edited styles, and geometry. Endpoint replacement remains an explicitly authorized structural change.
 
 The prompt template is also JSON and must remain independently usable:
 
@@ -216,7 +216,7 @@ Run scripts/validate-semantic-svg.mjs before insertion and after material change
 - Preview ordinary additive work with `apply_cowart_safe_thinking_operations` and require a valid `layoutReport`. Preserve user-authored shapes; use `apply_cowart_thinking_operations` only after explicit authorization for deletion or user-authored modification.
 - After a successful return, add operation IDs, returned shape IDs, and lastAppliedRevision to trace, then update the existing HTML draft through insert_cowart_html_draft with updateExistingDraft true.
 - Never infer external source content from a URL. Record it as unread unless the actual body is already present in the active context.
-- Never write raw tldraw records or replace a full canvas snapshot.
+- Never hand-write raw Excalidraw element records or legacy tldraw records, and never replace a full canvas snapshot.
 
 ## 7. Validation commands
 

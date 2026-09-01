@@ -1,20 +1,19 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.2.14+codex.20260901",
-  "description": "An AI canvas that turns requests into Excalidraw-style native editable diagrams.",
+  "version": "0.3.0+codex.20260902",
+  "description": "The official Excalidraw editor with optional Codex Agent generation of native editable diagrams.",
   "author": {
-    "name": "ZHONG XIN",
-    "email": "zhongxin123456@gmail.com",
-    "url": "https://www.jiqiren.ai"
+    "name": "Yogurt AI",
+    "url": "https://github.com/suud003/Cowart"
   },
-  "homepage": "https://www.jiqiren.ai",
+  "homepage": "https://github.com/suud003/Cowart",
   "repository": "https://github.com/suud003/Cowart",
   "license": "MIT",
   "keywords": [
     "canvas",
-    "tldraw",
+    "excalidraw",
     "whiteboard",
-    "excalidraw-style",
+    "official-excalidraw",
     "editable-diagram",
     "diagram-layout",
     "codex-agent",
@@ -24,31 +23,21 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Yogurt AI",
-    "shortDescription": "Turn a request into an Excalidraw-style diagram you can keep editing.",
-    "longDescription": "Yogurt AI turns text, the active page, or an exact selection into an Excalidraw-style diagram made from native editable cards, text, frames, and bound arrows. The Agent uses source-aware context and html-line-svg layout rules to choose reading order, spacing, ports, and obstacle-free routes, then validates collisions and bounds before writing to the canvas. Every generated element remains individually selectable, movable, resizable, editable, deletable, and reconnectable.",
-    "developerName": "ZHONG XIN",
+    "shortDescription": "Official Excalidraw, plus optional AI-generated native editable diagrams.",
+    "longDescription": "Yogurt AI embeds the official Excalidraw editor and keeps the AI layer completely optional. With AI off, users get the standard Excalidraw tools, style panel, shortcuts, and native document model. With AI on, Codex Agent generates native rectangles with bound text, frames, and bound arrows using html-line-svg layout rules; every generated element stays individually selectable, movable, resizable, restylable, editable, deletable, and reconnectable.",
+    "developerName": "Yogurt AI",
     "category": "Productivity",
-    "websiteURL": "https://www.jiqiren.ai",
-    "brandColor": "#25BFEF",
+    "websiteURL": "https://github.com/suud003/Cowart",
+    "brandColor": "#6965DB",
     "logo": "./assets/app-icon.png",
     "composerIcon": "./assets/app-icon.png",
     "capabilities": [
-      "Interactive canvas",
-      "Canvas-aware Codex Agent",
-      "Excalidraw-style hand-drawn visual language",
+      "Official Excalidraw editor runtime and UI",
+      "Optional canvas-aware Codex Agent",
       "Native editable cards, frames, text, and bound arrows",
-      "Deterministic html-line-svg layout and collision checks",
-      "Native Codex widget",
-      "Source-grounded reasoning",
-      "Revision-guarded reversible canvas edits",
-      "Selection-scoped diagram revision",
-      "Project-local persistence"
-    ],
-    "defaultPrompt": [
-      "Open Yogurt AI for this project.",
-      "Turn this requirement into an Excalidraw-style native editable diagram on the current canvas.",
-      "Organize the selected notes into editable cards, frames, and bound arrows without creating an image or PRD.",
-      "Improve this selected diagram while preserving my text edits and stable object IDs."
+      "Deterministic layout and obstacle-aware arrow routing",
+      "User style preservation",
+      "Project-local Excalidraw persistence"
     ]
   }
 }

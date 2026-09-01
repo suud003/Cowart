@@ -7,12 +7,10 @@ const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const REQUIRED_DEPENDENCIES = [
   "@modelcontextprotocol/ext-apps",
   "@modelcontextprotocol/sdk",
-  "@tldraw/assets",
   "@vitejs/plugin-react",
   "fractional-indexing",
   "react",
   "react-dom",
-  "tldraw",
   "vite",
   "zod",
 ];

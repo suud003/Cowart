@@ -41,7 +41,7 @@ import {
 import {
   normalizeAutoComposeImageMetadata,
   snapshotRevision,
-} from "./lib/thinking-canvas.mjs";
+} from "./lib/canvas-runtime-helpers.mjs";
 import { registerCowartThinkingTools } from "./lib/thinking-tools.mjs";
 import { validateSemanticSvg } from "../skills/cowart-semantic-diagram/scripts/validate-semantic-svg.mjs";
 
@@ -164,7 +164,7 @@ const server = new McpServer(
   },
   {
     instructions:
-      "Render and update the native Yogurt AI canvas. The default product path is one focused capability: turn a user's text, current page, or exact selection into an Excalidraw-style diagram made from individually editable native cards, short semantic frames, text, and bound arrows. Inspect source-aware context with get_cowart_thinking_context, preserve the user's source shapes, and use $cowart-semantic-diagram with semanticDiagram layoutEngine=html-line-svg. For a new diagram, omit node coordinates so the engine owns reading order, layers, safe gaps, ports, obstacle routing, frame tightening, and deterministic placement. Keep the visual language hand-drawn and restrained: draw strokes and font, transparent or optional hachure card fill, neutral black primary relations, dashed alternatives, and orange/red only for meaningful warning states. Split an over-dense request into adjacent native diagrams instead of shrinking text or rasterizing it. Preview the complete additive operation batch with apply_cowart_safe_thinking_operations; require layoutApplied=true, layoutReport.valid=true, no collisions or out-of-bounds nodes, and a stable layoutDigest before applying the identical batch against baseRevision. Do not route ordinary requests to Auto Compose, image generation, Product Bridge, PRD, HTML, inline SVG, or Slides unless the user explicitly asks for that separate capability. Reserve apply_cowart_thinking_operations for explicitly authorized deletion or edits to user-authored shapes, and use undo_cowart_thinking_operation for guarded undo. Never hand-write tldraw records.",
+      "Render and update the native Yogurt AI document used by the official Excalidraw editor. Turn a user's text, current page, or exact selection into individually editable Excalidraw rectangles with bound text, frames, and bound arrows. Inspect source-aware context with get_cowart_thinking_context, preserve the user's source elements, and use $cowart-semantic-diagram with semanticDiagram layoutEngine=html-line-svg. For a new diagram, omit node coordinates so the engine owns reading order, layers, safe gaps, ports, obstacle routing, frame tightening, and deterministic placement. Preserve user-edited text, colors, strokes, fonts, and geometry on later semantic updates. Split an over-dense request into adjacent native diagrams instead of shrinking text or rasterizing it. Preview the complete additive operation batch with apply_cowart_safe_thinking_operations; require layoutApplied=true, layoutReport.valid=true, no collisions or out-of-bounds nodes, and a stable layoutDigest before applying the identical batch against baseRevision. Reserve apply_cowart_thinking_operations for explicitly authorized deletion or edits to user-authored elements, and use undo_cowart_thinking_operation for guarded undo. Never hand-write raw Excalidraw element records.",
   },
 );
 
@@ -843,6 +843,11 @@ async function insertCowartHtmlDraft(args = {}) {
 
   const canvasState = await readCowartCanvasState(args, { hydrateAssets: false });
   const snapshot = canvasState.snapshot;
+  if (snapshot?.type === "excalidraw") {
+    throw new Error(
+      "HTML draft insertion is unavailable in the official Excalidraw runtime. Create native Excalidraw elements instead.",
+    );
+  }
   if (!snapshot || typeof snapshot !== "object" || !snapshot.schema || !snapshot.store) {
     throw new Error("No Yogurt AI canvas snapshot exists yet. Open the Yogurt AI widget for the target project and create or save the canvas before inserting HTML drafts.");
   }
@@ -1277,7 +1282,7 @@ function registerCowartWidget(mcpServer) {
     uri: COWART_WIDGET_URI,
     title: "Yogurt AI Canvas",
     description:
-      "A native Codex widget that renders the Yogurt AI tldraw canvas directly and persists canvas data in the active project.",
+      "A native Codex widget backed by the same project-local Excalidraw document used by Yogurt AI Desktop.",
     connectDomains: COWART_CONNECT_DOMAINS,
     resourceDomains: COWART_RESOURCE_DOMAINS,
     frameDomains: COWART_FRAME_DOMAINS,
@@ -1494,7 +1499,7 @@ function registerCowartStateTools(mcpServer) {
     {
       title: "Save Yogurt AI Canvas State",
       description:
-        "Persist a Yogurt AI/tldraw store snapshot to the project canvas directory, preserving per-page files and page-local assets.",
+        "Persist a Yogurt AI Excalidraw document to the active project's canvas directory with revision protection.",
       inputSchema: {
         ...projectArgsSchema,
         snapshot: z.any(),
@@ -1770,7 +1775,7 @@ function registerCowartImageTools(mcpServer) {
     {
       title: "Get Yogurt AI Selection",
       description:
-        "Return the currently selected Yogurt AI/tldraw shapes and image asset metadata from a project's canvas/cowart-selection.json state file.",
+        "Return the currently selected Yogurt AI Excalidraw elements and image metadata from the project's selection state.",
       inputSchema: projectArgsSchema,
       annotations: {
         readOnlyHint: true,
@@ -1804,7 +1809,7 @@ function registerCowartImageTools(mcpServer) {
     {
       title: "Insert Yogurt AI Image",
       description:
-        "Copy a local bitmap into a Yogurt AI page-local assets folder, create a tldraw image asset and shape, replace a targeted AI image holder by default, otherwise place it beside an anchor or clear page area, and save the project-backed Yogurt AI canvas.",
+        "Copy a local bitmap into the Yogurt AI project and insert or replace an image element in the project-backed canvas.",
       inputSchema: {
         imagePath: z.string().trim(),
         projectDir: z.string().trim().optional(),

@@ -6,6 +6,7 @@ const PAGE_ID_PREFIX = "page:";
 const GLOBAL_ASSETS_ROUTE = "/assets/";
 const PAGE_ASSETS_ROUTE = "/page-assets/";
 const CANVAS_FILE_NAME = "cowart-canvas.json";
+const EXCALIDRAW_FILE_NAME = "yogurt.excalidraw";
 const CANVAS_SAVE_LOCK_FILE = ".cowart-canvas-save.lock";
 const CANVAS_SAVE_LOCK_HEARTBEAT_MS = 2_000;
 const CANVAS_SAVE_LOCK_STALE_MS = 15_000;
@@ -46,6 +47,17 @@ function canonicalJsonValue(value) {
 }
 
 export function cowartSnapshotRevision(snapshot) {
+  if (isExcalidrawSnapshot(snapshot)) {
+    // Excalidraw array order is the scene's z-order and must remain significant.
+    // Object key insertion order is not meaningful, however, so canonicalize
+    // each element (without sorting the array) and the document maps.
+    const content = JSON.stringify({
+      elements: snapshot.elements.map(canonicalJsonValue),
+      appState: canonicalJsonValue(snapshot.appState ?? {}),
+      files: canonicalJsonValue(snapshot.files ?? {}),
+    });
+    return createHash("sha256").update(content).digest("hex").slice(0, 20);
+  }
   // A tldraw store is an ID-addressed record map: object insertion order has no
   // semantic meaning. Per-page persistence can legitimately reload the same
   // records in a different order, so hash a canonical representation rather
@@ -213,6 +225,10 @@ function canvasFile(args = {}) {
   return join(resolveCanvasDir(args), CANVAS_FILE_NAME);
 }
 
+function excalidrawFile(args = {}) {
+  return join(resolveCanvasDir(args), EXCALIDRAW_FILE_NAME);
+}
+
 function canvasPagesDir(args = {}) {
   return join(resolveCanvasDir(args), "pages");
 }
@@ -235,6 +251,16 @@ function pageAssetsDir(args, pageId) {
 
 function isCanvasSnapshot(value) {
   return value && typeof value === "object" && value.store && value.schema;
+}
+
+export function isExcalidrawSnapshot(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    value.type === "excalidraw" &&
+    Array.isArray(value.elements) &&
+    (!value.files || typeof value.files === "object"),
+  );
 }
 
 function isSelectionState(value) {
@@ -590,6 +616,20 @@ async function readPageSnapshots(args = {}) {
 }
 
 async function loadStoredCanvasSnapshot(args = {}) {
+  try {
+    const snapshot = await readJsonFile(excalidrawFile(args));
+    if (!isExcalidrawSnapshot(snapshot)) {
+      throw new Error(`Invalid Excalidraw document in ${excalidrawFile(args)}`);
+    }
+    return {
+      snapshot,
+      path: excalidrawFile(args),
+      storage: "excalidraw",
+    };
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
   const pageSnapshots = await readPageSnapshots(args);
   if (pageSnapshots.length > 0) {
     const [{ snapshot: firstSnapshot }] = pageSnapshots;
@@ -630,6 +670,11 @@ async function writeJsonAtomic(filePath, payload) {
 }
 
 async function saveStoredCanvasSnapshot(args, snapshot) {
+  if (isExcalidrawSnapshot(snapshot)) {
+    await writeJsonAtomic(excalidrawFile(args), snapshot);
+    return { storage: "excalidraw", paths: [excalidrawFile(args)] };
+  }
+
   const pages = getPageRecords(snapshot);
   if (pages.length === 0) {
     await writeJsonAtomic(canvasFile(args), snapshot);
@@ -674,6 +719,9 @@ async function saveStoredCanvasSnapshot(args, snapshot) {
 
 async function hydrateSnapshotAssets(args, snapshot) {
   if (!snapshot) return { snapshot, hydratedAssets: [] };
+  if (isExcalidrawSnapshot(snapshot)) {
+    return { snapshot: cloneJson(snapshot), hydratedAssets: [] };
+  }
 
   const hydrated = cloneJson(snapshot);
   const hydratedAssets = [];
@@ -806,8 +854,10 @@ export async function readCowartCanvasState(args = {}, { hydrateAssets = false }
 }
 
 export async function saveCowartCanvasSnapshot(args = {}, snapshot) {
-  const { sanitizeCanvasSnapshotForTldraw } = await import("../../src/canvasSnapshot.js");
-  const sanitized = sanitizeCanvasSnapshotForTldraw(snapshot);
+  const sanitized = isExcalidrawSnapshot(snapshot)
+    ? { snapshot: cloneJson(snapshot), skippedRecords: [] }
+    : await import("../../src/canvasSnapshot.js")
+      .then(({ sanitizeCanvasSnapshotForTldraw }) => sanitizeCanvasSnapshotForTldraw(snapshot));
   if (!sanitized.snapshot) {
     return {
       ok: false,

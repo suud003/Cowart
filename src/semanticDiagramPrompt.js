@@ -6,7 +6,7 @@ export const SEMANTIC_DIAGRAM_MAX_CONTEXT_SHAPES = 250
 
 export const SEMANTIC_DIAGRAM_QUICK_PROMPT = [
   '使用 $cowart-semantic-diagram 把当前需求生成到 Yogurt AI 画布。',
-  '只使用原生可编辑卡片、分区、文字和绑定箭头，呈现 Excalidraw 风格；不要生成位图、整页预演、PRD、HTML、SVG 或 Slides。',
+  '只使用官方 Excalidraw 原生矩形、绑定文字、画框和绑定箭头；不要生成位图、整页预演、PRD、HTML、SVG 或 Slides。',
   '先用 html-line-svg 语义与布局规则确定阅读顺序、层级、间距和端口，再 dry-run 验证无碰撞、无越界后直接写入当前画布。',
   '每个节点和箭头都必须可以单独选择、改字、移动、缩放、删除和重新连接。'
 ].join('\n')
@@ -14,7 +14,7 @@ export const SEMANTIC_DIAGRAM_QUICK_PROMPT = [
 export const SEMANTIC_DIAGRAM_ROUTING_HINT = [
   'Yogurt AI 当前只聚焦原生可编辑图（隐藏应用执行上下文，不是用户原话）：',
   '- 将用户对流程、系统、关系、状态、对比、架构或概念的描述默认路由到 $cowart-semantic-diagram。',
-  '- 输出必须是当前画布中的原生 tldraw/Excalidraw 风格对象：cards、purpose:"semantic" zones、editable text 与 bound relations。',
+  '- 输出必须是当前画布中的官方 Excalidraw 原生对象：rectangles、frames、bound text 与 bound arrows。',
   '- 禁止调用自动编排、图片生成、Product Bridge、Interaction PRD、AI HTML、inline SVG 或 Slides 能力；复杂内容应拆成多张相邻原生图，而不是栅格化或降级为单一图块。',
   '- 新建图时不要手写节点坐标；让 layoutEngine:"html-line-svg" 负责层级、间距、端口、避障与画框收紧。',
   '- 有选区时保持来源对象不动，优先在选区旁生成或只修改明确点名的已生成对象；无选区时使用当前整页作为语义来源。',
@@ -71,7 +71,7 @@ export function buildSemanticDiagramPrompt({
     : `get_cowart_thinking_context(scope: "page", pageId: ${JSON.stringify(pageId)})`
 
   return [
-    'Use $cowart-semantic-diagram to draw a traceable, Excalidraw-style semantic diagram directly on the current Yogurt AI canvas.',
+    'Use $cowart-semantic-diagram to draw a traceable semantic diagram as native elements in the official Excalidraw editor.',
     'This invocation is native-editable only. It is not a Product Bridge, Interaction PRD, image, HTML, SVG, Slides, or Auto Compose task.',
     '输出必须直接在当前 Yogurt AI canvas 落图，并且每个节点、文字和箭头都可单独编辑。',
     '',
@@ -95,7 +95,7 @@ export function buildSemanticDiagramPrompt({
     '2. 顶层传 semanticDiagram：version:"1"、稳定 diagramId、teachingClaim、readingOrder、diagramType、layoutEngine:"html-line-svg"、layoutMode:"balanced"、layoutFit、sourceShapeIds/sourceIds、完整 objectCount/relationCount，以及可用时的 specDigest。保持分区标题简短；如需显示核心判断，用可换行的 claim card。每个节点/分区传稳定 semantic.id、type、state、origin、order 与 sourceShapeIds。',
     '3. 主流程关系使用 direction:"forward" + path:"primary"；备选路径使用 path:"alternative" 并写清 label/payload；双向同步使用 direction:"bidirectional"；无向关联使用 direction:"none"。每条关系同时传稳定 semanticId、origin、sourceShapeIds/sourceIds 与 lane；包含关系用 parentZoneId 表达，并列对象靠同层布局表达，不添加伪箭头。',
     '4. 选择与 teaching claim 匹配的 readingOrder。先分层与分组，再对齐同级节点并留出安全间距；平行关系使用不同 lane，连线必须绑定源/目标边界，禁止穿过无关文字或节点。',
-    '5. 使用 Excalidraw 风格视觉契约：手绘 draw 描边与字体、透明填充、中性黑色主线、小号节点、无阴影；只有警告或阻塞状态使用克制的橙/红强调，备选路径使用 dashed。',
+    '5. 使用 Excalidraw 官方原生样式：保留标准手绘描边与字体、透明或 hachure 填充、中性主线和无阴影；只有警告或阻塞状态使用克制的橙/红强调，备选路径使用 dashed。',
     '6. 单张图优先控制在 12 个节点以内。信息更多时按独立 teaching claim 拆成多张相邻的原生可编辑图；不要压缩字号、堆叠节点、生成超大空框或退化为不可拆分图块。',
     '',
     '插入与验证：',

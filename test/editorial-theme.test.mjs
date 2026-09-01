@@ -4,32 +4,29 @@ import test from 'node:test'
 
 const readProjectFile = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('the visual atelier desktop shell is wired after the legacy themes', async () => {
+test('the desktop boots the official Excalidraw editor without legacy global themes', async () => {
   const [mainSource, appSource] = await Promise.all([
     readProjectFile('src/main.jsx'),
-    readProjectFile('src/App.jsx')
+    readProjectFile('src/NativeExcalidrawApp.jsx')
   ])
 
   assert.match(mainSource, /@fontsource\/barlow-condensed\/latin-800\.css/)
   assert.match(mainSource, /@fontsource\/ibm-plex-mono\/latin-500\.css/)
+  assert.match(mainSource, /@excalidraw\/excalidraw\/index\.css/)
+  assert.match(mainSource, /\.\/nativeExcalidraw\.css/)
+  assert.doesNotMatch(mainSource, /\.\/(?:styles|editorialTheme|atelierTheme)\.css/)
+  assert.doesNotMatch(mainSource, /(?:from\s+['"]tldraw['"]|tldraw\/tldraw\.css)/)
   assert.ok(
-    mainSource.indexOf("./editorialTheme.css") > mainSource.indexOf("./styles.css"),
-    'the editorial compatibility theme must remain after the legacy CSS'
+    mainSource.indexOf('window.EXCALIDRAW_ASSET_PATH') <
+      mainSource.indexOf("await import('./NativeExcalidrawApp.jsx')"),
+    'the official font asset path must be configured before the Excalidraw bundle loads'
   )
-  assert.ok(
-    mainSource.indexOf("./atelierTheme.css") > mainSource.indexOf("./editorialTheme.css"),
-    'the selected visual atelier theme must remain the final CSS override'
-  )
-  assert.match(appSource, /<YogurtSideRail/)
-  assert.match(appSource, /<YogurtAppChrome/)
-  assert.match(appSource, /<CowartCanvasEditorialEmptyState \/>/)
-  assert.match(appSource, /atelier-city-hero\.webp/)
-  assert.match(appSource, /atelier-branch-flow\.webp/)
-  assert.match(appSource, /licenseKey=\{TLDRAW_LICENSE_KEY\}/)
-  assert.match(appSource, /data-agent-open=\{isAgentPanelOpen \? 'true' : 'false'\}/)
-  assert.match(appSource, /inert=\{isModalAgentPanel \? true : undefined\}/)
-  assert.match(appSource, /isModal=\{isModalAgentPanel\}/)
-  assert.match(appSource, /onAttentionChange=\{setAgentPanelAttention\}/)
+  assert.match(appSource, /Excalidraw/)
+  assert.match(appSource, /CaptureUpdateAction/)
+  assert.match(appSource, /restore/)
+  assert.match(appSource, /serializeAsJSON/)
+  assert.match(appSource, /CowartAgentPanel/)
+  assert.match(appSource, /attachShadow\(\{ mode: 'open' \}\)/)
 })
 
 test('the integrated Agent toggle preserves explicit state and attention semantics', async () => {
