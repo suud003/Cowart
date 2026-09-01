@@ -87,11 +87,11 @@
 | `npm run dist:win` | PASS | 已生成 `Yogurt-AI-Beta-Setup-0.3.0-x64.exe`（`337,456,758` 字节）及 blockmap（`324,158` 字节）。 |
 | `npm run verify:packaged` | PASS | 校验 `399` 个源码/打包文件，内置 Codex stdio 与 Yogurt MCP 可用；真实打包 renderer 以退出码 `0` 完成 `1424 × 895` 截图，无未捕获启动错误。 |
 | 安装包 SHA-256 | PASS | `783E03A97E7DA4E72FC298A5ACDABC1F2131F18E223CE15DE06422E1FD24CAB9`，已与 `.sha256.txt` 复核一致。 |
-| GitHub Release | 待发布 | 仅待最终提交进入 `main` 后创建 `v0.3.0+codex.20260902` 非预发布 Release，并明确上传 exe、blockmap 与 SHA-256 文件。 |
+| GitHub Release | PASS | 已创建 `v0.3.0+codex.20260902` 非预发布 Release，并上传 exe、blockmap 与 SHA-256 文件；GitHub 端安装包摘要与本地一致。 |
 
 ## 结论与剩余项
 
 - 视觉与交互目标：通过。当前产品表面是官方 Excalidraw 编辑器；AI UI 只在 AI 模式开启后出现。
 - 原生可编辑性目标：通过。图中卡片、文本、frame、箭头和标签均为 Excalidraw 原生元素，并保留官方样式编辑能力。
 - P0/P1 设计问题：本轮截图与实现核对未发现。
-- 发布状态：**发布验证通过**。质量、Windows 打包、打包后真实启动及哈希校验均已完成；剩余动作仅为提交 `main` 并创建对应 GitHub Release。
+- 发布状态：**已正式发布**。质量、Windows 打包、打包后真实启动、哈希校验、`main` 提交与 GitHub Release 均已完成。
