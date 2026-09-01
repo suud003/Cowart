@@ -54,6 +54,8 @@ import {
   XBoxToolbarItem,
   createShapeId,
   DEFAULT_EMBED_DEFINITIONS,
+  getColorStyleItems,
+  getColorValue,
   onDragFromToolbarToCreateShape,
   renderPlaintextFromRichText,
   startEditingShapeWithRichText,
@@ -67,9 +69,9 @@ import {
 } from 'tldraw'
 import { AllSelection } from '@tiptap/pm/state'
 import html2canvas from 'html2canvas'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Download, FileCode, Image as ImageIcon, LassoSelect, LockKeyhole, Play, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Download, FileCode, Image as ImageIcon, LassoSelect, LockKeyhole, Play, Workflow, X } from 'lucide-react'
 import 'tldraw/tldraw.css'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { CowartAgentPanel } from './AgentPanel.jsx'
 import { YogurtAppChrome } from './YogurtAppChrome.jsx'
 import { YogurtSideRail } from './YogurtSideRail.jsx'
@@ -116,6 +118,11 @@ import {
   isCanvasSnapshot,
   sanitizeCanvasSnapshotForTldraw
 } from './canvasSnapshot.js'
+import {
+  isCowartAiOnlyTool,
+  persistCowartAiMode,
+  readCowartAiMode
+} from './aiMode.js'
 import {
   classifyRemoteCanvasRefresh,
   collectNewSemanticDiagramRootIds,
@@ -171,6 +178,11 @@ if (!isYogurtDesktopRenderer()) installCowartHandDrawnFontFaces()
 
 const SELECTION_STATE_ELEMENT_ID = 'cowart-selection-state'
 const TLDRAW_LICENSE_KEY = String(import.meta.env.VITE_TLDRAW_LICENSE_KEY || '').trim() || undefined
+const CowartAiModeContext = createContext(false)
+
+function useCowartAiMode() {
+  return useContext(CowartAiModeContext)
+}
 const PAGE_ASSETS_ROUTE = '/page-assets/'
 const GLOBAL_ASSETS_ROUTE = '/assets/'
 const AI_IMAGE_TOOL_ID = 'ai-image'
@@ -3380,7 +3392,11 @@ class CowartAnnotationPointing extends StateNode {
   }
 }
 
-class CowartFrameShapeUtil extends FrameShapeUtil {
+// Keep the editor's construction dependencies stable while AI mode changes. The
+// UI gates these tools, and the mode effect returns to select before hiding them.
+const cowartTools = Object.freeze([CowartAnnotationTool, CowartAgentLassoTool])
+
+class CowartFrameShapeUtilBase extends FrameShapeUtil {
   isAspectRatioLocked(shape) {
     if (isCowartAiHolderShape(shape)) {
       return isAiImageAspectLocked(shape)
@@ -3632,6 +3648,8 @@ const CowartArrowShapeUtil = ArrowShapeUtil.configure({
   }
 })
 
+const CowartFrameShapeUtil = CowartFrameShapeUtilBase.configure({ showColors: true })
+
 const cowartShapeUtils = [
   CowartFrameShapeUtil,
   CowartEmbedShapeUtil,
@@ -3640,7 +3658,7 @@ const cowartShapeUtils = [
   CowartArrowShapeUtil
 ]
 
-const cowartUiOverrides = {
+const cowartCanvasUiOverrides = {
   actions(editor, actions, helpers) {
     const defaultDownloadOriginal = actions['download-original']
     const defaultCopyAsPng = actions['copy-as-png']
@@ -3729,7 +3747,11 @@ const cowartUiOverrides = {
         }
       }
     }
-  },
+  }
+}
+
+const cowartUiOverrides = {
+  ...cowartCanvasUiOverrides,
   translations: {
     en: {
       'tool.ai-image': AI_IMAGE_HOLDER_LABEL,
@@ -3855,6 +3877,11 @@ const cowartUiOverrides = {
 const cowartComponents = {
   Toolbar: CowartToolbar,
   ImageToolbar: CowartSelectionToolbar,
+  InFrontOfTheCanvas: CowartCanvasOverlay,
+  StylePanel: CowartStylePanel
+}
+
+const cowartNativeComponents = {
   InFrontOfTheCanvas: CowartCanvasOverlay,
   StylePanel: CowartStylePanel
 }
@@ -4027,10 +4054,12 @@ async function submitCowartSemanticDiagram(editor) {
 }
 
 function CowartCanvasOverlay() {
+  const isAiModeEnabled = useCowartAiMode()
+
   return (
     <>
-      <CowartCanvasEditorialEmptyState />
       <ExcalidrawCowartChrome
+        aiModeEnabled={isAiModeEnabled}
         htmlIcon={aiHtmlToolIcon}
         imageIcon={aiImageToolIcon}
         onCreateHtml={createAiDraftHolderAtViewportCenter}
@@ -4042,11 +4071,16 @@ function CowartCanvasOverlay() {
         onExportCanvasPptx={(editor) => exportCowartCanvas(editor, 'pptx')}
         slidesIcon={aiSlidesToolIcon}
       />
-      <CowartThinkingReviewToolbar />
-      <CowartAiImageGenerationPanel />
-      <CowartAiDraftGenerationPanel />
-      <CowartAiSlidesGenerationPanel />
-      <CowartSlidesPresentationOverlay />
+      {isAiModeEnabled && (
+        <>
+          <CowartCanvasEditorialEmptyState />
+          <CowartThinkingReviewToolbar />
+          <CowartAiImageGenerationPanel />
+          <CowartAiDraftGenerationPanel />
+          <CowartAiSlidesGenerationPanel />
+          <CowartSlidesPresentationOverlay />
+        </>
+      )}
     </>
   )
 }
@@ -5348,12 +5382,78 @@ function CowartAiSlidesGenerationPanel() {
 }
 
 function CowartStylePanel(props) {
+  const isAiModeEnabled = useCowartAiMode()
+
   return (
     <DefaultStylePanel {...props}>
       <DefaultStylePanelContent />
+      <CowartLabelColorStyleControls />
       <CowartTypographyStyleControls />
-      <CowartAiImageStyleControls />
+      {isAiModeEnabled && <CowartAiImageStyleControls />}
     </DefaultStylePanel>
+  )
+}
+
+function CowartLabelColorStyleControls() {
+  const editor = useEditor()
+  const labelShapes = useValue(
+    'selected shapes with editable label color',
+    () => editor
+      .getSelectedShapeIds()
+      .map((shapeId) => editor.getShape(shapeId))
+      .filter((shape) => typeof shape?.props?.labelColor === 'string'),
+    [editor]
+  )
+  const palette = useValue(
+    'cowart label color palette',
+    () => editor.getCurrentTheme().colors[editor.getColorMode()],
+    [editor]
+  )
+
+  if (labelShapes.length === 0) return null
+
+  const items = getColorStyleItems(palette)
+  const labelColors = labelShapes.map((shape) => shape.props.labelColor)
+  const selectedColor = labelColors.every((color) => color === labelColors[0])
+    ? labelColors[0]
+    : null
+
+  function applyLabelColor(color) {
+    if (selectedColor === color) return
+    editor.markHistoryStoppingPoint('set-cowart-label-color')
+    editor.updateShapes(labelShapes.map((shape) => ({
+      id: shape.id,
+      type: shape.type,
+      props: { labelColor: color }
+    })))
+  }
+
+  return (
+    <section className="cowart-label-color-panel" aria-label="文字颜色">
+      <div className="cowart-label-color-heading">
+        <strong>文字颜色</strong>
+        <span>与边框 / 线条分开设置</span>
+      </div>
+      <div className="cowart-label-color-grid" role="group" aria-label="文字颜色">
+        {items.map((item) => {
+          const isSelected = selectedColor === item.value
+          return (
+            <button
+              aria-label={`文字颜色：${item.value}`}
+              aria-pressed={isSelected}
+              data-color={item.value}
+              key={item.value}
+              onClick={() => applyLabelColor(item.value)}
+              style={{ '--cowart-label-swatch': getColorValue(palette, item.value, 'solid') }}
+              title={`文字颜色：${item.value}`}
+              type="button"
+            >
+              <span aria-hidden="true" />
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -5720,6 +5820,7 @@ function CowartAspectLockIcon({ locked }) {
 }
 
 function CowartSelectionToolbar() {
+  const isAiModeEnabled = useCowartAiMode()
   const editor = useEditor()
   const slidesShapeId = useValue(
     'cowart selected ai slides toolbar shape id',
@@ -5737,6 +5838,10 @@ function CowartSelectionToolbar() {
     },
     [editor]
   )
+
+  if (!isAiModeEnabled) {
+    return <DefaultImageToolbar />
+  }
 
   if (slidesShapeId) {
     return <CowartSlidesToolbar slidesShapeId={slidesShapeId} />
@@ -6485,6 +6590,8 @@ function CowartToolLockButton() {
 }
 
 function CowartToolbar(props) {
+  const isAiModeEnabled = useCowartAiMode()
+
   return (
     <DefaultToolbar {...props} maxItems={15} maxSizePx={710} minItems={15} minSizePx={710}>
       <CowartToolLockButton />
@@ -6499,9 +6606,9 @@ function CowartToolbar(props) {
       <TextToolbarItem />
       <AssetToolbarItem />
       <EraserToolbarItem />
-      <CowartToolbarDivider />
-      <CowartAgentLassoToolbarItem />
-      <CowartAnnotationToolbarItem />
+      {isAiModeEnabled && <CowartToolbarDivider />}
+      {isAiModeEnabled && <CowartAgentLassoToolbarItem />}
+      {isAiModeEnabled && <CowartAnnotationToolbarItem />}
       <NoteToolbarItem />
       <FrameToolbarItem />
       <HighlightToolbarItem />
@@ -6650,6 +6757,22 @@ async function prepareCowartAgentTask() {
   return context
 }
 
+function CowartAiModeEntry({ onEnable }) {
+  return (
+    <button
+      aria-label="开启 Yogurt AI 模式"
+      aria-pressed="false"
+      className="cowart-ai-mode-entry"
+      onClick={onEnable}
+      title="开启 AI 模式"
+      type="button"
+    >
+      <Workflow aria-hidden="true" size={18} strokeWidth={2} />
+      <span>AI</span>
+    </button>
+  )
+}
+
 export default function App() {
   const [snapshot, setSnapshot] = useState()
   const [viewState, setViewState] = useState()
@@ -6657,6 +6780,7 @@ export default function App() {
   const [skippedRecords, setSkippedRecords] = useState([])
   const [canvasSyncConflict, setCanvasSyncConflict] = useState(null)
   const [agentBridge, setAgentBridge] = useState(null)
+  const [isAiModeEnabled, setIsAiModeEnabled] = useState(readCowartAiMode)
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false)
   const [agentPanelAttention, setAgentPanelAttention] = useState(null)
   const [isCompactAgentViewport, setIsCompactAgentViewport] = useState(() => (
@@ -6674,12 +6798,28 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (!isAiModeEnabled) return undefined
     const nextBridge = getCowartAgentBridge(window)
     setAgentBridge(nextBridge)
     Promise.resolve(nextBridge.refreshCapabilities()).catch((error) => {
       console.warn('Yogurt AI could not initialize the Agent bridge.', error)
     })
+    return undefined
+  }, [isAiModeEnabled])
+
+  const handleAiModeChange = useCallback((enabled) => {
+    const nextEnabled = persistCowartAiMode(enabled)
+    setIsAiModeEnabled(nextEnabled)
+    if (!nextEnabled) setIsAgentPanelOpen(false)
   }, [])
+
+  useEffect(() => {
+    if (isAiModeEnabled) return
+    const editor = globalThis.window?.__cowartEditor
+    if (editor && isCowartAiOnlyTool(editor.getCurrentToolId?.())) {
+      editor.setCurrentTool('select')
+    }
+  }, [isAiModeEnabled])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -7121,57 +7261,70 @@ export default function App() {
     )
   }
 
-  const isModalAgentPanel = isAgentPanelOpen && isCompactAgentViewport
+  const isModalAgentPanel = isAiModeEnabled && isAgentPanelOpen && isCompactAgentViewport
 
   return (
     <main
-      className={`cowart-workbench${isAgentPanelOpen ? '' : ' cowart-workbench--agent-closed'}`}
+      className={isAiModeEnabled
+        ? `cowart-workbench${isAgentPanelOpen ? '' : ' cowart-workbench--agent-closed'}`
+        : 'cowart-native-workbench'}
       data-agent-open={isAgentPanelOpen ? 'true' : 'false'}
-      aria-label="Yogurt AI workspace"
+      data-ai-mode={isAiModeEnabled ? 'on' : 'off'}
+      aria-label={isAiModeEnabled ? 'Yogurt AI workspace' : 'Excalidraw canvas'}
     >
-      <YogurtSideRail
-        agentAttention={agentPanelAttention}
-        isAgentPanelOpen={isAgentPanelOpen}
-        onAgentPanelOpenChange={setIsAgentPanelOpen}
-      />
-      <YogurtAppChrome
-        agentAttention={agentPanelAttention}
-        isAgentPanelOpen={isAgentPanelOpen}
-        onAgentPanelOpenChange={setIsAgentPanelOpen}
-        projectName={cowartProjectName()}
-      />
+      {isAiModeEnabled && (
+        <YogurtSideRail
+          agentAttention={agentPanelAttention}
+          isAgentPanelOpen={isAgentPanelOpen}
+          onAgentPanelOpenChange={setIsAgentPanelOpen}
+        />
+      )}
+      {isAiModeEnabled && (
+        <YogurtAppChrome
+          agentAttention={agentPanelAttention}
+          isAgentPanelOpen={isAgentPanelOpen}
+          onAgentPanelOpenChange={setIsAgentPanelOpen}
+          onAiModeChange={handleAiModeChange}
+          projectName={cowartProjectName()}
+        />
+      )}
       <section
         aria-hidden={isModalAgentPanel ? 'true' : undefined}
-        aria-label="Yogurt AI infinite canvas"
-        className="cowart-canvas"
+        aria-label={isAiModeEnabled ? 'Yogurt AI infinite canvas' : 'Drawing canvas'}
+        className={isAiModeEnabled ? 'cowart-canvas' : 'cowart-native-canvas'}
         inert={isModalAgentPanel ? true : undefined}
       >
         <CanvasSyncConflictNotice conflict={canvasSyncConflict} />
         <SkippedRecordsNotice records={skippedRecords} />
-        <Tldraw
-          snapshot={snapshot ?? undefined}
-          licenseKey={TLDRAW_LICENSE_KEY}
-          assetUrls={cowartAssetUrls}
-          assets={cowartTldrawAssetStore}
-          inferDarkMode
-          onMount={handleMount}
-          options={cowartTldrawOptions}
-          overrides={cowartUiOverrides}
-          components={cowartComponents}
-          shapeUtils={cowartShapeUtils}
-          themes={cowartTldrawThemes}
-          tools={[CowartAnnotationTool, CowartAgentLassoTool]}
-        />
+        <CowartAiModeContext.Provider value={isAiModeEnabled}>
+          <Tldraw
+            snapshot={snapshot ?? undefined}
+            licenseKey={TLDRAW_LICENSE_KEY}
+            assetUrls={cowartAssetUrls}
+            assets={cowartTldrawAssetStore}
+            inferDarkMode
+            onMount={handleMount}
+            options={cowartTldrawOptions}
+            overrides={isAiModeEnabled ? cowartUiOverrides : cowartCanvasUiOverrides}
+            components={isAiModeEnabled ? cowartComponents : cowartNativeComponents}
+            shapeUtils={cowartShapeUtils}
+            themes={cowartTldrawThemes}
+            tools={cowartTools}
+          />
+        </CowartAiModeContext.Provider>
       </section>
-      <CowartAgentPanel
-        beforeSend={prepareCowartAgentTask}
-        bridge={agentBridge}
-        contextProvider={getCowartAgentPanelContext}
-        isModal={isModalAgentPanel}
-        isOpen={isAgentPanelOpen}
-        onAttentionChange={setAgentPanelAttention}
-        onOpenChange={setIsAgentPanelOpen}
-      />
+      {!isAiModeEnabled && <CowartAiModeEntry onEnable={() => handleAiModeChange(true)} />}
+      {isAiModeEnabled && (
+        <CowartAgentPanel
+          beforeSend={prepareCowartAgentTask}
+          bridge={agentBridge}
+          contextProvider={getCowartAgentPanelContext}
+          isModal={isModalAgentPanel}
+          isOpen={isAgentPanelOpen}
+          onAttentionChange={setAgentPanelAttention}
+          onOpenChange={setIsAgentPanelOpen}
+        />
+      )}
     </main>
   )
 }

@@ -34,6 +34,7 @@ function telemetryKey(value) {
 export function YogurtAppChrome({
   agentAttention,
   isAgentPanelOpen,
+  onAiModeChange,
   onAgentPanelOpenChange,
   projectName
 }) {
@@ -90,6 +91,18 @@ export function YogurtAppChrome({
         </button>
         <button aria-label="重做" onClick={() => runEditorCommand('redo')} title="重做" type="button">
           <ArrowClockwise aria-hidden="true" size={18} />
+        </button>
+        <button
+          aria-label="关闭 AI 模式，返回纯画布"
+          aria-pressed="true"
+          className="yogurt-app-ai-mode-toggle"
+          onClick={() => onAiModeChange(false)}
+          title="关闭 AI 模式"
+          type="button"
+        >
+          <Robot aria-hidden="true" size={16} weight="bold" />
+          <span>AI 模式</span>
+          <b aria-hidden="true">开启</b>
         </button>
         <button
           aria-controls="yogurt-codex-agent-panel"

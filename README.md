@@ -52,13 +52,19 @@ flowchart LR
 | 节点 | 原生 tldraw geo shape，双击即可修改中英文文字 |
 | 连线 | 原生 arrow，并与起点、终点保持真实 binding |
 | 分区 | 原生 frame；移动分区时子节点一起移动 |
-| 样式 | 手绘 `draw` 描边与字体、透明或可选 hachure 填充、中性黑色主路径 |
+| 样式 | 可分别调整字体、字号、文字色、描边/线条色、填充、线型、粗细、透明度和箭头样式 |
 | 布局 | 按阅读顺序分层；同级对齐；标签、节点与长连线避障 |
-| 修改 | 用户手改过的文字会成为下一轮 AI 的最新上下文，不会被旧 metadata 覆盖 |
+| 修改 | 用户手改过的文字与视觉样式会成为下一轮 AI 的最新上下文，不会被旧 metadata 覆盖 |
 | 追溯 | 每个对象保留稳定 semantic ID 与来源 shape ID |
 | 安全写入 | dry-run 与 revision 校验通过后才提交；可使用受保护的 Agent 撤销 |
 
 主流程默认只生成原生可编辑图。复杂需求会拆成多张相邻的图，不会降级成位图、整页视觉预演、HTML/SVG 图块或 PRD 页面。
+
+## 纯画布与 AI 模式
+
+Yogurt AI 启动时默认进入纯画布：使用原生绘图工具、菜单、快捷键和样式面板，不加载侧栏、Agent、智能圈选、批注或生成入口。右上角的 `AI` 按钮是唯一的模式入口。
+
+开启 AI 模式后才会显示 Yogurt 导航与 Codex Agent。关闭 AI 模式会立即返回纯画布；切换过程复用同一个编辑器和画布数据，因此对象、选区、相机位置与撤销历史不会被重建。AI 更新文字、语义或布局时会保留当前人工样式，只有明确要求改色或改字体时才会改变对应属性。
 
 ## 如何使用
 
@@ -91,7 +97,7 @@ flowchart LR
 
 - 双击卡片修改文字；
 - 拖动节点，绑定箭头会跟随；
-- 使用样式面板修改颜色、填充和线型；
+- 使用样式面板分别修改字体、字号、文字色、线框/连线色、填充、线型与透明度；
 - 框选或 Shift 多选后整体移动；
 - 使用画布撤销/重做处理手工编辑；
 - 圈选已有图后，继续让 Agent 补节点、改关系或重新布局。
@@ -100,7 +106,7 @@ flowchart LR
 
 普通用户不需要安装 Node.js、Git 或全局 Codex CLI。
 
-1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.2.13](https://github.com/suud003/Cowart/releases/tag/v0.2.13%2Bcodex.20260901) 的 `Yogurt-AI-Beta-Setup-0.2.13-x64.exe`。
+1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.2.14](https://github.com/suud003/Cowart/releases/tag/v0.2.14%2Bcodex.20260901) 的 `Yogurt-AI-Beta-Setup-0.2.14-x64.exe`。
 2. 双击安装包并完成安装。
 3. 首次打开时选择项目文件夹。
 4. 展开 Codex Agent；如果尚未登录，点击“登录 Codex”并在官方浏览器页面完成授权。

@@ -182,6 +182,7 @@ function CowartAiMenu({ brandIcon, items }) {
 }
 
 export function ExcalidrawCowartChrome({
+  aiModeEnabled = false,
   onCreateSemanticDiagram
 }) {
   const editor = useEditor()
@@ -206,7 +207,9 @@ export function ExcalidrawCowartChrome({
   return (
     <>
       <ExcalidrawShortcutBridge />
-      <CowartAiMenu brandIcon={<Workflow aria-hidden="true" />} items={items} />
+      {aiModeEnabled && (
+        <CowartAiMenu brandIcon={<Workflow aria-hidden="true" />} items={items} />
+      )}
     </>
   )
 }

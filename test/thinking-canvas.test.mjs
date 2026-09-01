@@ -465,6 +465,29 @@ test("round-trips restricted semantic patches without changing diagram or semant
     semanticDiagram: diagram,
     operations: [{ type: "update_zone", id: "shape:zone", semantic: { diagramId: "native:hijack" } }],
   }).success, false);
+  assert.equal(schema.safeParse({
+    semanticDiagram: diagram,
+    operations: [{
+      type: "update_relation",
+      id: "shape:relation",
+      kind: "supports",
+      direction: "forward",
+      path: "primary",
+      payload: "evidence",
+      origin: "source",
+      sourceShapeIds: ["shape:source-2"],
+      sourceIds: ["source:2"],
+      label: "supports",
+    }],
+  }).success, true);
+  assert.equal(schema.safeParse({
+    semanticDiagram: diagram,
+    operations: [{ type: "update_relation", id: "shape:relation", semanticId: "relation:hijack" }],
+  }).success, false);
+  assert.equal(schema.safeParse({
+    semanticDiagram: diagram,
+    operations: [{ type: "update_relation", id: "shape:relation", diagramId: "native:hijack" }],
+  }).success, false);
 
   const created = applyThinkingOperationsToSnapshot({
     snapshot: emptySnapshot(),
@@ -1771,6 +1794,187 @@ test("preserves live canvas text when a later Agent update changes only style or
   assert.equal(card.meta.cowartThinkingBody, "用户正文第一行\n用户正文第二行");
   assert.deepEqual(card.props.richText, exactLiveRichText);
   assert.equal(card.props.color, "orange");
+  assert.doesNotThrow(() => validateSnapshot(updated.snapshot));
+});
+
+test("preserves every user-edited visual style when an Agent changes only semantics", () => {
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: semanticDiagram("native:user-style"),
+    operations: [
+      {
+        type: "create_card",
+        key: "styled",
+        title: "可编辑卡片",
+        body: "用户随后调整视觉样式",
+        semantic: { id: "object:styled", type: "concept" },
+      },
+    ],
+  });
+  const cardId = created.references.styled;
+  const manuallyStyled = structuredClone(created.snapshot);
+  Object.assign(manuallyStyled.store[cardId].props, {
+    color: "blue",
+    labelColor: "violet",
+    fill: "solid",
+    dash: "dashed",
+    size: "l",
+    font: "serif",
+    align: "end",
+    verticalAlign: "end",
+  });
+  manuallyStyled.store[cardId].opacity = 0.55;
+  manuallyStyled.store[cardId].meta.cowartFontSize = 31;
+  manuallyStyled.store[cardId].meta.cowartFontBaseSize = "l";
+
+  const before = summarizeThinkingContext({ snapshot: manuallyStyled, scope: "page" })
+    .shapes.find(({ id }) => id === cardId);
+  assert.deepEqual(before.style, {
+    color: "blue",
+    labelColor: "violet",
+    fill: "solid",
+    dash: "dashed",
+    size: "l",
+    font: "serif",
+    align: "end",
+    verticalAlign: "end",
+    opacity: 0.55,
+    scale: 1,
+    fontSize: 31,
+  });
+
+  const updated = applyThinkingOperationsToSnapshot({
+    snapshot: manuallyStyled,
+    semanticDiagram: semanticDiagram("native:user-style"),
+    operations: [
+      {
+        type: "update_card",
+        id: cardId,
+        semantic: { state: "success" },
+      },
+    ],
+  });
+  const card = updated.snapshot.store[cardId];
+  assert.deepEqual(card.props, manuallyStyled.store[cardId].props);
+  assert.equal(card.opacity, 0.55);
+  assert.equal(card.meta.cowartFontSize, 31);
+  assert.equal(card.meta.cowartFontBaseSize, "l");
+  assert.equal(card.meta.cowartSemanticObject.state, "success");
+  assert.doesNotThrow(() => validateSnapshot(updated.snapshot));
+});
+
+test("updates relation semantics without replacing bindings or user-edited line styles", () => {
+  const diagram = semanticDiagram("native:relation-user-style");
+  const created = applyThinkingOperationsToSnapshot({
+    snapshot: emptySnapshot(),
+    semanticDiagram: diagram,
+    operations: [
+      {
+        type: "create_card",
+        key: "source",
+        title: "Source",
+        x: 40,
+        y: 40,
+        semantic: { id: "object:source", type: "document" },
+      },
+      {
+        type: "create_card",
+        key: "decision",
+        title: "Decision",
+        x: 520,
+        y: 40,
+        semantic: { id: "object:decision", type: "decision" },
+      },
+      {
+        type: "create_relation",
+        key: "supports",
+        semanticId: "relation:supports",
+        from: "source",
+        to: "decision",
+        kind: "flow",
+        direction: "forward",
+        path: "primary",
+        label: "initial",
+        lane: 2,
+        origin: "synthesis",
+      },
+    ],
+  });
+  const relationId = created.references.supports;
+  const manuallyStyled = structuredClone(created.snapshot);
+  const relationBefore = manuallyStyled.store[relationId];
+  Object.assign(relationBefore.props, {
+    color: "violet",
+    labelColor: "blue",
+    fill: "solid",
+    dash: "dotted",
+    size: "xl",
+    font: "serif",
+    arrowheadStart: "diamond",
+    arrowheadEnd: "triangle",
+    scale: 1.25,
+  });
+  relationBefore.opacity = 0.47;
+  relationBefore.meta.cowartFontSize = 29;
+  const propsBefore = structuredClone(relationBefore.props);
+  const bindingIdsBefore = relationBindings(manuallyStyled, relationId).map(({ id }) => id).sort();
+  const semanticIdentityBefore = {
+    diagramId: relationBefore.meta.cowartSemanticRelation.diagramId,
+    semanticId: relationBefore.meta.cowartSemanticRelation.semanticId,
+    lane: relationBefore.meta.cowartSemanticRelation.lane,
+  };
+
+  const updated = applyThinkingOperationsToSnapshot({
+    snapshot: manuallyStyled,
+    semanticDiagram: diagram,
+    operations: [{
+      type: "update_relation",
+      id: relationId,
+      kind: "supports",
+      direction: "bidirectional",
+      path: "alternative",
+      payload: "verified evidence",
+      origin: "source",
+      sourceShapeIds: ["shape:source-note"],
+      sourceIds: ["source:research"],
+    }],
+  });
+  const relation = updated.snapshot.store[relationId];
+  const bindingIdsAfter = relationBindings(updated.snapshot, relationId).map(({ id }) => id).sort();
+  assert.equal(relation.id, relationId);
+  assert.deepEqual(relation.props, propsBefore);
+  assert.equal(relation.opacity, 0.47);
+  assert.equal(relation.meta.cowartFontSize, 29);
+  assert.deepEqual(bindingIdsAfter, bindingIdsBefore);
+  assert.deepEqual(
+    {
+      diagramId: relation.meta.cowartSemanticRelation.diagramId,
+      semanticId: relation.meta.cowartSemanticRelation.semanticId,
+      lane: relation.meta.cowartSemanticRelation.lane,
+    },
+    semanticIdentityBefore,
+  );
+  assert.deepEqual(
+    {
+      type: relation.meta.cowartSemanticRelation.type,
+      direction: relation.meta.cowartSemanticRelation.direction,
+      path: relation.meta.cowartSemanticRelation.path,
+      payload: relation.meta.cowartSemanticRelation.payload,
+      origin: relation.meta.cowartSemanticRelation.origin,
+      sourceShapeIds: relation.meta.cowartSemanticRelation.sourceShapeIds,
+      sourceIds: relation.meta.cowartSemanticRelation.sourceIds,
+    },
+    {
+      type: "supports",
+      direction: "bidirectional",
+      path: "alternative",
+      payload: "verified evidence",
+      origin: "source",
+      sourceShapeIds: ["shape:source-note"],
+      sourceIds: ["source:research"],
+    },
+  );
+  assert.equal(updated.changes.at(-1).type, "update_relation");
   assert.doesNotThrow(() => validateSnapshot(updated.snapshot));
 });
 

@@ -304,8 +304,18 @@ async function captureDesktopIfRequested() {
         const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
         const shouldOpenPanel = ${JSON.stringify(captureAgentPanel || captureAutoAdvance)}
         const shouldEnableAutoAdvance = ${JSON.stringify(captureAutoAdvance)}
+        const pureCanvasReady = Boolean(
+          document.querySelector('.cowart-native-workbench .tl-container') &&
+          document.querySelector('.cowart-ai-mode-entry')
+        )
         if (shouldOpenPanel) {
-          const opener = document.querySelector('.yogurt-app-agent-toggle')
+          document.querySelector('.cowart-ai-mode-entry')?.click()
+          let opener = null
+          for (let attempt = 0; attempt < 40; attempt += 1) {
+            opener = document.querySelector('.yogurt-app-agent-toggle')
+            if (opener) break
+            await sleep(100)
+          }
           if (opener?.getAttribute('aria-expanded') !== 'true') opener?.click()
         }
         let executionToggle = null
@@ -314,16 +324,28 @@ async function captureDesktopIfRequested() {
           if (executionToggle) break
           await sleep(100)
         }
-        if (shouldEnableAutoAdvance && executionToggle?.getAttribute('aria-pressed') !== 'true') {
+        if (
+          shouldEnableAutoAdvance &&
+          executionToggle &&
+          executionToggle.getAttribute('aria-pressed') !== 'true'
+        ) {
           executionToggle.click()
           await sleep(250)
         }
         return {
+          pureCanvasReady,
+          aiModeEnabled: document.querySelector('.cowart-workbench[data-ai-mode="on"]') !== null,
           agentPanelOpen: document.querySelector('.yogurt-app-agent-toggle')?.getAttribute('aria-expanded') === 'true',
           autoAdvanceEnabled: executionToggle?.getAttribute('aria-pressed') === 'true'
         }
       })()
     `)
+    if (captureState?.pureCanvasReady !== true) {
+      throw new Error('Requested desktop capture did not start in pure canvas mode.')
+    }
+    if (captureState?.aiModeEnabled !== true) {
+      throw new Error('Requested desktop capture could not enable AI mode.')
+    }
     if (captureState?.agentPanelOpen !== true) {
       throw new Error('Requested desktop capture could not open the Codex Agent panel.')
     }

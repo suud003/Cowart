@@ -1096,6 +1096,31 @@ function compactAutoCompose(store, shape) {
   };
 }
 
+function compactEditableStyle(shape) {
+  const props = shape?.props ?? {};
+  const style = {};
+  for (const key of [
+    "color",
+    "labelColor",
+    "fill",
+    "dash",
+    "size",
+    "font",
+    "align",
+    "verticalAlign",
+    "arrowheadStart",
+    "arrowheadEnd",
+  ]) {
+    if (typeof props[key] === "string" && props[key]) style[key] = props[key];
+  }
+  if (Number.isFinite(shape?.opacity)) style.opacity = shape.opacity;
+  if (Number.isFinite(props.scale)) style.scale = props.scale;
+  if (Number.isFinite(shape?.meta?.cowartFontSize)) {
+    style.fontSize = shape.meta.cowartFontSize;
+  }
+  return Object.keys(style).length > 0 ? style : null;
+}
+
 function shapeContext(store, shape, selected, maxTextLength) {
   const asset = shape?.props?.assetId ? store[shape.props.assetId] : null;
   const parent = typeof shape?.parentId === "string" ? store[shape.parentId] : null;
@@ -1148,6 +1173,7 @@ function shapeContext(store, shape, selected, maxTextLength) {
     bridge: compactBridge(shape.meta),
     autoCompose: compactAutoCompose(store, shape),
     visual: compactVisual(shape),
+    style: compactEditableStyle(shape),
     semantic: nativeSemantic,
     relation: shape.meta?.cowartThinkingRelation === true
       ? {
@@ -1769,6 +1795,154 @@ function updateCanvasZone(store, operation, references, pageId, requestedSemanti
       cowartThinkingSourceRefs: sourceRefs,
       cowartProductBridge: bridge,
       cowartSemanticObject: semanticObject,
+      cowartThinkingUpdatedAt: new Date().toISOString(),
+    },
+  };
+  store[shape.id] = updated;
+  return updated;
+}
+
+const UPDATE_RELATION_FIELDS = new Set([
+  "type",
+  "id",
+  "kind",
+  "direction",
+  "path",
+  "payload",
+  "origin",
+  "sourceShapeIds",
+  "sourceIds",
+  "label",
+]);
+
+function updateThinkingRelation(store, operation, semanticDiagram = null) {
+  const unsupported = Object.keys(operation).filter((key) => !UPDATE_RELATION_FIELDS.has(key));
+  if (unsupported.length > 0) {
+    throw new Error(
+      `update_relation cannot change semanticId, diagramId, or visual styles; unsupported field(s): ${unsupported.join(", ")}.`,
+    );
+  }
+
+  const shape = resolveShapeReference(store, new Map(), operation.id, "update_relation.id");
+  if (
+    shape.type !== "arrow" ||
+    shape.meta?.cowartThinkingGenerated !== true ||
+    shape.meta?.cowartThinkingRelation !== true
+  ) {
+    throw new Error(`Refusing to update non-agent relation ${shape.id}.`);
+  }
+
+  const endpoints = boundThinkingRelationEndpoints(store, shape, { syncMeta: true });
+  if (!endpoints.complete) {
+    throw new Error(`update_relation requires complete start and end bindings for ${shape.id}.`);
+  }
+
+  const currentSemantic = shape.meta?.cowartSemanticRelation;
+  if (currentSemantic) {
+    const validity = semanticRelationValidity(store, shape, endpoints);
+    if (!validity.valid) {
+      throw new Error(`update_relation cannot modify invalid semantic relation ${shape.id}: ${validity.reason}.`);
+    }
+    if (!semanticDiagram || currentSemantic.diagramId !== semanticDiagram.diagramId) {
+      throw new Error(`update_relation must stay in diagram ${currentSemantic.diagramId}.`);
+    }
+  } else if (
+    semanticDiagram ||
+    operation.origin !== undefined ||
+    operation.sourceShapeIds !== undefined ||
+    operation.sourceIds !== undefined
+  ) {
+    throw new Error("update_relation semantic provenance requires an existing native semantic relation.");
+  }
+
+  const currentKind = boundedString(
+    currentSemantic?.type ?? shape.meta?.cowartThinkingRelationKind,
+    80,
+    "relates-to",
+  );
+  const relationKind = operation.kind === undefined
+    ? currentKind
+    : boundedString(operation.kind, 80);
+  if (!relationKind) throw new Error("update_relation.kind must be a non-empty string.");
+
+  const currentDirection = ["forward", "bidirectional", "none"].includes(
+    currentSemantic?.direction ?? shape.meta?.cowartThinkingRelationDirection,
+  )
+    ? currentSemantic?.direction ?? shape.meta?.cowartThinkingRelationDirection
+    : "forward";
+  if (
+    operation.direction !== undefined &&
+    !["forward", "bidirectional", "none"].includes(operation.direction)
+  ) {
+    throw new Error("update_relation.direction is invalid.");
+  }
+  const direction = operation.direction ?? currentDirection;
+
+  const currentPath = (currentSemantic?.path ?? shape.meta?.cowartThinkingRelationPath) === "alternative"
+    ? "alternative"
+    : "primary";
+  if (operation.path !== undefined && !["primary", "alternative"].includes(operation.path)) {
+    throw new Error("update_relation.path is invalid.");
+  }
+  const path = operation.path ?? currentPath;
+
+  if (
+    operation.payload !== undefined &&
+    operation.payload !== null &&
+    typeof operation.payload !== "string"
+  ) {
+    throw new Error("update_relation.payload must be a string or null.");
+  }
+  const currentPayload = boundedString(
+    currentSemantic?.payload ?? shape.meta?.cowartThinkingRelationPayload,
+    300,
+  ) || null;
+  const payload = operation.payload === undefined
+    ? currentPayload
+    : boundedString(operation.payload, 300) || null;
+
+  if (operation.origin !== undefined && !SEMANTIC_ORIGINS.has(operation.origin)) {
+    throw new Error("update_relation.origin is invalid.");
+  }
+  if (
+    operation.label !== undefined &&
+    operation.label !== null &&
+    typeof operation.label !== "string"
+  ) {
+    throw new Error("update_relation.label must be a string or null.");
+  }
+
+  const semanticRelation = currentSemantic
+    ? {
+        ...currentSemantic,
+        type: relationKind,
+        direction,
+        path,
+        payload,
+        origin: operation.origin ?? currentSemantic.origin,
+        sourceShapeIds: operation.sourceShapeIds === undefined
+          ? boundedStringList(currentSemantic.sourceShapeIds, 100)
+          : boundedStringList(operation.sourceShapeIds, 100),
+        sourceIds: operation.sourceIds === undefined
+          ? boundedStringList(currentSemantic.sourceIds, 100)
+          : boundedStringList(operation.sourceIds, 100),
+      }
+    : currentSemantic;
+  const updated = {
+    ...shape,
+    props: operation.label === undefined
+      ? shape.props
+      : {
+          ...shape.props,
+          richText: toRichText(boundedString(operation.label, 300)),
+        },
+    meta: {
+      ...shape.meta,
+      cowartThinkingRelationKind: relationKind,
+      cowartThinkingRelationDirection: direction,
+      cowartThinkingRelationPath: path,
+      cowartThinkingRelationPayload: payload,
+      cowartSemanticRelation: semanticRelation,
       cowartThinkingUpdatedAt: new Date().toISOString(),
     },
   };
@@ -3124,6 +3298,7 @@ function validateOperations(operations) {
     "move_shape",
     "resize_shape",
     "create_relation",
+    "update_relation",
     "delete_shape",
   ]);
   const keyedCreationTypes = new Set(["create_card", "create_zone", "create_relation"]);
@@ -3196,7 +3371,7 @@ export function applyThinkingOperationsToSnapshot({
   }
   if (!semanticDiagram) {
     for (const operation of operations) {
-      if (["update_card", "update_zone", "move_shape", "resize_shape"].includes(operation.type)) {
+      if (["update_card", "update_zone", "update_relation", "move_shape", "resize_shape"].includes(operation.type)) {
         const target = typeof operation.id === "string" ? store[operation.id] : null;
         const fixedDiagramId = fixedAutoComposeDiagramIdForShape(target);
         if (fixedDiagramId) {
@@ -3336,6 +3511,13 @@ export function applyThinkingOperationsToSnapshot({
       shape.props.h = Math.max(16, Math.min(8_192, finiteNumber(operation.h, shape.props.h)));
       descendantShapeIds(store, shape.id).forEach((id) => geometryChangedShapeIds.add(id));
       changes.push({ type: operation.type, id: shape.id, w: shape.props.w, h: shape.props.h });
+      continue;
+    }
+
+    if (operation.type === "update_relation") {
+      const updated = updateThinkingRelation(store, operation, semanticDiagram);
+      refreshRelationGeometryAndBindings(store, updated.id);
+      changes.push({ type: operation.type, id: updated.id });
       continue;
     }
 

@@ -48,11 +48,13 @@ Use the Excalidraw-style visual contract throughout:
 - warning and blocked states may use restrained orange or red; do not assign a different color to every category;
 - use short visible labels and place detail in the card body so text never spills outside the node.
 
+Treat every live editable style returned by `get_cowart_thinking_context` as user-owned state. This includes `color`, `labelColor`, `fill`, `dash`, `size`, `font`, `fontSize`, `opacity`, alignment, and arrowheads. When revising text, semantics, provenance, position, or layout, omit all style fields so the current values survive unchanged. Change a style only when the user explicitly asks for that exact visual change. Do not delete and recreate a manually styled relation during an autonomous revision; if a requested structural change truly requires replacement, report that limitation and preserve the existing relation until the user explicitly authorizes replacement.
+
 Call `apply_cowart_safe_thinking_operations` with `dryRun: true` and the captured revision. Require a matching `layoutReport` whose `engine` is `html-line-svg`, `layoutReport.valid` is true, `collisions` and `outOfBounds` are empty, and `layoutDigest` is present. Validate the real node/edge bounds returned by that dry run, not guessed placeholder geometry. Verify that every non-root card has the intended relation and that only the selected region changes. Apply the identical operation list through the same safe tool against the preview's `baseRevision`, then require the same layout digest. If the revision changed or the digest differs, discard the preview, re-read context, and recompute. The safe tool may update, move, or resize only Cowart-managed shapes and cannot accept `delete_shape` or `allowUserAuthoredEdits`.
 
 Use native relation labels only when the verb carries meaning not already clear from the hierarchy. Keep source-shape IDs and semantic IDs in the native semantic metadata; do not borrow Product Bridge zone/trace fields. Never write raw tldraw records.
 
-To revise card or zone semantics, use the restricted `semantic` patch on `update_card` or `update_zone`; keep `diagramId` and `semanticId` stable and change only type, state, origin, order, or source mappings. To revise a relation's direction, path, lane, label, payload, provenance, or endpoints, explicit deletion is required because there is no `update_relation` operation. Obtain explicit user authorization, then use the destructive `apply_cowart_thinking_operations` entry point with `delete_shape` before `create_relation` and reuse the stable relation `semanticId`. Never route that replacement through autonomous safe execution.
+To revise card or zone semantics, use the restricted `semantic` patch on `update_card` or `update_zone`; keep `diagramId` and `semanticId` stable and change only type, state, origin, order, or source mappings. To revise an existing relation's kind, direction, path, label, payload, origin, or source mappings, use safe `update_relation`; it preserves the relation ID, bindings, lane, live label text when no label is supplied, and every user-edited line or text style. Endpoint or lane changes are intentionally outside that semantic-only operation. If one of those structural changes truly requires replacement, keep the existing relation until the user explicitly authorizes destructive replacement; never route it through autonomous safe execution.
 
 ## Verify the rendered result
 
@@ -71,6 +73,6 @@ If the geometry is ambiguous, reassign ports, separate lanes, use a monotonic Be
 
 ## Revise and report
 
-When revising an existing generated diagram, match objects by stable semantic IDs instead of recreating the whole graph. Keep manually edited rich text and user-positioned nodes unless the user explicitly asks to rewrite or relayout them. Use the smallest safe native operation batch; do not replace an editable graph with a new image or monolithic object.
+When revising an existing generated diagram, match objects by stable semantic IDs instead of recreating the whole graph. Keep manually edited rich text, visual styles, and user-positioned nodes unless the user explicitly asks to rewrite, restyle, or relayout them. Use the smallest safe native operation batch; do not replace an editable graph with a new image or monolithic object.
 
 Report the diagram claim, source scope and access limitations, affected native shape/relation IDs, validation performed, inference introduced, and the operation ID available for undo.

@@ -281,6 +281,27 @@ const createRelationSchema = z.object({
   dash: z.enum(["draw", "dashed"]).optional(),
 });
 
+const updateRelationSchema = z.object({
+  type: z.literal("update_relation"),
+  id: z.string().trim().min(1).max(160),
+  kind: z.string().trim().min(1).max(80).optional(),
+  direction: z.enum(["forward", "bidirectional", "none"]).optional(),
+  path: z.enum(["primary", "alternative"]).optional(),
+  payload: z.string().max(300).nullable().optional(),
+  origin: z.enum([
+    "source",
+    "user",
+    "synthesis",
+    "inference",
+    "unknown",
+    "assumption",
+    "question",
+  ]).optional(),
+  sourceShapeIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
+  sourceIds: z.array(z.string().trim().min(1).max(160)).max(100).optional(),
+  label: z.string().max(300).nullable().optional(),
+}).strict();
+
 const deleteShapeSchema = z.object({
   type: z.literal("delete_shape"),
   id: z.string().trim(),
@@ -294,6 +315,7 @@ const operationSchema = z.discriminatedUnion("type", [
   moveShapeSchema,
   resizeShapeSchema,
   createRelationSchema,
+  updateRelationSchema,
   deleteShapeSchema,
 ]);
 
@@ -305,6 +327,7 @@ const safeOperationSchema = z.discriminatedUnion("type", [
   moveShapeSchema,
   resizeShapeSchema,
   createRelationSchema,
+  updateRelationSchema,
 ]);
 
 function safeThinkingOperationInput(input = {}) {
@@ -436,7 +459,7 @@ export function registerCowartThinkingTools(server) {
     {
       title: "Apply Safe Yogurt AI Thinking Operations",
       description:
-        "Preview or atomically apply non-destructive local edits to Yogurt AI. This safe entry point creates cards, zones, and relations and may update, move, or resize only Cowart-managed shapes. It cannot delete shapes or enable edits to user-authored content. Use it by default for autonomous composition and ordinary additive canvas work; use the separately annotated destructive tool only for an explicitly authorized deletion or user-authored edit.",
+        "Preview or atomically apply non-destructive local edits to Yogurt AI. This safe entry point creates cards, zones, and relations and may update cards, zones, relations, positions, or sizes only on Cowart-managed shapes. Relation semantic updates preserve live line and label styles unless label text is explicitly supplied. It cannot delete shapes or enable edits to user-authored content. Use it by default for autonomous composition and ordinary additive canvas work; use the separately annotated destructive tool only for an explicitly authorized deletion or user-authored edit.",
       inputSchema: {
         ...projectArgsSchema,
         baseRevision: z.string().trim().optional(),
@@ -469,7 +492,7 @@ export function registerCowartThinkingTools(server) {
     {
       title: "Apply Yogurt AI Thinking Operations",
       description:
-        "Preview or atomically apply local, typed edits to Yogurt AI cards, canvas zones, positions, sizes, and relations. Pass semanticDiagram to create a source-traceable native canvas diagram: readingOrder drives automatic layout, create_zone purpose=semantic creates a semantic canvas group, and relation direction/path derive the html-line-svg relation grammar (primary, alternative, bidirectional, or association). create_card may use parentZoneId (a stable zone key or shape ID, including a zone created earlier in the same batch) to become a real frame child. Creation keys must be unique within a batch, and zone updates cannot cross the requested page. Deletion is limited to agent-generated shapes and refuses zones containing user-authored descendants. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
+        "Preview or atomically apply local, typed edits to Yogurt AI cards, canvas zones, positions, sizes, and relations. Pass semanticDiagram to create a source-traceable native canvas diagram: readingOrder drives automatic layout, create_zone purpose=semantic creates a semantic canvas group, and relation direction/path derive the html-line-svg relation grammar (primary, alternative, bidirectional, or association). update_relation changes relation semantics without replacing its ID, bindings, or user-edited visual styles. create_card may use parentZoneId (a stable zone key or shape ID, including a zone created earlier in the same batch) to become a real frame child. Creation keys must be unique within a batch, and zone updates cannot cross the requested page. Deletion is limited to agent-generated shapes and refuses zones containing user-authored descendants. Pass the latest canvas revision and use dryRun before applying a non-trivial batch.",
       inputSchema: {
         ...projectArgsSchema,
         baseRevision: z.string().trim().optional(),

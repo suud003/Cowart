@@ -18,6 +18,7 @@ export const SEMANTIC_DIAGRAM_ROUTING_HINT = [
   '- 禁止调用自动编排、图片生成、Product Bridge、Interaction PRD、AI HTML、inline SVG 或 Slides 能力；复杂内容应拆成多张相邻原生图，而不是栅格化或降级为单一图块。',
   '- 新建图时不要手写节点坐标；让 layoutEngine:"html-line-svg" 负责层级、间距、端口、避障与画框收紧。',
   '- 有选区时保持来源对象不动，优先在选区旁生成或只修改明确点名的已生成对象；无选区时使用当前整页作为语义来源。',
+  '- 上下文中的 style 是用户当前手工样式。除非用户明确要求改样式，否则更新时不得传 color、labelColor、fill、dash、size、font、fontSize、opacity 或箭头样式，也不得通过删除重建关系覆盖它们。',
   '- 普通布局选择采用可逆默认值，不要要求用户逐项确认。'
 ].join('\n')
 
@@ -87,6 +88,7 @@ export function buildSemanticDiagramPrompt({
     '2. 合并本次对话中的文字、产品想法和画布内容；外部链接只有在当前上下文确实包含正文后才能转成需求关系，未读取时只保留为待补充来源。',
     '3. 先写唯一 teaching claim，再列出 objects、relations、states、visible labels、layout constraints 和 reading order。没有来源依据的关系不要画成箭头。',
     '4. 原始画布对象必须保持不动。新图保留 source shape IDs，并区分用户原话、事实、推断、假设与待确认问题。',
+    '5. get_cowart_thinking_context 返回的 style 是用户当前手工样式。除非用户明确要求改某项视觉属性，否则更新操作必须省略 color、labelColor、fill、dash、size、font、fontSize、opacity、alignment 和 arrowheads；关系语义变化使用 update_relation，保持原 relation ID、bindings 与人工样式，不得用删除重建覆盖。',
     '',
     '绘图与布局要求：',
     '1. 只使用 apply_cowart_safe_thinking_operations 生成可单独选择和编辑的 Yogurt 原生 cards、purpose:"semantic" 的 zones 与 bound relations；不要创建图片、整页视觉预演、PRD 页面、HTML 或 SVG 图块。',

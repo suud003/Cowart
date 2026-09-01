@@ -47,13 +47,19 @@ flowchart LR
 | Nodes | Native tldraw geo shapes with directly editable text |
 | Connections | Native arrows with real start and end bindings |
 | Sections | Native frames whose children move with them |
-| Visual style | Hand-drawn strokes and font, transparent or optional hachure fill, neutral primary paths |
+| Visual style | Separate controls for font, font size, label color, stroke/line color, fill, dash, weight, opacity, and arrowheads |
 | Layout | Layered reading order, aligned peers, bounded text, obstacle-aware routes |
-| Revision | User-edited text becomes the latest Agent context instead of being replaced by stale metadata |
+| Revision | User-edited text and visual style become the latest Agent context instead of being replaced by stale metadata |
 | Traceability | Stable semantic IDs and source shape IDs on every generated object |
 | Safety | Dry-run and revision checks before apply, with guarded Agent undo |
 
 The default path creates native editable diagrams only. Dense material is split into adjacent diagrams instead of being rasterized or forced into one tiny, tangled graph. Image previews, PRDs, HTML/SVG blocks, and Slides do not intercept an ordinary diagram request.
+
+## Pure canvas and AI mode
+
+Yogurt AI starts in pure canvas mode. It keeps the native drawing tools, menus, shortcuts, and style panel while leaving the Yogurt shell, Agent, smart lasso, annotations, and generation actions unmounted. The small `AI` button in the upper-right is the only mode entry.
+
+AI mode adds Yogurt navigation and Codex Agent. Turning it off immediately returns to the pure canvas without recreating the editor, canvas store, selection, camera, or undo history. Agent revisions preserve current user-edited styles unless the user explicitly asks for a visual change.
 
 ## How it works
 
@@ -80,7 +86,7 @@ and preserve the text I already edited.
 
 Regular users do not need Node.js, Git, or a global Codex CLI.
 
-1. Download `Yogurt-AI-Beta-Setup-0.2.13-x64.exe` from the [Yogurt AI Beta 0.2.13 release](https://github.com/suud003/Cowart/releases/tag/v0.2.13%2Bcodex.20260901).
+1. Download `Yogurt-AI-Beta-Setup-0.2.14-x64.exe` from the [Yogurt AI Beta 0.2.14 release](https://github.com/suud003/Cowart/releases/tag/v0.2.14%2Bcodex.20260901).
 2. Run the installer and choose a project folder on first launch.
 3. Expand Codex Agent. If needed, choose **Sign in to Codex** and finish the official browser authorization flow.
 

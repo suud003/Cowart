@@ -742,11 +742,6 @@ body {
   backdrop-filter: blur(10px);
 }
 
-.cowart-canvas .tlui-menu-zone,
-.cowart-canvas .tlui-style-panel.tlui-style-panel__wrapper {
-  display: none;
-}
-
 .cowart-canvas .tlui-main-toolbar--horizontal .tlui-main-toolbar__left {
   padding: 4px;
   gap: 2px;
@@ -1330,7 +1325,7 @@ body {
   .yogurt-app-breadcrumb i:nth-of-type(2) { display: none; }
   .yogurt-app-breadcrumb span,
   .yogurt-app-breadcrumb strong { max-width: 120px; }
-  .yogurt-app-actions > button:not(.yogurt-app-agent-toggle) { display: none; }
+  .yogurt-app-actions > button:not(.yogurt-app-agent-toggle):not(.yogurt-app-ai-mode-toggle) { display: none; }
   .yogurt-app-actions > .yogurt-app-agent-toggle { display: inline-grid; width: 34px; min-width: 34px; height: 34px; padding: 0; }
   .yogurt-app-agent-toggle > span,
   .yogurt-app-agent-toggle b { display: none; }
@@ -1342,6 +1337,163 @@ body {
   .cowart-canvas .tlui-main-toolbar--horizontal { left: 12px !important; width: calc(100vw - 24px); max-width: calc(100vw - 24px); transform: none !important; }
   .cowart-agent-panel { inset: 54px 0 0; width: 100%; height: auto; border: 0; border-radius: 0; }
   .cowart-agent-panel-launcher { right: 12px; bottom: 14px; }
+}
+
+.cowart-native-workbench {
+  position: fixed;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: #1b1b1f;
+  background: #fff;
+}
+
+.cowart-native-canvas {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cowart-ai-mode-entry {
+  position: fixed;
+  z-index: 1600;
+  top: 12px;
+  right: 224px;
+  display: inline-flex;
+  height: 40px;
+  padding: 0 12px;
+  gap: 7px;
+  align-items: center;
+  color: #1b1b1f;
+  font: 600 13px/1 var(--atelier-sans);
+  background: rgb(255 255 255 / 96%);
+  border: 1px solid #d9d9df;
+  border-radius: 9px;
+  box-shadow: 0 6px 18px rgb(22 24 28 / 10%);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.cowart-ai-mode-entry:hover {
+  color: #174ecb;
+  background: #f4f7ff;
+  border-color: #a9bff3;
+}
+
+.cowart-ai-mode-entry:focus-visible {
+  outline: 2px solid #2864e8;
+  outline-offset: 2px;
+}
+
+.yogurt-app-actions > .yogurt-app-ai-mode-toggle {
+  display: inline-flex;
+  width: auto;
+  min-width: 92px;
+  padding: 0 9px;
+  gap: 6px;
+  color: #174ecb;
+  background: #e8efff;
+  border: 1px solid #cbd9fb;
+}
+
+.yogurt-app-ai-mode-toggle span {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.yogurt-app-ai-mode-toggle b {
+  padding: 2px 5px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  background: #2864e8;
+  border-radius: 999px;
+}
+
+.cowart-label-color-panel {
+  padding: 9px 12px 11px;
+  border-top: 1px solid var(--tl-color-divider);
+}
+
+.cowart-label-color-heading {
+  display: flex;
+  margin-bottom: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cowart-label-color-heading strong {
+  color: var(--tl-color-text-1);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.cowart-label-color-heading span {
+  overflow: hidden;
+  color: var(--tl-color-text-3);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cowart-label-color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 26px);
+  gap: 5px;
+}
+
+.cowart-label-color-grid button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cowart-label-color-grid button:hover,
+.cowart-label-color-grid button[aria-pressed="true"] {
+  background: var(--tl-color-muted-2);
+}
+
+.cowart-label-color-grid button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 2px var(--tl-color-selected);
+}
+
+.cowart-label-color-grid button > span {
+  width: 16px;
+  height: 16px;
+  background: var(--cowart-label-swatch);
+  border: 1px solid rgb(0 0 0 / 13%);
+  border-radius: 50%;
+}
+
+@media (max-width: 720px) {
+  .cowart-ai-mode-entry {
+    top: 68px;
+    right: 12px;
+  }
+
+  .yogurt-app-actions > .yogurt-app-ai-mode-toggle {
+    display: inline-grid;
+    width: 34px;
+    min-width: 34px;
+    padding: 0;
+    place-items: center;
+  }
+
+  .yogurt-app-ai-mode-toggle span,
+  .yogurt-app-ai-mode-toggle b {
+    display: none;
+  }
 }
 
 @media (max-width: 520px) {
