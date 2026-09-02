@@ -1,6 +1,6 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.4.0+codex.20260902",
+  "version": "0.4.1+codex.20260902",
   "description": "The official Excalidraw editor with optional Codex Agent generation of native editable diagrams.",
   "author": {
     "name": "Yogurt AI",

@@ -27,6 +27,7 @@ Yogurt AI Desktop 把可编辑无限画布与 Codex Agent 工作台装进同一�
 桌面桥接的边界如下：
 
 - Electron 开启 context isolation、renderer sandbox 与 web security，并关闭 renderer 的 Node 集成。
+- 官方 Excalidraw 的 PNG 复制仅为当前受信主页面开放系统剪贴板写入；剪贴板读取、子页面与外部页面仍被拒绝。
 - Renderer 只能访问经过白名单约束的 Yogurt Agent、画布工具与工作区选择 IPC。
 - Renderer 不能选择任意 App Server RPC、Shell 命令、进程、MCP Server 或白名单外工具。
 - “登录 Codex”只调用固定的 `account/login/start`，主进程仅会打开 App Server 返回、且通过 HTTPS 与 OpenAI/ChatGPT 域名校验的授权地址；授权地址不会返回给 Renderer。
@@ -95,6 +96,7 @@ NSIS 安装包输出到 `output/desktop/`，文件名为 `Yogurt-AI-Beta-Setup-<
 
 ```powershell
 npm run probe:desktop
+npm run probe:clipboard
 npm run verify:packaged
 ```
 

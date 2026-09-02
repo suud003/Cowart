@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cowart-thinking-canvas",
-  "version": "0.4.0+codex.20260902",
+  "version": "0.4.1+codex.20260902",
   "description": "The official Excalidraw editor with optional Codex Agent generation of native editable diagrams.",
   "author": {
     "name": "Yogurt AI",

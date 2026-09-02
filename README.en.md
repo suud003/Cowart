@@ -32,6 +32,7 @@ When you need AI, open Codex Agent from the application menu or keyboard. Cards,
 - Use the standard selection, free-draw, rectangle, diamond, ellipse, arrow, text, image, eraser, and frame tools.
 - Select an element to change its font, font size, text color, stroke, fill, width, dash, roughness, opacity, and arrowheads in the official style panel.
 - Keep Excalidraw's undo/redo, zoom, shortcuts, import/export, and native editing behavior.
+- Copy the current selection or the full canvas as PNG and paste it into chats, documents, or design tools.
 
 <p align="center">
   <img src="docs/images/yogurt-ai-official-excalidraw.png" width="100%" alt="The official Excalidraw editor with AI turned off">
@@ -102,7 +103,7 @@ This Beta focuses on the official Excalidraw editor, multi-canvas project trees,
 
 Regular users do not need Node.js, Git, or a global Codex CLI.
 
-1. Download `Yogurt-AI-Beta-Setup-0.4.0-x64.exe` from the [Yogurt AI Beta 0.4.0 release](https://github.com/suud003/Cowart/releases/tag/v0.4.0%2Bcodex.20260902).
+1. Download `Yogurt-AI-Beta-Setup-0.4.1-x64.exe` from the [Yogurt AI Beta 0.4.1 release](https://github.com/suud003/Cowart/releases/tag/v0.4.1%2Bcodex.20260902).
 2. Run the installer and choose a project folder on first launch.
 3. Press `Ctrl + Shift + A` to open Codex Agent. If needed, finish Codex authorization in the official browser flow.
 

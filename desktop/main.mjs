@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { YogurtAgentService } from './agent-service.mjs'
 import { createAgentAttentionController } from './agent-attention.mjs'
 import { persistThreadId, readPersistedThreadId } from './agent-session.mjs'
+import { installTrustedClipboardPermissionPolicy } from './clipboard-permission.mjs'
 import { CodexAppServerClient } from './codex-app-server-client.mjs'
 import { installYogurtApplicationMenu } from './ai-mode-menu.mjs'
 import { registerYogurtAgentIpc, YogurtDesktopRuntime } from './ipc-bridge.mjs'
@@ -430,7 +431,10 @@ async function captureDesktopIfRequested() {
 }
 
 await app.whenReady()
-session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+installTrustedClipboardPermissionPolicy({
+  electronSession: session.defaultSession,
+  getTrustedWebContents: trustedWebContents
+})
 await initializeDesktopRuntime()
 desktopRuntime.start().catch((error) => {
   console.error('Yogurt AI Codex sidecar failed to start:', error)

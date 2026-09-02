@@ -32,6 +32,7 @@ Yogurt AI 内嵌官方 [`@excalidraw/excalidraw`](https://www.npmjs.com/package/
 - 使用官方选择、手绘、矩形、菱形、椭圆、箭头、文字、图片、橡皮擦和画框工具；
 - 选中元素后，通过官方样式面板调整字体、字号、文字色、描边色、填充色、线宽、线型、粗糙度、透明度与箭头样式；
 - 保留 Excalidraw 的撤销/重做、缩放、快捷键、导入导出和原生编辑体验。
+- 可将当前选区或整张画布直接复制为 PNG，并粘贴到聊天、文档或设计工具中。
 
 <p align="center">
   <img src="docs/images/yogurt-ai-official-excalidraw.png" width="100%" alt="AI 关闭时的官方 Excalidraw 编辑器">
@@ -101,7 +102,7 @@ Agent 面板会在同一个编辑器旁打开；关闭后立即回到纯净画�
 
 普通用户不需要安装 Node.js、Git 或全局 Codex CLI。
 
-1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.4.0](https://github.com/suud003/Cowart/releases/tag/v0.4.0%2Bcodex.20260902) 的 `Yogurt-AI-Beta-Setup-0.4.0-x64.exe`。
+1. 从 [GitHub Releases 下载 Yogurt AI Beta 0.4.1](https://github.com/suud003/Cowart/releases/tag/v0.4.1%2Bcodex.20260902) 的 `Yogurt-AI-Beta-Setup-0.4.1-x64.exe`。
 2. 双击安装包并完成安装。
 3. 首次打开时选择项目文件夹。
 4. 按 `Ctrl + Shift + A` 打开 Codex Agent；如果尚未登录，请在官方浏览器页面完成 Codex 授权。
