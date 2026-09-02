@@ -15,6 +15,7 @@ import {
   undoThinkingOperation,
 } from "../mcp/lib/thinking-runtime.mjs";
 import { saveCowartCanvasSnapshot } from "../mcp/lib/canvas-storage.mjs";
+import { createCowartCanvas } from "../mcp/lib/canvas-project-storage.mjs";
 
 function emptyExcalidraw() {
   return {
@@ -561,6 +562,70 @@ test("runtime dispatch persists, previews, imports, and safely undoes native Exc
     assert.equal((await getThinkingContext({ projectDir }, { scope: "page" })).shapes.length, 1);
     await undoThinkingOperation({ projectDir }, { operationId: applied.operationId });
     assert.equal((await getThinkingContext({ projectDir }, { scope: "page" })).shapes.length, 0);
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("multi-canvas thinking mutations require and remain frozen to an explicit canvas", async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), "cowart-thinking-multi-canvas-"));
+  try {
+    const seeded = await saveCowartCanvasSnapshot({ projectDir }, emptyExcalidraw());
+    await createCowartCanvas(
+      { projectDir },
+      {
+        canvasId: "canvas_child",
+        name: "Child",
+        parentId: "canvas_main",
+        baseProjectRevision: seeded.projectRevision,
+      },
+    );
+
+    await assert.rejects(
+      applyThinkingOperations(
+        { projectDir },
+        { operations: [{ type: "create_card", key: "unsafe", title: "Wrong canvas" }] },
+      ),
+      (error) => error.code === "COWART_CANVAS_ID_REQUIRED",
+    );
+
+    const root = await getThinkingContext(
+      { projectDir, canvasId: "canvas_main" },
+      { scope: "page" },
+    );
+    const applied = await applyThinkingOperations(
+      { projectDir, canvasId: "canvas_main" },
+      {
+        baseRevision: root.revision,
+        operations: [{ type: "create_card", key: "root-only", title: "Root only" }],
+      },
+    );
+    assert.equal(applied.canvasId, "canvas_main");
+    assert.equal(applied.pageId, "canvas_main");
+
+    const [updatedRoot, untouchedChild] = await Promise.all([
+      getThinkingContext({ projectDir, canvasId: "canvas_main" }, { scope: "page" }),
+      getThinkingContext({ projectDir, canvasId: "canvas_child" }, { scope: "page" }),
+    ]);
+    assert.equal(updatedRoot.shapes.length, 1);
+    assert.equal(untouchedChild.shapes.length, 0);
+    assert.deepEqual(untouchedChild.canvasBreadcrumb, ["主画布", "Child"]);
+
+    await assert.rejects(
+      undoThinkingOperation(
+        { projectDir, canvasId: "canvas_child" },
+        { operationId: applied.operationId },
+      ),
+      /Unknown or already undone operation/,
+    );
+    await undoThinkingOperation(
+      { projectDir, canvasId: "canvas_main" },
+      { operationId: applied.operationId },
+    );
+    assert.equal(
+      (await getThinkingContext({ projectDir, canvasId: "canvas_main" }, { scope: "page" })).shapes.length,
+      0,
+    );
   } finally {
     await rm(projectDir, { recursive: true, force: true });
   }

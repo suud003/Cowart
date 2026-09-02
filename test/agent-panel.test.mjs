@@ -90,6 +90,11 @@ test.after(async () => {
 test('Agent panel tasks include stable page and selection IDs instead of screenshot coordinates', () => {
   const message = buildAgentPanelMessage('整理这些产品想法', {
     projectName: 'AI 互动影游',
+    canvasId: 'canvas_story_map',
+    canvasName: '故事地图',
+    parentCanvasId: 'canvas_main',
+    canvasBreadcrumb: ['主画布', '故事地图'],
+    projectRevision: 'project-revision-1',
     pageId: 'page:story-map',
     pageName: '故事地图',
     selectedCount: 2,
@@ -102,6 +107,10 @@ test('Agent panel tasks include stable page and selection IDs instead of screens
   assert.doesNotMatch(message.prompt, /page:story-map|shape:brief|\$cowart-auto-compose/)
   assert.doesNotMatch(message.runtimeContext, /整理这些产品想法/)
   assert.match(message.runtimeContext, /page:story-map/)
+  assert.match(message.runtimeContext, /canvas_story_map/)
+  assert.match(message.runtimeContext, /canvas_main/)
+  assert.match(message.runtimeContext, /主画布 \/ 故事地图/)
+  assert.match(message.runtimeContext, /project-revision-1/)
   assert.match(message.runtimeContext, /shape:brief/)
   assert.match(message.runtimeContext, /shape:ending/)
   assert.match(message.runtimeContext, /不要依赖截图坐标/)

@@ -8,8 +8,18 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 import { desktopCspPlugin } from './desktop/content-security-policy.mjs'
 import {
   readCowartCanvasState as readPersistentCanvasState,
-  saveCowartCanvasSnapshot as savePersistentCanvasSnapshot
+  readCowartSelectionState as readPersistentSelectionState,
+  saveCowartCanvasSnapshot as savePersistentCanvasSnapshot,
+  writeCowartSelectionState as writePersistentSelectionState,
+  writeCowartViewState as writePersistentViewState
 } from './mcp/lib/canvas-storage.mjs'
+import {
+  createCowartCanvas,
+  deleteCowartCanvas,
+  readCowartCanvasProject,
+  setActiveCowartCanvas,
+  updateCowartCanvas
+} from './mcp/lib/canvas-project-storage.mjs'
 
 const projectDir = resolve(process.env.COWART_PROJECT_DIR ?? process.cwd())
 const cowartWidgetBuild = process.env.COWART_WIDGET_BUILD === '1'
@@ -19,8 +29,6 @@ const cowartAppVersion = JSON.parse(
 const canvasDir = resolve(process.env.COWART_CANVAS_DIR ?? join(projectDir, 'canvas'))
 const canvasFile = join(canvasDir, 'cowart-canvas.json')
 const excalidrawFile = join(canvasDir, 'yogurt.excalidraw')
-const selectionFile = join(canvasDir, 'cowart-selection.json')
-const viewStateFile = join(canvasDir, 'cowart-view-state.json')
 const canvasPagesDir = join(canvasDir, 'pages')
 const canvasAssetsDir = join(canvasDir, 'assets')
 const pagesManifestFile = join(canvasPagesDir, 'manifest.json')
@@ -61,7 +69,9 @@ function broadcastCanvasChanged(result) {
     version: ++canvasEventVersion,
     updatedAt: new Date().toISOString(),
     storage: result.storage,
-    paths: result.paths
+    paths: result.paths,
+    canvasId: result.canvasId ?? result.canvas?.id ?? null,
+    projectRevision: result.projectRevision ?? null
   }
 
   for (const client of canvasEventClients) {
@@ -96,6 +106,48 @@ function readRequestBody(req) {
 
 function isCanvasSnapshot(value) {
   return value && typeof value === 'object' && value.store && value.schema
+}
+
+async function manageCanvasProject(input = {}) {
+  const args = { projectDir, canvasDir }
+  const action = String(input.action || '').trim()
+  const options = {}
+  for (const key of ['canvasId', 'name', 'activate', 'baseProjectRevision']) {
+    if (input[key] !== undefined) options[key] = input[key]
+  }
+  if (Object.hasOwn(input, 'parentId')) options.parentId = input.parentId
+  if (input.order !== undefined || input.index !== undefined) {
+    options.order = input.order ?? input.index
+  }
+
+  if (action === 'read' || action === 'list') return readCowartCanvasProject(args)
+  if (action === 'create') return createCowartCanvas(args, options)
+  if (['update', 'rename', 'move'].includes(action)) return updateCowartCanvas(args, options)
+  if (action === 'set-active') return setActiveCowartCanvas(args, options)
+  if (action === 'delete') {
+    return deleteCowartCanvas(args, {
+      ...options,
+      reparentChildren: input.reparentChildren === true || input.mode === 'reparent-children'
+    })
+  }
+  throw new Error(`Unsupported Yogurt AI canvas-project action: ${action || '(missing)'}.`)
+}
+
+function canvasApiErrorStatus(error) {
+  if (error?.code === 'COWART_PROJECT_REVISION_CONFLICT') return 409
+  if (error?.code === 'COWART_CANVAS_NOT_FOUND') return 404
+  if (error?.code === 'COWART_CANVAS_HAS_CHILDREN') return 409
+  if (String(error?.code || '').startsWith('COWART_')) return 400
+  return 500
+}
+
+function sendCanvasApiError(res, error) {
+  sendJson(res, canvasApiErrorStatus(error), {
+    error: error.message,
+    code: error.code || null,
+    currentRevision: error.currentRevision ?? null,
+    expectedRevision: error.expectedRevision ?? null
+  })
 }
 
 function isExcalidrawSnapshot(value) {
@@ -629,7 +681,7 @@ function canvasStoragePlugin() {
           broadcastCanvasChanged(result)
           sendJson(res, 200, { ok: true, ...updatedDraft, ...result })
         } catch (error) {
-          sendJson(res, 500, { error: error.message })
+          sendCanvasApiError(res, error)
         }
       })
 
@@ -662,21 +714,18 @@ function canvasStoragePlugin() {
       server.middlewares.use('/api/selection', async (req, res) => {
         try {
           if (req.method === 'GET') {
-            try {
-              sendJson(res, 200, {
-                selection: await readJsonFile(selectionFile),
-                path: selectionFile
-              })
-            } catch (error) {
-              if (error.code === 'ENOENT') {
-                sendJson(res, 200, {
-                  selection: { selectedShapes: [], updatedAt: null },
-                  path: selectionFile
-                })
-                return
-              }
-              throw error
-            }
+            const url = new URL(req.url, 'http://127.0.0.1')
+            const state = await readPersistentCanvasState({
+              projectDir,
+              canvasDir,
+              canvasId: url.searchParams.get('canvasId') || undefined
+            })
+            const result = await readPersistentSelectionState({
+              projectDir,
+              canvasDir,
+              canvasId: state.canvasId
+            })
+            sendJson(res, 200, { ...result, path: result.selectionFile })
             return
           }
 
@@ -688,8 +737,17 @@ function canvasStoragePlugin() {
               return
             }
 
-            await writeJsonAtomic(selectionFile, selection)
-            sendJson(res, 200, { ok: true, path: selectionFile })
+            const state = await readPersistentCanvasState({
+              projectDir,
+              canvasDir,
+              canvasId: selection.canvasId
+            })
+            const result = await writePersistentSelectionState({
+              projectDir,
+              canvasDir,
+              canvasId: state.canvasId
+            }, selection)
+            sendJson(res, 200, result)
             return
           }
 
@@ -697,33 +755,24 @@ function canvasStoragePlugin() {
           res.setHeader('allow', 'GET, PUT')
           res.end()
         } catch (error) {
-          sendJson(res, 500, { error: error.message })
+          sendCanvasApiError(res, error)
         }
       })
 
       server.middlewares.use('/api/view-state', async (req, res) => {
         try {
           if (req.method === 'GET') {
-            try {
-              sendJson(res, 200, {
-                viewState: await readJsonFile(viewStateFile),
-                path: viewStateFile
-              })
-            } catch (error) {
-              if (error.code === 'ENOENT') {
-                sendJson(res, 200, {
-                  viewState: {
-                    version: 1,
-                    currentPageId: null,
-                    camera: { x: 0, y: 0, z: 1 },
-                    updatedAt: null
-                  },
-                  path: viewStateFile
-                })
-                return
-              }
-              throw error
-            }
+            const url = new URL(req.url, 'http://127.0.0.1')
+            const state = await readPersistentCanvasState({
+              projectDir,
+              canvasDir,
+              canvasId: url.searchParams.get('canvasId') || undefined
+            })
+            sendJson(res, 200, {
+              viewState: state.viewState,
+              viewStateFile: state.viewStateFile,
+              path: state.viewStateFile
+            })
             return
           }
 
@@ -735,8 +784,17 @@ function canvasStoragePlugin() {
               return
             }
 
-            await writeJsonAtomic(viewStateFile, viewState)
-            sendJson(res, 200, { ok: true, path: viewStateFile })
+            const state = await readPersistentCanvasState({
+              projectDir,
+              canvasDir,
+              canvasId: viewState.canvasId
+            })
+            const result = await writePersistentViewState({
+              projectDir,
+              canvasDir,
+              canvasId: state.canvasId
+            }, viewState)
+            sendJson(res, 200, result)
             return
           }
 
@@ -744,7 +802,28 @@ function canvasStoragePlugin() {
           res.setHeader('allow', 'GET, PUT')
           res.end()
         } catch (error) {
-          sendJson(res, 500, { error: error.message })
+          sendCanvasApiError(res, error)
+        }
+      })
+
+      server.middlewares.use('/api/canvas-project', async (req, res) => {
+        try {
+          if (req.method !== 'POST') {
+            res.statusCode = 405
+            res.setHeader('allow', 'POST')
+            res.end()
+            return
+          }
+          const input = JSON.parse(await readRequestBody(req))
+          const result = await manageCanvasProject(input)
+          sendJson(res, 200, result)
+          broadcastCanvasChanged({
+            ...result,
+            storage: 'canvas-project',
+            paths: [result.projectFile]
+          })
+        } catch (error) {
+          sendCanvasApiError(res, error)
         }
       })
 
@@ -753,7 +832,11 @@ function canvasStoragePlugin() {
           if (req.method === 'GET') {
             const url = new URL(req.url, 'http://127.0.0.1')
             const result = await readPersistentCanvasState(
-              { projectDir, canvasDir },
+              {
+                projectDir,
+                canvasDir,
+                canvasId: url.searchParams.get('canvasId') || undefined
+              },
               { hydrateAssets: url.searchParams.get('hydrateAssets') === 'true' }
             )
             sendJson(res, 200, result)
@@ -763,6 +846,7 @@ function canvasStoragePlugin() {
           if (req.method === 'PUT') {
             const body = await readRequestBody(req)
             const payload = JSON.parse(body)
+            const url = new URL(req.url, 'http://127.0.0.1')
             const isSnapshotPayload = isCanvasSnapshot(payload) || isExcalidrawSnapshot(payload)
             const snapshot = isSnapshotPayload ? payload : payload?.snapshot
             if (!isCanvasSnapshot(snapshot) && !isExcalidrawSnapshot(snapshot)) {
@@ -780,6 +864,8 @@ function canvasStoragePlugin() {
               {
                 projectDir,
                 canvasDir,
+                canvasId: (isSnapshotPayload ? undefined : payload?.canvasId) ||
+                  url.searchParams.get('canvasId') || undefined,
                 baseRevision,
                 protectImageRecords: isSnapshotPayload ? undefined : payload?.protectImageRecords,
                 acknowledgedImageShapeDeletes: isSnapshotPayload
@@ -802,7 +888,7 @@ function canvasStoragePlugin() {
           res.setHeader('allow', 'GET, PUT')
           res.end()
         } catch (error) {
-          sendJson(res, 500, { error: error.message })
+          sendCanvasApiError(res, error)
         }
       })
     }

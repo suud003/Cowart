@@ -7,7 +7,13 @@ const GLOBAL_ASSETS_ROUTE = "/assets/";
 const PAGE_ASSETS_ROUTE = "/page-assets/";
 const CANVAS_FILE_NAME = "cowart-canvas.json";
 const EXCALIDRAW_FILE_NAME = "yogurt.excalidraw";
+const CANVAS_PROJECT_FILE_NAME = "project.json";
+const CANVASES_DIRECTORY_NAME = "canvases";
+const CANVAS_SCENE_FILE_NAME = "scene.excalidraw";
+const DEFAULT_EXCALIDRAW_CANVAS_ID = "canvas_main";
+const EXCALIDRAW_CANVAS_ID_PATTERN = /^canvas_[a-z0-9][a-z0-9_-]{0,119}$/;
 const CANVAS_SAVE_LOCK_FILE = ".cowart-canvas-save.lock";
+const CANVAS_SAVE_LOCKS_DIRECTORY = ".locks";
 const CANVAS_SAVE_LOCK_HEARTBEAT_MS = 2_000;
 const CANVAS_SAVE_LOCK_STALE_MS = 15_000;
 const CANVAS_SAVE_LOCK_HARD_STALE_MS = 5 * 60_000;
@@ -88,7 +94,9 @@ export function resolveCanvasDir(args = {}) {
 
 function canvasSaveQueueKey(args) {
   const canvasDir = resolveCanvasDir(args);
-  return process.platform === "win32" ? canvasDir.toLowerCase() : canvasDir;
+  const canvasId = nonEmptyString(args.canvasId) ?? "__legacy__";
+  const key = `${canvasDir}::${canvasId}`;
+  return process.platform === "win32" ? key.toLowerCase() : key;
 }
 
 function waitForCanvasSaveLock(delayMs) {
@@ -136,11 +144,14 @@ async function reclaimStaleCanvasSaveLock(lockPath) {
 }
 
 async function acquireCanvasSaveLock(args) {
+  const canvasId = nonEmptyString(args.canvasId);
   const canvasDir = resolveCanvasDir(args);
-  const lockPath = join(canvasDir, CANVAS_SAVE_LOCK_FILE);
+  const lockPath = canvasId
+    ? join(canvasDir, CANVAS_SAVE_LOCKS_DIRECTORY, `${assertExcalidrawCanvasId(canvasId)}.save.lock`)
+    : join(canvasDir, CANVAS_SAVE_LOCK_FILE);
   const token = `${process.pid}:${randomUUID()}`;
   const startedAt = Date.now();
-  await mkdir(canvasDir, { recursive: true });
+  await mkdir(dirname(lockPath), { recursive: true });
 
   while (true) {
     let lockHandle;
@@ -205,12 +216,28 @@ function serializeCanvasSave(args, operation) {
   });
 }
 
+// Project deletion and scene persistence must share the same queue and
+// cross-process lock. The lock file lives outside the canvas directory so a
+// Windows rename-to-trash can proceed while the lock is held.
+export function withCowartCanvasSaveTransaction(args = {}, operation) {
+  if (typeof operation !== "function") {
+    throw new TypeError("A canvas save transaction requires an operation function.");
+  }
+  return serializeCanvasSave(args, operation);
+}
+
 export function resolveSelectionFile(args = {}) {
-  return join(resolveCanvasDir(args), "cowart-selection.json");
+  const canvasId = nonEmptyString(args.canvasId);
+  return canvasId
+    ? join(dirname(excalidrawCanvasFile(args, canvasId)), "selection.json")
+    : join(resolveCanvasDir(args), "cowart-selection.json");
 }
 
 export function resolveViewStateFile(args = {}) {
-  return join(resolveCanvasDir(args), "cowart-view-state.json");
+  const canvasId = nonEmptyString(args.canvasId);
+  return canvasId
+    ? join(dirname(excalidrawCanvasFile(args, canvasId)), "view-state.json")
+    : join(resolveCanvasDir(args), "cowart-view-state.json");
 }
 
 export function pageDirName(pageId) {
@@ -225,8 +252,36 @@ function canvasFile(args = {}) {
   return join(resolveCanvasDir(args), CANVAS_FILE_NAME);
 }
 
-function excalidrawFile(args = {}) {
+function legacyExcalidrawFile(args = {}) {
   return join(resolveCanvasDir(args), EXCALIDRAW_FILE_NAME);
+}
+
+function canvasProjectFile(args = {}) {
+  return join(resolveCanvasDir(args), CANVAS_PROJECT_FILE_NAME);
+}
+
+function canvasStorageError(code, message, details = {}) {
+  const error = new Error(message);
+  error.code = code;
+  Object.assign(error, details);
+  return error;
+}
+
+function assertExcalidrawCanvasId(canvasId) {
+  const normalizedId = nonEmptyString(canvasId);
+  if (!normalizedId || !EXCALIDRAW_CANVAS_ID_PATTERN.test(normalizedId)) {
+    throw canvasStorageError(
+      "COWART_CANVAS_ID_INVALID",
+      `Invalid Yogurt AI canvas ID: ${String(canvasId || "")}`,
+      { canvasId },
+    );
+  }
+  return normalizedId;
+}
+
+function excalidrawCanvasFile(args = {}, canvasId = args.canvasId) {
+  const normalizedId = assertExcalidrawCanvasId(canvasId);
+  return join(resolveCanvasDir(args), CANVASES_DIRECTORY_NAME, normalizedId, CANVAS_SCENE_FILE_NAME);
 }
 
 function canvasPagesDir(args = {}) {
@@ -616,14 +671,40 @@ async function readPageSnapshots(args = {}) {
 }
 
 async function loadStoredCanvasSnapshot(args = {}) {
+  const canvasId = nonEmptyString(args.canvasId);
+  if (canvasId) {
+    const sceneFile = excalidrawCanvasFile(args, canvasId);
+    try {
+      const snapshot = await readJsonFile(sceneFile);
+      if (!isExcalidrawSnapshot(snapshot)) {
+        const error = new Error(`Invalid Excalidraw document in ${sceneFile}`);
+        error.code = "COWART_CANVAS_SCENE_INVALID";
+        throw error;
+      }
+      return {
+        snapshot,
+        path: sceneFile,
+        storage: "excalidraw",
+      };
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      const missing = new Error(`Canvas ${canvasId} has no stored Excalidraw scene at ${sceneFile}.`);
+      missing.code = "COWART_CANVAS_SCENE_NOT_FOUND";
+      missing.canvasId = canvasId;
+      missing.path = sceneFile;
+      throw missing;
+    }
+  }
+
   try {
-    const snapshot = await readJsonFile(excalidrawFile(args));
+    const sceneFile = legacyExcalidrawFile(args);
+    const snapshot = await readJsonFile(sceneFile);
     if (!isExcalidrawSnapshot(snapshot)) {
-      throw new Error(`Invalid Excalidraw document in ${excalidrawFile(args)}`);
+      throw new Error(`Invalid Excalidraw document in ${sceneFile}`);
     }
     return {
       snapshot,
-      path: excalidrawFile(args),
+      path: sceneFile,
       storage: "excalidraw",
     };
   } catch (error) {
@@ -671,8 +752,11 @@ async function writeJsonAtomic(filePath, payload) {
 
 async function saveStoredCanvasSnapshot(args, snapshot) {
   if (isExcalidrawSnapshot(snapshot)) {
-    await writeJsonAtomic(excalidrawFile(args), snapshot);
-    return { storage: "excalidraw", paths: [excalidrawFile(args)] };
+    const sceneFile = nonEmptyString(args.canvasId)
+      ? excalidrawCanvasFile(args, args.canvasId)
+      : legacyExcalidrawFile(args);
+    await writeJsonAtomic(sceneFile, snapshot);
+    return { storage: "excalidraw", paths: [sceneFile] };
   }
 
   const pages = getPageRecords(snapshot);
@@ -830,25 +914,448 @@ export async function readCowartPageAsset(args = {}, options = {}) {
   };
 }
 
-export async function readCowartCanvasState(args = {}, { hydrateAssets = false } = {}) {
+async function fileExists(filePath) {
+  try {
+    return (await stat(filePath)).isFile();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function canvasProjectStorage() {
+  // canvas-project-storage imports resolveCowartPaths from this module. Keep
+  // this edge dynamic so both modules can initialize without a static cycle.
+  return import("./canvas-project-storage.mjs");
+}
+
+function selectProjectCanvas(project, requestedCanvasId, { requireExplicitCanvasId = false } = {}) {
+  const explicitCanvasId = nonEmptyString(requestedCanvasId);
+  if (requireExplicitCanvasId && project.canvases.length > 1 && !explicitCanvasId) {
+    throw canvasStorageError(
+      "COWART_CANVAS_ID_REQUIRED",
+      "canvasId is required when a Yogurt AI project contains more than one canvas.",
+      { activeCanvasId: project.activeCanvasId, canvasCount: project.canvases.length },
+    );
+  }
+
+  const canvasId = assertExcalidrawCanvasId(explicitCanvasId || project.activeCanvasId);
+  const canvas = project.canvases.find((entry) => entry.id === canvasId);
+  if (!canvas) {
+    throw canvasStorageError(
+      "COWART_CANVAS_NOT_FOUND",
+      `Unknown Yogurt AI canvas: ${canvasId}.`,
+      { canvasId },
+    );
+  }
+  return { canvasId, canvas };
+}
+
+function legacyCanvasName(snapshot) {
+  if (isExcalidrawSnapshot(snapshot)) {
+    return nonEmptyString(snapshot.appState?.name) || "主画布";
+  }
+  if (isCanvasSnapshot(snapshot)) {
+    return nonEmptyString(getPageRecords(snapshot)[0]?.name) || "主画布";
+  }
+  return "主画布";
+}
+
+function legacyText(value) {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+  if (typeof value.text === "string") return value.text;
+  if (!Array.isArray(value.content)) return "";
+  return value.content
+    .map(legacyText)
+    .filter(Boolean)
+    .join(value.type === "doc" ? "\n" : "");
+}
+
+function legacyShapeText(shape) {
+  const props = shape?.props ?? {};
+  return [
+    legacyText(props.richText),
+    typeof props.text === "string" ? props.text : "",
+    typeof props.label === "string" ? props.label : "",
+    typeof props.name === "string" ? props.name : "",
+  ].find((value) => value.trim()) ?? "";
+}
+
+function legacyColor(value, fallback = "#1b1b1f") {
+  const colors = {
+    black: "#1b1b1f",
+    blue: "#1e1aa8",
+    green: "#087f5b",
+    grey: "#868e96",
+    gray: "#868e96",
+    lightblue: "#4dabf7",
+    lightgreen: "#69db7c",
+    lightred: "#ffa8a8",
+    lightviolet: "#d0bfff",
+    orange: "#e8590c",
+    red: "#c92a2a",
+    violet: "#7048e8",
+    white: "#ffffff",
+    yellow: "#f08c00",
+  };
+  const raw = String(value || "").trim();
+  const normalized = raw.toLowerCase().replace(/[^a-z]/g, "");
+  return colors[normalized] || (raw.startsWith("#") ? raw : fallback);
+}
+
+function stableElementNumber(value, salt) {
+  const digest = createHash("sha256").update(`${salt}:${String(value)}`).digest();
+  return Math.max(1, digest.readUInt32BE(0));
+}
+
+function legacyShapePosition(store, shape, pageOffsets, cache = new Map(), visited = new Set()) {
+  if (cache.has(shape.id)) return cache.get(shape.id);
+  if (visited.has(shape.id)) return { x: Number(shape.x) || 0, y: Number(shape.y) || 0 };
+  visited.add(shape.id);
+  let x = Number(shape.x) || 0;
+  let y = Number(shape.y) || 0;
+  const parent = store[shape.parentId];
+  if (parent?.typeName === "shape") {
+    const parentPosition = legacyShapePosition(store, parent, pageOffsets, cache, visited);
+    x += parentPosition.x;
+    y += parentPosition.y;
+  } else if (parent?.typeName === "page") {
+    x += pageOffsets.get(parent.id) ?? 0;
+  }
+  visited.delete(shape.id);
+  const position = { x, y };
+  cache.set(shape.id, position);
+  return position;
+}
+
+function legacyFontSize(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(8, value);
+  if (value === "xl") return 32;
+  if (value === "l") return 28;
+  if (value === "s") return 16;
+  return 20;
+}
+
+function legacyStrokeWidth(value) {
+  if (value === "xl") return 4;
+  if (value === "l") return 3;
+  if (value === "m") return 2;
+  return 1;
+}
+
+function legacyElementBase(snapshot, shape, position, type) {
+  const props = shape.props ?? {};
+  const parent = snapshot.store[shape.parentId];
+  const width = Math.max(16, Number(props.w) || 240);
+  const height = Math.max(16, Number(props.h) || 140);
+  return {
+    id: String(shape.id),
+    type,
+    x: position.x,
+    y: position.y,
+    width,
+    height,
+    angle: Number(shape.rotation) || 0,
+    strokeColor: legacyColor(props.color),
+    backgroundColor: props.fill === "none"
+      ? "transparent"
+      : legacyColor(props.color, "#ffffff"),
+    fillStyle: props.fill === "solid" ? "solid" : "hachure",
+    strokeWidth: legacyStrokeWidth(props.size),
+    strokeStyle: props.dash === "dashed"
+      ? "dashed"
+      : props.dash === "dotted" ? "dotted" : "solid",
+    roughness: 1,
+    opacity: 100,
+    groupIds: [],
+    frameId: parent?.type === "frame" ? parent.id : null,
+    roundness: type === "rectangle" ? { type: 3 } : null,
+    seed: stableElementNumber(shape.id, "seed"),
+    version: 1,
+    versionNonce: stableElementNumber(shape.id, "nonce"),
+    isDeleted: false,
+    boundElements: null,
+    updated: 1,
+    link: typeof props.url === "string" && props.url ? props.url : null,
+    locked: Boolean(shape.isLocked),
+    customData: {
+      yogurt: {
+        migratedFrom: "tldraw",
+        originalType: shape.type,
+        originalRecord: cloneJson(shape),
+      },
+    },
+  };
+}
+
+function migratedTextElement(snapshot, shape, position) {
+  const props = shape.props ?? {};
+  const text = legacyShapeText(shape) || " ";
+  const fontSize = legacyFontSize(props.size);
+  return {
+    ...legacyElementBase(snapshot, shape, position, "text"),
+    text,
+    originalText: text,
+    fontSize,
+    fontFamily: props.font === "mono" ? 3 : props.font === "sans" ? 2 : 1,
+    textAlign: props.textAlign === "end" ? "right" : props.textAlign === "middle" ? "center" : "left",
+    verticalAlign: "top",
+    baseline: Math.round(fontSize * 1.25),
+    lineHeight: 1.25,
+    containerId: null,
+    autoResize: true,
+    backgroundColor: "transparent",
+    fillStyle: "solid",
+    roundness: null,
+  };
+}
+
+function migratedArrowElement(snapshot, shape, position) {
+  const props = shape.props ?? {};
+  const start = props.start ?? { x: 0, y: 0 };
+  const end = props.end ?? { x: 240, y: 0 };
+  const x = position.x + (Number(start.x) || 0);
+  const y = position.y + (Number(start.y) || 0);
+  const dx = (Number(end.x) || 240) - (Number(start.x) || 0);
+  const dy = (Number(end.y) || 0) - (Number(start.y) || 0);
+  return {
+    ...legacyElementBase(snapshot, shape, { x, y }, "arrow"),
+    width: Math.abs(dx),
+    height: Math.abs(dy),
+    points: [[0, 0], [dx, dy]],
+    lastCommittedPoint: null,
+    startBinding: null,
+    endBinding: null,
+    startArrowhead: props.arrowheadStart === "none" ? null : props.arrowheadStart ?? null,
+    endArrowhead: props.arrowheadEnd === "none" ? null : props.arrowheadEnd ?? "arrow",
+    elbowed: false,
+    backgroundColor: "transparent",
+    fillStyle: "solid",
+    roundness: { type: 2 },
+  };
+}
+
+// This server-safe migration intentionally keeps the complete source snapshot
+// in document metadata, even for record types that can only be represented as
+// a generic Excalidraw box. Legacy files also remain untouched on disk.
+export function migrateLegacyTldrawSnapshotToExcalidraw(snapshot) {
+  if (!isCanvasSnapshot(snapshot)) {
+    return {
+      type: "excalidraw",
+      version: 2,
+      source: "https://github.com/suud003/Cowart",
+      elements: [],
+      appState: { viewBackgroundColor: "#ffffff" },
+      files: {},
+    };
+  }
+
+  const pages = getPageRecords(snapshot);
+  const pageOffsets = new Map(pages.map((page, index) => [page.id, index * 1600]));
+  const positions = new Map();
+  const shapes = Object.values(snapshot.store)
+    .filter((record) => record?.typeName === "shape")
+    .sort((left, right) => {
+      const leftFrame = left.type === "frame" ? 0 : 1;
+      const rightFrame = right.type === "frame" ? 0 : 1;
+      return leftFrame - rightFrame || String(left.index ?? left.id).localeCompare(String(right.index ?? right.id));
+    });
+  const elements = shapes.map((shape) => {
+    const position = legacyShapePosition(snapshot.store, shape, pageOffsets, positions);
+    if (shape.type === "text") return migratedTextElement(snapshot, shape, position);
+    if (shape.type === "arrow") return migratedArrowElement(snapshot, shape, position);
+    const props = shape.props ?? {};
+    const type = shape.type === "frame"
+      ? "frame"
+      : shape.type === "geo" && ["ellipse", "diamond"].includes(props.geo)
+        ? props.geo
+        : "rectangle";
+    const element = legacyElementBase(snapshot, shape, position, type);
+    if (type === "frame") {
+      element.name = legacyShapeText(shape) || "Frame";
+      element.backgroundColor = "transparent";
+      element.fillStyle = "solid";
+      element.roundness = null;
+    }
+    const label = legacyShapeText(shape);
+    if (label && type !== "frame") {
+      element.customData.yogurt.visibleLabel = label;
+    }
+    return element;
+  });
+
+  return {
+    type: "excalidraw",
+    version: 2,
+    source: "https://github.com/suud003/Cowart",
+    elements,
+    appState: {
+      viewBackgroundColor: "#ffffff",
+      scrollToContent: elements.length > 0,
+    },
+    files: {},
+    yogurt: {
+      migratedFrom: "tldraw",
+      legacyTldrawSnapshot: cloneJson(snapshot),
+    },
+  };
+}
+
+export async function readCowartLegacyMigrationSource(args = {}) {
+  const legacyArgs = { ...args };
+  delete legacyArgs.canvasId;
+  const loaded = await loadStoredCanvasSnapshot(legacyArgs);
+  if (!isCanvasSnapshot(loaded.snapshot) && loaded.snapshot !== null) return null;
+  let sourceTimestamp = null;
+  try {
+    sourceTimestamp = new Date((await stat(loaded.path)).mtimeMs).toISOString();
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  return {
+    snapshot: cloneJson(loaded.snapshot),
+    scene: migrateLegacyTldrawSnapshotToExcalidraw(loaded.snapshot),
+    name: legacyCanvasName(loaded.snapshot),
+    source: loaded.storage === "empty" ? "empty" : `legacy-${loaded.storage}`,
+    sourceRevision: cowartSnapshotRevision(loaded.snapshot),
+    sourceTimestamp,
+    migrated: isCanvasSnapshot(loaded.snapshot),
+  };
+}
+
+async function syntheticLegacyProject(snapshot) {
+  const { CANVAS_PROJECT_TYPE, CANVAS_PROJECT_VERSION, canvasProjectRevision } = await canvasProjectStorage();
+  const canvas = {
+    id: DEFAULT_EXCALIDRAW_CANVAS_ID,
+    name: legacyCanvasName(snapshot),
+    parentId: null,
+    order: 0,
+    createdAt: null,
+    updatedAt: null,
+  };
+  const project = {
+    type: CANVAS_PROJECT_TYPE,
+    version: CANVAS_PROJECT_VERSION,
+    createdAt: null,
+    updatedAt: null,
+    activeCanvasId: canvas.id,
+    canvases: [canvas],
+  };
+  return {
+    project,
+    projectRevision: canvasProjectRevision(project),
+    canvas,
+    canvasId: canvas.id,
+    persisted: false,
+  };
+}
+
+async function persistedProjectScope(args, options = {}) {
+  const { readCowartCanvasProject } = await canvasProjectStorage();
+  const result = await readCowartCanvasProject(args);
+  const selected = selectProjectCanvas(result.project, args.canvasId, options);
+  return {
+    project: result.project,
+    projectRevision: result.projectRevision,
+    ...selected,
+    persisted: true,
+  };
+}
+
+async function readCanvasScope(args, { requireExplicitCanvasId = false } = {}) {
+  const projectFile = canvasProjectFile(args);
+  if (await fileExists(projectFile)) {
+    const scope = await persistedProjectScope(args, { requireExplicitCanvasId });
+    const storageArgs = { ...args, canvasId: scope.canvasId };
+    return { scope, storageArgs, loaded: await loadStoredCanvasSnapshot(storageArgs) };
+  }
+
+  // Read the legacy store before creating project.json. A tldraw project may
+  // still be in active use; eagerly creating an empty Excalidraw scene would
+  // make those records disappear on the next read.
+  const legacyArgs = { ...args };
+  delete legacyArgs.canvasId;
+  const legacy = await loadStoredCanvasSnapshot(legacyArgs);
+
+  // Another process may have completed migration while the legacy read was in
+  // flight. Honor project.json as the cutover marker if it now exists.
+  if (await fileExists(projectFile)) {
+    const scope = await persistedProjectScope(args, { requireExplicitCanvasId });
+    const storageArgs = { ...args, canvasId: scope.canvasId };
+    return { scope, storageArgs, loaded: await loadStoredCanvasSnapshot(storageArgs) };
+  }
+
+  if (isCanvasSnapshot(legacy.snapshot) || legacy.snapshot === null) {
+    const scope = await syntheticLegacyProject(legacy.snapshot);
+    selectProjectCanvas(scope.project, args.canvasId, { requireExplicitCanvasId });
+    return { scope, storageArgs: legacyArgs, loaded: legacy };
+  }
+
+  // Legacy yogurt.excalidraw migrates lazily. The project module copies its
+  // bytes exactly and writes
+  // project.json last, so a failed migration cannot hide the old scene.
+  const { ensureCowartCanvasProject } = await canvasProjectStorage();
+  await ensureCowartCanvasProject(args);
+  const scope = await persistedProjectScope(args, { requireExplicitCanvasId });
+  const storageArgs = { ...args, canvasId: scope.canvasId };
+  return { scope, storageArgs, loaded: await loadStoredCanvasSnapshot(storageArgs) };
+}
+
+function projectFields(scope) {
+  return {
+    canvasId: scope.canvasId,
+    canvas: scope.canvas,
+    project: scope.project,
+    projectRevision: scope.projectRevision,
+  };
+}
+
+async function assertCanvasStillExists(args, canvasId) {
+  const projectFile = canvasProjectFile(args);
+  let project;
+  try {
+    project = await readJsonFile(projectFile);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    throw canvasStorageError(
+      "COWART_CANVAS_NOT_FOUND",
+      `Canvas ${canvasId} no longer belongs to this Yogurt AI project.`,
+      { canvasId },
+    );
+  }
+  if (!Array.isArray(project?.canvases) || !project.canvases.some((canvas) => canvas?.id === canvasId)) {
+    throw canvasStorageError(
+      "COWART_CANVAS_NOT_FOUND",
+      `Canvas ${canvasId} was deleted before its scene could be saved.`,
+      { canvasId },
+    );
+  }
+}
+
+export async function readCowartCanvasState(
+  args = {},
+  { hydrateAssets = false, requireExplicitCanvasId = false } = {},
+) {
   const { projectDir, canvasDir } = resolveCowartPaths(args);
-  const loaded = await loadStoredCanvasSnapshot(args);
+  const { scope, storageArgs, loaded } = await readCanvasScope(args, { requireExplicitCanvasId });
   const hydrated = hydrateAssets
-    ? await hydrateSnapshotAssets(args, loaded.snapshot)
+    ? await hydrateSnapshotAssets(storageArgs, loaded.snapshot)
     : { snapshot: loaded.snapshot, hydratedAssets: [] };
-  const { viewState, viewStateFile } = await readCowartViewState(args);
+  const { viewState, viewStateFile } = await readCowartViewState(storageArgs);
 
   return {
     version: 1,
     projectDir,
     canvasDir,
+    ...projectFields(scope),
     snapshot: hydrated.snapshot,
     revision: cowartSnapshotRevision(loaded.snapshot),
     path: loaded.path,
     storage: loaded.storage,
     viewState,
     viewStateFile,
-    selectionFile: resolveSelectionFile(args),
+    selectionFile: resolveSelectionFile(storageArgs),
     hydratedAssets: hydrated.hydratedAssets,
   };
 }
@@ -867,11 +1374,76 @@ export async function saveCowartCanvasSnapshot(args = {}, snapshot) {
     };
   }
 
-  return serializeCanvasSave(args, async () => {
-    const previous = await loadStoredCanvasSnapshot(args);
+  let scope;
+  let storageArgs = { ...args };
+  let transitionRevision = null;
+  let transitionTargetRevision = null;
+
+  if (isExcalidrawSnapshot(sanitized.snapshot)) {
+    const hadProject = await fileExists(canvasProjectFile(args));
+    const requestedCanvasId = nonEmptyString(args.canvasId)
+      ? assertExcalidrawCanvasId(args.canvasId)
+      : null;
+    if (!hadProject && requestedCanvasId && requestedCanvasId !== DEFAULT_EXCALIDRAW_CANVAS_ID) {
+      throw canvasStorageError(
+        "COWART_CANVAS_NOT_FOUND",
+        `Unknown Yogurt AI canvas: ${requestedCanvasId}. Create it before saving its scene.`,
+        { canvasId: requestedCanvasId },
+      );
+    }
+    let legacyBeforeMigration = null;
+    if (!hadProject) {
+      const legacyArgs = { ...args };
+      delete legacyArgs.canvasId;
+      legacyBeforeMigration = await loadStoredCanvasSnapshot(legacyArgs);
+    }
+
+    const { ensureCowartCanvasProject } = await canvasProjectStorage();
+    const ensured = await ensureCowartCanvasProject(args);
+    scope = {
+      project: ensured.project,
+      projectRevision: ensured.projectRevision,
+      ...selectProjectCanvas(ensured.project, args.canvasId),
+      persisted: true,
+    };
+    storageArgs = { ...args, canvasId: scope.canvasId };
+
+    // The first native Excalidraw save can be a conversion of a legacy tldraw
+    // snapshot. Accept its tldraw base revision exactly once, but only while
+    // the newly-created target scene is still byte-for-byte unchanged.
+    if (
+      ensured.created &&
+      (isCanvasSnapshot(legacyBeforeMigration?.snapshot) || legacyBeforeMigration?.snapshot === null)
+    ) {
+      transitionRevision = cowartSnapshotRevision(legacyBeforeMigration.snapshot);
+      transitionTargetRevision = cowartSnapshotRevision(
+        (await loadStoredCanvasSnapshot(storageArgs)).snapshot,
+      );
+    }
+  } else if (await fileExists(canvasProjectFile(args))) {
+    scope = await persistedProjectScope(args);
+  } else {
+    const legacyArgs = { ...args };
+    delete legacyArgs.canvasId;
+    storageArgs = legacyArgs;
+    const previous = await loadStoredCanvasSnapshot(legacyArgs);
+    scope = await syntheticLegacyProject(previous.snapshot ?? sanitized.snapshot);
+  }
+
+  return serializeCanvasSave(storageArgs, async () => {
+    if (scope.persisted) {
+      await assertCanvasStillExists(storageArgs, scope.canvasId);
+    }
+    const previous = await loadStoredCanvasSnapshot(storageArgs);
     const currentRevision = cowartSnapshotRevision(previous.snapshot);
     const expectedRevision = nonEmptyString(args.baseRevision);
-    if (expectedRevision && expectedRevision !== currentRevision) {
+    const validTransition = Boolean(
+      expectedRevision &&
+      transitionRevision &&
+      expectedRevision === transitionRevision &&
+      currentRevision === transitionTargetRevision
+    );
+    if (expectedRevision && expectedRevision !== currentRevision && !validTransition) {
       return {
         ok: false,
         storage: "revision-conflict",
@@ -879,10 +1451,15 @@ export async function saveCowartCanvasSnapshot(args = {}, snapshot) {
         expectedRevision,
         currentRevision,
         skippedRecords: sanitized.skippedRecords,
+        ...projectFields(scope),
         message: `Yogurt AI canvas changed from ${expectedRevision} to ${currentRevision}; reload and merge before saving.`,
       };
     }
-    const imageLosses = await getUnacknowledgedImageLosses(args, previous.snapshot, sanitized.snapshot);
+    const imageLosses = await getUnacknowledgedImageLosses(
+      storageArgs,
+      previous.snapshot,
+      sanitized.snapshot,
+    );
     if (imageLosses.length > 0) {
       return {
         ok: false,
@@ -890,15 +1467,17 @@ export async function saveCowartCanvasSnapshot(args = {}, snapshot) {
         paths: [],
         skippedRecords: sanitized.skippedRecords,
         blockedImageLosses: imageLosses,
+        ...projectFields(scope),
         message: `Yogurt AI refused to save because ${imageLosses.length} existing image shape(s) disappeared without a user delete confirmation.`,
       };
     }
 
-    const result = await saveStoredCanvasSnapshot(args, sanitized.snapshot);
-    const persisted = await loadStoredCanvasSnapshot(args);
+    const result = await saveStoredCanvasSnapshot(storageArgs, sanitized.snapshot);
+    const persisted = await loadStoredCanvasSnapshot(storageArgs);
     return {
       ok: true,
       ...result,
+      ...projectFields(scope),
       baseRevision: currentRevision,
       // Persistence can normalize assets (for example, a data URL becomes a
       // page-local asset URL). Return the revision clients will observe on the
@@ -937,8 +1516,16 @@ export async function writeCowartSelectionState(args = {}, selection) {
     ...selection,
     updatedAt: selection.updatedAt ?? new Date().toISOString(),
   };
-  await writeJsonAtomic(selectionFile, payload);
-  return { ok: true, path: selectionFile, selection: payload };
+  const persist = async () => {
+    if (nonEmptyString(args.canvasId)) {
+      await assertCanvasStillExists(args, args.canvasId);
+    }
+    await writeJsonAtomic(selectionFile, payload);
+    return { ok: true, path: selectionFile, selection: payload };
+  };
+  return nonEmptyString(args.canvasId)
+    ? serializeCanvasSave(args, persist)
+    : persist();
 }
 
 export async function readCowartViewState(args = {}) {
@@ -963,6 +1550,14 @@ export async function writeCowartViewState(args = {}, viewState) {
     ...viewState,
     updatedAt: viewState.updatedAt ?? new Date().toISOString(),
   };
-  await writeJsonAtomic(viewStateFile, payload);
-  return { ok: true, path: viewStateFile, viewState: payload };
+  const persist = async () => {
+    if (nonEmptyString(args.canvasId)) {
+      await assertCanvasStillExists(args, args.canvasId);
+    }
+    await writeJsonAtomic(viewStateFile, payload);
+    return { ok: true, path: viewStateFile, viewState: payload };
+  };
+  return nonEmptyString(args.canvasId)
+    ? serializeCanvasSave(args, persist)
+    : persist();
 }

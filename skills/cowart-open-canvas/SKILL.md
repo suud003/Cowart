@@ -20,10 +20,13 @@ The tool returns `openai/outputTemplate: ui://widget/cowart/canvas.html`, which 
 2. Confirm the widget opens for the user. The canvas data is stored in the active project:
 
 ```text
-canvas/yogurt.excalidraw
+canvas/project.json
+canvas/canvases/<canvasId>/scene.excalidraw
 canvas/materials/
-canvas/thinking-history/
+canvas/canvases/<canvasId>/thinking-history/
 ```
+
+The first open migrates a legacy `canvas/yogurt.excalidraw` into the root canvas without deleting the legacy file.
 
 3. If the MCP tool is not visible in the current session, use tool discovery for Yogurt AI widget/render capabilities. If the plugin was just installed or upgraded, tell the user a new Codex conversation may be required for the new MCP tool schema to load.
 

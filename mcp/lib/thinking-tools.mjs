@@ -49,6 +49,7 @@ export const AUTO_COMPOSE_DEGRADATION_POLICY = Object.freeze({
 const projectArgsSchema = {
   projectDir: z.string().trim().optional(),
   canvasDir: z.string().trim().optional(),
+  canvasId: z.string().trim().optional(),
 };
 
 const placementSchema = z.enum(["right", "left", "below", "above"]);

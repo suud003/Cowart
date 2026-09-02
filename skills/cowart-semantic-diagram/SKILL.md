@@ -16,7 +16,7 @@ Never turn a semantic diagram into a bitmap, full-page preview, HTML draft, inli
 ## Capture context and write the semantic plan
 
 1. Call get_cowart_thinking_context. Use scope selection for a marked region and scope page for a page-level synthesis. Preserve any frozen shape IDs supplied by the Yogurt launcher.
-2. Record canvas ID, page ID, revision, scope, and source shape IDs. Separate source material, user judgment, source-grounded synthesis, inference, assumptions, and open questions.
+2. Record canvas ID, page ID, revision, scope, and source shape IDs. Pass that exact `canvasId` to every later context, dry-run, apply, and undo tool call; once a project has multiple canvases, never rely on whichever canvas happens to be active. Separate source material, user judgment, source-grounded synthesis, inference, assumptions, and open questions.
 3. State one diagram claim: the single judgment the composition must make legible.
 4. Define stable object and relation IDs, visible labels, origin, source-shape mappings, relation type and direction, layout profile, reading order, and special states. Do not add an arrow for a relationship the material does not support.
 5. Inventory nearby titles and labels. Remove repeated text before laying out the diagram.

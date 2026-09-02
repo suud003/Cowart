@@ -10,8 +10,13 @@ import { createTLSchema } from '@tldraw/tlschema'
 import {
   cowartSnapshotRevision,
   readCowartCanvasState,
-  saveCowartCanvasSnapshot
+  readCowartSelectionState,
+  readCowartViewState,
+  saveCowartCanvasSnapshot,
+  writeCowartSelectionState,
+  writeCowartViewState
 } from '../mcp/lib/canvas-storage.mjs'
+import { createCowartCanvas } from '../mcp/lib/canvas-project-storage.mjs'
 import {
   applyThinkingOperationsToSnapshot,
   snapshotRevision
@@ -309,7 +314,7 @@ test('Excalidraw revisions canonicalize object keys but preserve element z-order
   assert.notEqual(cowartSnapshotRevision(first), cowartSnapshotRevision(reordered))
 })
 
-test('Excalidraw scenes save atomically to yogurt.excalidraw and take read priority', async () => {
+test('Excalidraw scenes save atomically to the active project canvas and take read priority', async () => {
   const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-excalidraw-priority-'))
   try {
     const legacySnapshot = snapshotWithPageName('Legacy tldraw page')
@@ -331,7 +336,7 @@ test('Excalidraw scenes save atomically to yogurt.excalidraw and take read prior
       { projectDir, baseRevision: beforeMigration.revision },
       scene
     )
-    const scenePath = path.join(canvasDir, 'yogurt.excalidraw')
+    const scenePath = path.join(canvasDir, 'canvases', 'canvas_main', 'scene.excalidraw')
     assert.equal(saved.ok, true)
     assert.equal(saved.storage, 'excalidraw')
     assert.deepEqual(saved.paths, [scenePath])
@@ -403,6 +408,156 @@ test('Excalidraw saves enforce CAS and keep the winning scene intact', async () 
   }
 })
 
+test('multi-canvas Excalidraw scenes stay isolated and explicit reads identify their canvas', async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-excalidraw-multi-canvas-'))
+  try {
+    const initial = await readCowartCanvasState({ projectDir })
+    const rootSave = await saveCowartCanvasSnapshot(
+      { projectDir, canvasId: 'canvas_main', baseRevision: initial.revision },
+      excalidrawScene('Root scene')
+    )
+    assert.equal(rootSave.ok, true)
+    assert.equal(rootSave.canvasId, 'canvas_main')
+
+    const childCreated = await createCowartCanvas(
+      { projectDir },
+      {
+        canvasId: 'canvas_child',
+        name: 'Child scene',
+        parentId: 'canvas_main',
+        baseProjectRevision: rootSave.projectRevision
+      }
+    )
+    const childInitial = await readCowartCanvasState({ projectDir, canvasId: 'canvas_child' })
+    const childSave = await saveCowartCanvasSnapshot(
+      { projectDir, canvasId: 'canvas_child', baseRevision: childInitial.revision },
+      excalidrawScene('Child scene')
+    )
+    assert.equal(childSave.ok, true)
+    assert.equal(childSave.projectRevision, childCreated.projectRevision)
+
+    const [root, child] = await Promise.all([
+      readCowartCanvasState({ projectDir, canvasId: 'canvas_main' }),
+      readCowartCanvasState({ projectDir, canvasId: 'canvas_child' })
+    ])
+    assert.equal(root.canvasId, 'canvas_main')
+    assert.equal(root.canvas.name, '主画布')
+    assert.equal(root.snapshot.appState.name, 'Root scene')
+    assert.equal(child.canvasId, 'canvas_child')
+    assert.equal(child.canvas.parentId, 'canvas_main')
+    assert.equal(child.snapshot.appState.name, 'Child scene')
+    assert.notEqual(root.path, child.path)
+
+    await assert.rejects(
+      readCowartCanvasState({ projectDir }, { requireExplicitCanvasId: true }),
+      (error) => error.code === 'COWART_CANVAS_ID_REQUIRED'
+    )
+    await assert.rejects(
+      readCowartCanvasState({ projectDir, canvasId: 'canvas_missing' }),
+      (error) => error.code === 'COWART_CANVAS_NOT_FOUND'
+    )
+  } finally {
+    await rm(projectDir, { recursive: true, force: true })
+  }
+})
+
+test('selection and view state are persisted independently for every project canvas', async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-canvas-local-state-'))
+  try {
+    const initial = await readCowartCanvasState({ projectDir })
+    const rootSave = await saveCowartCanvasSnapshot(
+      { projectDir, baseRevision: initial.revision },
+      excalidrawScene('Root')
+    )
+    await createCowartCanvas(
+      { projectDir },
+      {
+        canvasId: 'canvas_child',
+        parentId: 'canvas_main',
+        baseProjectRevision: rootSave.projectRevision
+      }
+    )
+
+    await Promise.all([
+      writeCowartSelectionState(
+        { projectDir, canvasId: 'canvas_main' },
+        { selectedShapes: ['root-shape'] }
+      ),
+      writeCowartSelectionState(
+        { projectDir, canvasId: 'canvas_child' },
+        { selectedShapes: ['child-shape'] }
+      ),
+      writeCowartViewState(
+        { projectDir, canvasId: 'canvas_main' },
+        { version: 1, currentPageId: null, camera: { x: 10, y: 20, z: 1 } }
+      ),
+      writeCowartViewState(
+        { projectDir, canvasId: 'canvas_child' },
+        { version: 1, currentPageId: null, camera: { x: 30, y: 40, z: 2 } }
+      )
+    ])
+
+    const [rootSelection, childSelection, rootView, childView] = await Promise.all([
+      readCowartSelectionState({ projectDir, canvasId: 'canvas_main' }),
+      readCowartSelectionState({ projectDir, canvasId: 'canvas_child' }),
+      readCowartViewState({ projectDir, canvasId: 'canvas_main' }),
+      readCowartViewState({ projectDir, canvasId: 'canvas_child' })
+    ])
+    assert.deepEqual(rootSelection.selection.selectedShapes, ['root-shape'])
+    assert.deepEqual(childSelection.selection.selectedShapes, ['child-shape'])
+    assert.equal(rootView.viewState.camera.x, 10)
+    assert.equal(childView.viewState.camera.x, 30)
+    assert.match(rootSelection.selectionFile, /canvases[\\/]canvas_main[\\/]selection\.json$/)
+    assert.match(childView.viewStateFile, /canvases[\\/]canvas_child[\\/]view-state\.json$/)
+  } finally {
+    await rm(projectDir, { recursive: true, force: true })
+  }
+})
+
+test('different canvases can save concurrently even when their scene revisions are identical', async () => {
+  const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-canvas-parallel-scenes-'))
+  try {
+    const initial = await readCowartCanvasState({ projectDir })
+    const rootSave = await saveCowartCanvasSnapshot(
+      { projectDir, baseRevision: initial.revision },
+      excalidrawScene('Root seed')
+    )
+    await createCowartCanvas(
+      { projectDir },
+      {
+        canvasId: 'canvas_child',
+        parentId: 'canvas_main',
+        baseProjectRevision: rootSave.projectRevision
+      }
+    )
+
+    const root = await readCowartCanvasState({ projectDir, canvasId: 'canvas_main' })
+    const child = await readCowartCanvasState({ projectDir, canvasId: 'canvas_child' })
+    const [savedRoot, savedChild] = await Promise.all([
+      saveCowartCanvasSnapshot(
+        { projectDir, canvasId: 'canvas_main', baseRevision: root.revision },
+        excalidrawScene('Root concurrent')
+      ),
+      saveCowartCanvasSnapshot(
+        { projectDir, canvasId: 'canvas_child', baseRevision: child.revision },
+        excalidrawScene('Child concurrent')
+      )
+    ])
+    assert.equal(savedRoot.ok, true)
+    assert.equal(savedChild.ok, true)
+    assert.equal(
+      (await readCowartCanvasState({ projectDir, canvasId: 'canvas_main' })).snapshot.appState.name,
+      'Root concurrent'
+    )
+    assert.equal(
+      (await readCowartCanvasState({ projectDir, canvasId: 'canvas_child' })).snapshot.appState.name,
+      'Child concurrent'
+    )
+  } finally {
+    await rm(projectDir, { recursive: true, force: true })
+  }
+})
+
 test('Vite canvas API persists Excalidraw scenes and returns HTTP 409 for stale CAS', { timeout: 20_000 }, async () => {
   const projectDir = await mkdtemp(path.join(tmpdir(), 'yogurt-excalidraw-vite-cas-'))
   const previousProjectDir = process.env.COWART_PROJECT_DIR
@@ -459,6 +614,83 @@ test('Vite canvas API persists Excalidraw scenes and returns HTTP 409 for stale 
     assert.equal(persisted.snapshot.appState.name, 'Vite winner')
     assert.equal(persisted.revision, winner.revision)
     assert.deepEqual(persisted.hydratedAssets, [])
+
+    const projectEndpoint = `http://127.0.0.1:${address.port}/api/canvas-project`
+    const createdResponse = await fetch(projectEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create',
+        canvasId: 'canvas_child',
+        name: 'Child',
+        parentId: 'canvas_main',
+        activate: false,
+        baseProjectRevision: winner.projectRevision
+      })
+    })
+    assert.equal(createdResponse.status, 200)
+    const created = await createdResponse.json()
+    assert.equal(created.canvas.id, 'canvas_child')
+
+    const childResponse = await fetch(`${endpoint}?canvasId=canvas_child`)
+    assert.equal(childResponse.status, 200)
+    const child = await childResponse.json()
+    assert.equal(child.canvasId, 'canvas_child')
+    assert.equal(child.snapshot.elements.length, 0)
+
+    const childSaveResponse = await fetch(endpoint, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        canvasId: 'canvas_child',
+        snapshot: excalidrawScene('Vite child'),
+        baseRevision: child.revision
+      })
+    })
+    assert.equal(childSaveResponse.status, 200)
+    assert.equal((await childSaveResponse.json()).canvasId, 'canvas_child')
+    assert.equal(
+      (await (await fetch(`${endpoint}?canvasId=canvas_main`)).json()).snapshot.appState.name,
+      'Vite winner'
+    )
+
+    const selectionEndpoint = `http://127.0.0.1:${address.port}/api/selection`
+    const selectionWrite = await fetch(selectionEndpoint, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ canvasId: 'canvas_child', selectedShapes: ['shape:child'] })
+    })
+    assert.equal(selectionWrite.status, 200)
+    const selected = await (await fetch(`${selectionEndpoint}?canvasId=canvas_child`)).json()
+    assert.deepEqual(selected.selection.selectedShapes, ['shape:child'])
+
+    const viewEndpoint = `http://127.0.0.1:${address.port}/api/view-state`
+    const viewWrite = await fetch(viewEndpoint, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        canvasId: 'canvas_child',
+        version: 1,
+        currentPageId: 'canvas_child',
+        camera: { x: 12, y: 34, z: 1.5 }
+      })
+    })
+    assert.equal(viewWrite.status, 200)
+    const childView = await (await fetch(`${viewEndpoint}?canvasId=canvas_child`)).json()
+    assert.deepEqual(childView.viewState.camera, { x: 12, y: 34, z: 1.5 })
+
+    const staleProjectResponse = await fetch(projectEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create',
+        canvasId: 'canvas_stale',
+        baseProjectRevision: winner.projectRevision
+      })
+    })
+    assert.equal(staleProjectResponse.status, 409)
+    const staleProject = await staleProjectResponse.json()
+    assert.equal(staleProject.code, 'COWART_PROJECT_REVISION_CONFLICT')
   } finally {
     await server?.close()
     if (previousProjectDir === undefined) delete process.env.COWART_PROJECT_DIR

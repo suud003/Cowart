@@ -23,7 +23,7 @@ test('the desktop boots the official Excalidraw editor without legacy global the
   )
   assert.match(appSource, /Excalidraw/)
   assert.match(appSource, /CaptureUpdateAction/)
-  assert.match(appSource, /restore/)
+  assert.match(appSource, /normalizeExcalidrawDocument/)
   assert.match(appSource, /serializeAsJSON/)
   assert.match(appSource, /CowartAgentPanel/)
   assert.match(appSource, /attachShadow\(\{ mode: 'open' \}\)/)

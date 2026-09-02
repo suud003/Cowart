@@ -1,9 +1,11 @@
 const CANVAS_ENDPOINT = '/api/canvas'
+const CANVAS_PROJECT_ENDPOINT = '/api/canvas-project'
 const SELECTION_ENDPOINT = '/api/selection'
 const VIEW_STATE_ENDPOINT = '/api/view-state'
 
 const TOOL_GET_CANVAS_STATE = 'get_cowart_canvas_state'
 const TOOL_SAVE_CANVAS_STATE = 'save_cowart_canvas_state'
+const TOOL_MANAGE_CANVAS_PROJECT = 'manage_cowart_canvas_project'
 const TOOL_SAVE_SELECTION_STATE = 'save_cowart_selection_state'
 const TOOL_SAVE_VIEW_STATE = 'save_cowart_view_state'
 const TOOL_SAVE_REFERENCE_IMAGE = 'save_cowart_reference_image'
@@ -96,9 +98,12 @@ async function callCowartServerTool(name, args = {}, options = {}) {
   if (result?.isError) {
     const message = result.content?.find((item) => item.type === 'text')?.text
     const error = new Error(message || `Yogurt AI server tool failed: ${name}`)
-    error.code = result.structuredContent?.storage === 'revision-conflict'
+    const storageError = result.structuredContent?.storage
+    error.code = storageError === 'revision-conflict'
       ? 'COWART_REVISION_CONFLICT'
-      : 'COWART_TOOL_ERROR'
+      : storageError === 'project-revision-conflict'
+        ? 'COWART_PROJECT_REVISION_CONFLICT'
+        : result.structuredContent?.code || 'COWART_TOOL_ERROR'
     error.details = result.structuredContent ?? null
     throw error
   }
@@ -113,18 +118,47 @@ async function fetchJson(url, options = {}) {
       details?.message || details?.error ||
       `Yogurt AI request failed: ${response.status} - ${response.statusText}`
     )
-    error.code = response.status === 409 ? 'COWART_REVISION_CONFLICT' : 'COWART_HTTP_ERROR'
+    error.code = response.status === 409
+      ? (details?.code === 'COWART_PROJECT_REVISION_CONFLICT'
+          ? 'COWART_PROJECT_REVISION_CONFLICT'
+          : 'COWART_REVISION_CONFLICT')
+      : details?.code || 'COWART_HTTP_ERROR'
     error.details = details
     throw error
   }
   return response.json()
 }
 
-export async function loadCowartCanvasState(signal) {
+function isAbortSignal(value) {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof value.addEventListener === 'function' &&
+    typeof value.aborted === 'boolean'
+  )
+}
+
+function canvasRequestOptions(signalOrOptions) {
+  if (isAbortSignal(signalOrOptions)) return { signal: signalOrOptions }
+  return signalOrOptions && typeof signalOrOptions === 'object' ? signalOrOptions : {}
+}
+
+function canvasStateUrl(canvasId) {
+  if (!canvasId) return CANVAS_ENDPOINT
+  return `${CANVAS_ENDPOINT}?${new URLSearchParams({ canvasId: String(canvasId) })}`
+}
+
+function canvasScopedUrl(endpoint, canvasId) {
+  if (!canvasId) return endpoint
+  return `${endpoint}?${new URLSearchParams({ canvasId: String(canvasId) })}`
+}
+
+export async function loadCowartCanvasState(signalOrOptions) {
+  const { canvasId, signal } = canvasRequestOptions(signalOrOptions)
   if (hasCowartWidgetBridge()) {
     const state = await callCowartServerTool(
       TOOL_GET_CANVAS_STATE,
-      { hydrateAssets: false },
+      { hydrateAssets: false, canvasId },
       { signal }
     )
     return {
@@ -132,50 +166,65 @@ export async function loadCowartCanvasState(signal) {
       revision: state.revision ?? null,
       viewState: state.viewState ?? null,
       storage: state.storage,
+      canvasId: state.canvasId ?? null,
+      canvas: state.canvas ?? null,
+      project: state.project ?? null,
+      projectRevision: state.projectRevision ?? null,
       skippedRecords: []
     }
   }
 
-  const [canvasData, viewStateData] = await Promise.all([
-    fetchJson(CANVAS_ENDPOINT, { signal }),
-    fetchJson(VIEW_STATE_ENDPOINT, { signal })
-  ])
+  const canvasData = await fetchJson(canvasStateUrl(canvasId), { signal })
+  const resolvedCanvasId = canvasData.canvasId ?? canvasId
+  const viewStateData = canvasData.viewState === undefined
+    ? await fetchJson(canvasScopedUrl(VIEW_STATE_ENDPOINT, resolvedCanvasId), { signal })
+    : { viewState: canvasData.viewState }
   return {
     snapshot: canvasData.snapshot,
     revision: canvasData.revision ?? null,
     viewState: viewStateData.viewState ?? null,
     storage: canvasData.storage,
+    canvasId: canvasData.canvasId ?? null,
+    canvas: canvasData.canvas ?? null,
+    project: canvasData.project ?? null,
+    projectRevision: canvasData.projectRevision ?? null,
     skippedRecords: []
   }
 }
 
-export async function refreshCowartCanvasSnapshot(signal) {
+export async function refreshCowartCanvasSnapshot(signalOrOptions) {
+  const { canvasId, signal } = canvasRequestOptions(signalOrOptions)
   if (hasCowartWidgetBridge()) {
     const state = await callCowartServerTool(
       TOOL_GET_CANVAS_STATE,
-      { hydrateAssets: false },
+      { hydrateAssets: false, canvasId },
       { signal }
     )
     return state.snapshot
   }
 
-  const canvasData = await fetchJson(CANVAS_ENDPOINT, { signal })
+  const canvasData = await fetchJson(canvasStateUrl(canvasId), { signal })
   return canvasData.snapshot
 }
 
-export async function refreshCowartCanvasState(signal) {
+export async function refreshCowartCanvasState(signalOrOptions) {
+  const { canvasId, signal } = canvasRequestOptions(signalOrOptions)
   if (hasCowartWidgetBridge()) {
     return callCowartServerTool(
       TOOL_GET_CANVAS_STATE,
-      { hydrateAssets: false },
+      { hydrateAssets: false, canvasId },
       { signal }
     )
   }
 
-  const canvasData = await fetchJson(CANVAS_ENDPOINT, { signal })
+  const canvasData = await fetchJson(canvasStateUrl(canvasId), { signal })
   return {
     snapshot: canvasData.snapshot,
-    revision: canvasData.revision ?? null
+    revision: canvasData.revision ?? null,
+    canvasId: canvasData.canvasId ?? null,
+    canvas: canvasData.canvas ?? null,
+    project: canvasData.project ?? null,
+    projectRevision: canvasData.projectRevision ?? null
   }
 }
 
@@ -183,6 +232,7 @@ export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
   if (hasCowartWidgetBridge()) {
     return callCowartServerTool(TOOL_SAVE_CANVAS_STATE, {
       snapshot,
+      canvasId: options.canvasId,
       baseRevision: options.baseRevision,
       protectImageRecords: options.protectImageRecords,
       acknowledgedImageShapeDeletes: options.acknowledgedImageShapeDeletes
@@ -194,6 +244,7 @@ export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       snapshot,
+      canvasId: options.canvasId,
       baseRevision: options.baseRevision,
       protectImageRecords: options.protectImageRecords,
       acknowledgedImageShapeDeletes: options.acknowledgedImageShapeDeletes
@@ -201,27 +252,86 @@ export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
   })
 }
 
-export async function saveCowartSelectionState(selection) {
+export async function manageCowartCanvasProject(operation = {}) {
+  const payload = removeUndefined({
+    action: operation.action,
+    canvasId: operation.canvasId,
+    name: operation.name,
+    parentId: operation.parentId,
+    order: operation.order ?? operation.index,
+    mode: operation.mode,
+    reparentChildren: operation.reparentChildren,
+    activate: operation.activate,
+    baseProjectRevision: operation.baseProjectRevision
+  })
+  if (Object.prototype.hasOwnProperty.call(operation, 'parentId')) {
+    payload.parentId = operation.parentId
+  }
+
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_SELECTION_STATE, { selection })
+    return callCowartServerTool(TOOL_MANAGE_CANVAS_PROJECT, payload)
+  }
+
+  return fetchJson(CANVAS_PROJECT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+}
+
+export function createCowartCanvas(options = {}) {
+  return manageCowartCanvasProject({ ...options, action: 'create' })
+}
+
+export function renameCowartCanvas(canvasId, name, options = {}) {
+  return manageCowartCanvasProject({ ...options, action: 'update', canvasId, name })
+}
+
+export function moveCowartCanvas(canvasId, parentId, options = {}) {
+  return manageCowartCanvasProject({ ...options, action: 'update', canvasId, parentId })
+}
+
+export function setActiveCowartCanvas(canvasId, options = {}) {
+  return manageCowartCanvasProject({ ...options, action: 'set-active', canvasId })
+}
+
+export function deleteCowartCanvas(canvasId, options = {}) {
+  return manageCowartCanvasProject({
+    mode: 'reparent-children',
+    reparentChildren: true,
+    ...options,
+    action: 'delete',
+    canvasId
+  })
+}
+
+export async function saveCowartSelectionState(selection, options = {}) {
+  if (hasCowartWidgetBridge()) {
+    return callCowartServerTool(TOOL_SAVE_SELECTION_STATE, {
+      canvasId: options.canvasId,
+      selection
+    })
   }
 
   return fetchJson(SELECTION_ENDPOINT, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(selection)
+    body: JSON.stringify({ ...selection, canvasId: options.canvasId ?? selection.canvasId })
   })
 }
 
-export async function saveCowartViewState(viewState) {
+export async function saveCowartViewState(viewState, options = {}) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_VIEW_STATE, { viewState })
+    return callCowartServerTool(TOOL_SAVE_VIEW_STATE, {
+      canvasId: options.canvasId,
+      viewState
+    })
   }
 
   return fetchJson(VIEW_STATE_ENDPOINT, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(viewState)
+    body: JSON.stringify({ ...viewState, canvasId: options.canvasId ?? viewState.canvasId })
   })
 }
 

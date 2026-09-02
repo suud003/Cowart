@@ -10,7 +10,7 @@ Treat the canvas as shared external memory. Preserve the user's materials and ch
 ## Core loop
 
 1. Open Yogurt AI with `render_cowart_canvas_widget` when no active canvas exists.
-2. Read context with `get_cowart_thinking_context`. Use `scope: selection` for annotation requests and `scope: page` for broader synthesis.
+2. Read context with `get_cowart_thinking_context`. Use `scope: selection` for annotation requests and `scope: page` for broader synthesis. Capture its `canvasId` and pass that exact ID to every later read, dry-run, apply, import, image, and undo call; in a multi-canvas project, never mutate an implicit active canvas.
 3. Separate four layers before editing:
    - source material and direct excerpts;
    - knowledge or judgments supplied by the user;

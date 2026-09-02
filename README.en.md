@@ -6,7 +6,7 @@
 
 <p align="center"><strong>The official Excalidraw editor, with AI only when you ask for it.</strong></p>
 
-<p align="center">Official Excalidraw editor · Native editable AI output · Codex Agent · Project-local storage</p>
+<p align="center">Official Excalidraw editor · Multi-canvas project tree · Native editable AI output · Codex Agent · Project-local storage</p>
 
 <p align="center">
   <a href="README.md">中文</a> ·
@@ -15,7 +15,7 @@
   <a href="#local-development">Local development</a>
 </p>
 
-Yogurt AI embeds the official [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) runtime and UI. With AI off, the interface, tools, keyboard shortcuts, style panel, and `.excalidraw` data model are all provided by the official editor component.
+Yogurt AI embeds the official [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) runtime and UI. With AI off, the editor, tools, keyboard shortcuts, style panel, and `.excalidraw` data model still come from the official component, while project canvas navigation lives in Excalidraw's official Sidebar.
 
 When you need AI, open Codex Agent from the application menu or keyboard. Cards, text, frames, and bound arrows created by the Agent are still native Excalidraw elements. Select, move, rewrite, recolor, resize, reconnect, undo, and export them with the standard editor.
 
@@ -23,11 +23,12 @@ When you need AI, open Codex Agent from the application menu or keyboard. Cards,
   <img src="docs/images/yogurt-ai-native-editable-diagram.png" width="100%" alt="A native Excalidraw card selected in Yogurt AI with the official style panel open">
 </p>
 
-## Two modes, one canvas
+## Two modes, one multi-canvas project
 
-### AI off: Excalidraw
+### AI off: the official Excalidraw experience
 
-- Only the official Excalidraw editor is visible; there are no Yogurt buttons, sidebars, or preset prompts.
+- The editor, tools, shortcuts, and style panel retain the official Excalidraw experience.
+- Project canvas navigation lives in Excalidraw's official Sidebar; the AI panel and preset prompts stay hidden.
 - Use the standard selection, free-draw, rectangle, diamond, ellipse, arrow, text, image, eraser, and frame tools.
 - Select an element to change its font, font size, text color, stroke, fill, width, dash, roughness, opacity, and arrowheads in the official style panel.
 - Keep Excalidraw's undo/redo, zoom, shortcuts, import/export, and native editing behavior.
@@ -49,6 +50,17 @@ The Agent opens beside the same editor. Toggle it off to return immediately to t
   <img src="docs/images/yogurt-ai-agent-mode.png" width="100%" alt="Yogurt AI Codex Agent beside the official Excalidraw editor">
 </p>
 
+## One project, multiple canvases
+
+Each project can contain multiple independent Excalidraw canvases, organized as a parent/child tree in the official Sidebar. Open canvas navigation with:
+
+- Windows / Linux: `Ctrl + Shift + O`
+- macOS: `Cmd + Shift + O`
+
+Create root or child canvases, switch between them, rename them, move them within the hierarchy, and delete canvases you no longer need. When a parent canvas is deleted, its children are promoted to the deleted canvas's parent so their content is not removed with it.
+
+Every canvas persists its own scene and revision independently. Editing a canvas or running the Agent on it cannot overwrite another canvas in the same project.
+
 ## AI output is native Excalidraw
 
 | Content | Generated result |
@@ -66,9 +78,10 @@ Every generated element remains independently selectable and editable with Excal
 ## How to use it
 
 1. Open Yogurt AI from the desktop shortcut and choose a project folder on first launch.
-2. Draw directly in Excalidraw. Select any element to restyle it with the official panel.
-3. Press `Ctrl + Shift + A`, or use the `Yogurt AI` application menu, when you want the Agent.
-4. Describe the structure you want to create or reorganize. For example:
+2. Press `Ctrl + Shift + O` to open canvas navigation. Create root or child canvases as needed, then switch and organize them in the project tree.
+3. Draw directly in Excalidraw. Select any element to restyle it with the official panel.
+4. Press `Ctrl + Shift + A`, or use the `Yogurt AI` application menu, when you want the Agent.
+5. Describe the structure you want to create or reorganize. For example:
 
 ```text
 Draw an editable left-to-right loop: user submits a request → AI detects intent →
@@ -81,15 +94,15 @@ Reorganize the selected cards. Preserve my edited text and colors, create clear 
 route arrows around nodes, and move exceptions into a separate frame.
 ```
 
-5. Turn AI mode off and continue editing, exporting, or sharing the document with the full Excalidraw toolset.
+6. Turn AI mode off and continue editing, exporting, or sharing the document with the full Excalidraw toolset.
 
-This Beta focuses on the official Excalidraw editor plus native editable AI diagrams.
+This Beta focuses on the official Excalidraw editor, multi-canvas project trees, and native editable AI diagrams.
 
 ## Windows desktop app
 
 Regular users do not need Node.js, Git, or a global Codex CLI.
 
-1. Download `Yogurt-AI-Beta-Setup-0.3.0-x64.exe` from the [Yogurt AI Beta 0.3.0 release](https://github.com/suud003/Cowart/releases/tag/v0.3.0%2Bcodex.20260902).
+1. Download `Yogurt-AI-Beta-Setup-0.4.0-x64.exe` from the [Yogurt AI Beta 0.4.0 release](https://github.com/suud003/Cowart/releases/tag/v0.4.0%2Bcodex.20260902).
 2. Run the installer and choose a project folder on first launch.
 3. Press `Ctrl + Shift + A` to open Codex Agent. If needed, finish Codex authorization in the official browser flow.
 
@@ -135,8 +148,10 @@ The Vite page is for editor UI development. `npm run desktop` launches the compl
 
 ## Data and safety
 
-- The active project is stored at `canvas/yogurt.excalidraw` using the standard Excalidraw document structure.
-- Revision checks and atomic writes prevent two updates from silently overwriting the same document version.
+- The project tree and active canvas are recorded in `canvas/project.json`.
+- Each canvas is stored independently at `canvas/canvases/<canvasId>/scene.excalidraw` using the standard Excalidraw document structure.
+- Projects that still use the legacy `canvas/yogurt.excalidraw` file migrate lazily on first open. The original file is retained, and its canvas content is copied unchanged into the new default canvas.
+- Per-canvas revision checks and atomic writes prevent canvases from overwriting one another and stop stale updates from silently replacing the latest scene.
 - Agent operations write native elements. User-edited fonts, colors, strokes, and positions become the latest state for later operations.
 - Automatic mode only continues reversible canvas work inside the active workspace; it does not approve external authorization, credentials, purchases, or destructive actions.
 - The desktop app connects to Codex App Server locally over stdio.

@@ -10,6 +10,13 @@ import {
   writeCowartViewState
 } from '../mcp/lib/canvas-storage.mjs'
 import {
+  createCowartCanvas,
+  deleteCowartCanvas,
+  readCowartCanvasProject,
+  setActiveCowartCanvas,
+  updateCowartCanvas
+} from '../mcp/lib/canvas-project-storage.mjs'
+import {
   normalizeMcpElicitationUrl,
   validateMcpElicitationResponse
 } from './elicitation.mjs'
@@ -30,11 +37,51 @@ export const IPC_CHANNELS = Object.freeze({
 
 const LOCAL_CANVAS_TOOLS = new Set([
   'get_cowart_canvas_state',
+  'manage_cowart_canvas_project',
   'read_cowart_page_asset',
   'save_cowart_canvas_state',
   'save_cowart_selection_state',
   'save_cowart_view_state'
 ])
+
+async function manageLocalCanvasProject(args, supplied) {
+  const action = String(supplied.action || '').trim()
+  const options = {}
+  for (const key of ['canvasId', 'name', 'activate', 'baseProjectRevision']) {
+    if (supplied[key] !== undefined) options[key] = supplied[key]
+  }
+  if (Object.hasOwn(supplied, 'parentId')) options.parentId = supplied.parentId
+  if (supplied.order !== undefined || supplied.index !== undefined) {
+    options.order = supplied.order ?? supplied.index
+  }
+
+  if (action === 'read' || action === 'list') return readCowartCanvasProject(args)
+  if (action === 'create') return createCowartCanvas(args, options)
+  if (action === 'update' || action === 'rename' || action === 'move') {
+    return updateCowartCanvas(args, options)
+  }
+  if (action === 'set-active') return setActiveCowartCanvas(args, options)
+  if (action === 'delete') {
+    return deleteCowartCanvas(args, {
+      ...options,
+      reparentChildren: supplied.reparentChildren === true || supplied.mode === 'reparent-children'
+    })
+  }
+  throw new Error(`Unsupported Yogurt AI canvas-project action: ${action || '(missing)'}.`)
+}
+
+function canvasProjectToolFailure(error) {
+  return {
+    ok: false,
+    storage: error?.code === 'COWART_PROJECT_REVISION_CONFLICT'
+      ? 'project-revision-conflict'
+      : 'canvas-project-error',
+    code: error?.code || 'COWART_CANVAS_PROJECT_ERROR',
+    message: String(error?.message || error || 'Yogurt AI 无法更新画布项目。'),
+    currentRevision: error?.currentRevision ?? null,
+    expectedRevision: error?.expectedRevision ?? null
+  }
+}
 
 function setupErrorDetails(error) {
   const message = String(error?.message || error || '')
@@ -123,6 +170,14 @@ async function callLocalCanvasTool({ projectDir, canvasDir }, request) {
       await readCowartCanvasState(args, { hydrateAssets: supplied.hydrateAssets === true })
     )
   }
+  if (name === 'manage_cowart_canvas_project') {
+    try {
+      return wrapToolResult(await manageLocalCanvasProject(args, supplied))
+    } catch (error) {
+      const failure = canvasProjectToolFailure(error)
+      return wrapToolResult(failure, { isError: true, message: failure.message })
+    }
+  }
   if (name === 'read_cowart_page_asset') {
     return wrapToolResult(await readCowartPageAsset(args, { assetUrl: supplied.assetUrl }))
   }
@@ -134,10 +189,18 @@ async function callLocalCanvasTool({ projectDir, canvasDir }, request) {
     })
   }
   if (name === 'save_cowart_selection_state') {
-    return wrapToolResult(await writeCowartSelectionState(args, supplied.selection))
+    const state = await readCowartCanvasState(args, { hydrateAssets: false })
+    return wrapToolResult(await writeCowartSelectionState(
+      { ...args, canvasId: state.canvasId },
+      supplied.selection
+    ))
   }
   if (name === 'save_cowart_view_state') {
-    return wrapToolResult(await writeCowartViewState(args, supplied.viewState))
+    const state = await readCowartCanvasState(args, { hydrateAssets: false })
+    return wrapToolResult(await writeCowartViewState(
+      { ...args, canvasId: state.canvasId },
+      supplied.viewState
+    ))
   }
   return wrapToolResult({ configured: false, delivered: false, status: null })
 }

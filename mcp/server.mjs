@@ -32,6 +32,13 @@ import {
   writeCowartSelectionState,
   writeCowartViewState,
 } from "./lib/canvas-storage.mjs";
+import {
+  createCowartCanvas,
+  deleteCowartCanvas,
+  readCowartCanvasProject,
+  setActiveCowartCanvas,
+  updateCowartCanvas,
+} from "./lib/canvas-project-storage.mjs";
 import { pluginPath } from "./lib/plugin-root.mjs";
 import { inlineWidget, registerWidgetResource } from "./lib/widget-resource.mjs";
 import {
@@ -47,6 +54,7 @@ import { validateSemanticSvg } from "../skills/cowart-semantic-diagram/scripts/v
 
 const TOOL_RENDER_WIDGET = "render_cowart_canvas_widget";
 const TOOL_GET_CANVAS_STATE = "get_cowart_canvas_state";
+const TOOL_MANAGE_CANVAS_PROJECT = "manage_cowart_canvas_project";
 const TOOL_SAVE_CANVAS_STATE = "save_cowart_canvas_state";
 const TOOL_SAVE_SELECTION_STATE = "save_cowart_selection_state";
 const TOOL_SAVE_VIEW_STATE = "save_cowart_view_state";
@@ -115,6 +123,7 @@ const COWART_FRAME_DOMAINS = [
 const projectArgsSchema = {
   projectDir: z.string().trim().optional(),
   canvasDir: z.string().trim().optional(),
+  canvasId: z.string().trim().optional(),
 };
 
 const semanticDiagramSchema = z.object({
@@ -1432,6 +1441,87 @@ function registerCowartAnalyticsTools(mcpServer) {
 }
 
 function registerCowartStateTools(mcpServer) {
+  const manageProject = async (input = {}) => {
+    const action = String(input.action || "").trim();
+    const options = {};
+    for (const key of ["canvasId", "name", "activate", "baseProjectRevision"]) {
+      if (input[key] !== undefined) options[key] = input[key];
+    }
+    if (Object.hasOwn(input, "parentId")) options.parentId = input.parentId;
+    if (input.order !== undefined || input.index !== undefined) {
+      options.order = input.order ?? input.index;
+    }
+
+    if (action === "read" || action === "list") return readCowartCanvasProject(input);
+    if (action === "create") return createCowartCanvas(input, options);
+    if (["update", "rename", "move"].includes(action)) return updateCowartCanvas(input, options);
+    if (action === "set-active") return setActiveCowartCanvas(input, options);
+    if (action === "delete") {
+      return deleteCowartCanvas(input, {
+        ...options,
+        reparentChildren: input.reparentChildren === true || input.mode === "reparent-children",
+      });
+    }
+    throw new Error(`Unsupported Yogurt AI canvas-project action: ${action || "(missing)"}.`);
+  };
+
+  mcpServer.registerTool(
+    TOOL_MANAGE_CANVAS_PROJECT,
+    {
+      title: "Manage Yogurt AI Canvas Project",
+      description:
+        "Create, rename, move, activate, or delete a canvas in the current Yogurt AI project hierarchy. Every mutation supports project-revision protection.",
+      inputSchema: {
+        projectDir: projectArgsSchema.projectDir,
+        canvasDir: projectArgsSchema.canvasDir,
+        action: z.enum(["read", "list", "create", "update", "rename", "move", "set-active", "delete"]),
+        canvasId: z.string().trim().optional(),
+        name: z.string().trim().min(1).max(120).optional(),
+        parentId: z.string().trim().nullable().optional(),
+        order: z.number().int().min(0).optional(),
+        index: z.number().int().min(0).optional(),
+        activate: z.boolean().optional(),
+        mode: z.enum(["reparent-children"]).optional(),
+        reparentChildren: z.boolean().optional(),
+        baseProjectRevision: z.string().trim().min(1).max(128).optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input = {}) => {
+      try {
+        const result = await manageProject(input);
+        return {
+          content: [{
+            type: "text",
+            text: `Yogurt AI canvas project ${input.action} completed at revision ${result.projectRevision}.`,
+          }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        const failure = {
+          ok: false,
+          storage: error?.code === "COWART_PROJECT_REVISION_CONFLICT"
+            ? "project-revision-conflict"
+            : "canvas-project-error",
+          code: error?.code || "COWART_CANVAS_PROJECT_ERROR",
+          message: error instanceof Error ? error.message : String(error),
+          currentRevision: error?.currentRevision ?? null,
+          expectedRevision: error?.expectedRevision ?? null,
+        };
+        return {
+          isError: true,
+          content: [{ type: "text", text: failure.message }],
+          structuredContent: failure,
+        };
+      }
+    },
+  );
+
   mcpServer.registerTool(
     TOOL_GET_CANVAS_STATE,
     {
@@ -1558,7 +1648,11 @@ function registerCowartStateTools(mcpServer) {
       },
     },
     async (input = {}) => {
-      const result = await writeCowartSelectionState(input, input.selection);
+      const state = await readCowartCanvasState(input, { hydrateAssets: false });
+      const result = await writeCowartSelectionState(
+        { ...input, canvasId: state.canvasId },
+        input.selection,
+      );
       return {
         content: [
           {
@@ -1589,7 +1683,11 @@ function registerCowartStateTools(mcpServer) {
       },
     },
     async (input = {}) => {
-      const result = await writeCowartViewState(input, input.viewState);
+      const state = await readCowartCanvasState(input, { hydrateAssets: false });
+      const result = await writeCowartViewState(
+        { ...input, canvasId: state.canvasId },
+        input.viewState,
+      );
       return {
         content: [
           {

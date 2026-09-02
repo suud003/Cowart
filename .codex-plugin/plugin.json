@@ -1,6 +1,6 @@
 {
   "name": "cowart-thinking-canvas",
-  "version": "0.3.0+codex.20260902",
+  "version": "0.4.0+codex.20260902",
   "description": "The official Excalidraw editor with optional Codex Agent generation of native editable diagrams.",
   "author": {
     "name": "Yogurt AI",
@@ -23,8 +23,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Yogurt AI",
-    "shortDescription": "Official Excalidraw, plus optional AI-generated native editable diagrams.",
-    "longDescription": "Yogurt AI embeds the official Excalidraw editor and keeps the AI layer completely optional. With AI off, users get the standard Excalidraw tools, style panel, shortcuts, and native document model. With AI on, Codex Agent generates native rectangles with bound text, frames, and bound arrows using html-line-svg layout rules; every generated element stays individually selectable, movable, resizable, restylable, editable, deletable, and reconnectable.",
+    "shortDescription": "Official Excalidraw with project trees and optional native editable AI diagrams.",
+    "longDescription": "Yogurt AI embeds the official Excalidraw editor, adds a parent-child multi-canvas project tree in the official Sidebar, and keeps the AI layer completely optional. Every canvas persists independently. With AI off, users retain the standard Excalidraw tools, style panel, shortcuts, and native document model. With AI on, Codex Agent generates native rectangles with bound text, frames, and bound arrows using html-line-svg layout rules; every generated element stays individually selectable, movable, resizable, restylable, editable, deletable, and reconnectable.",
     "developerName": "Yogurt AI",
     "category": "Productivity",
     "websiteURL": "https://github.com/suud003/Cowart",
@@ -33,6 +33,8 @@
     "composerIcon": "./assets/app-icon.png",
     "capabilities": [
       "Official Excalidraw editor runtime and UI",
+      "Parent-child multi-canvas project trees",
+      "Independent per-canvas persistence and revisions",
       "Optional canvas-aware Codex Agent",
       "Native editable cards, frames, text, and bound arrows",
       "Deterministic layout and obstacle-aware arrow routing",

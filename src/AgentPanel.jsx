@@ -141,6 +141,10 @@ function stableContextKey(context) {
   return JSON.stringify([
     context?.projectScopeId,
     context?.projectName,
+    context?.canvasId,
+    context?.canvasName,
+    context?.parentCanvasId,
+    context?.projectRevision,
     context?.pageId,
     context?.pageName,
     context?.selectedCount,
@@ -1274,7 +1278,7 @@ export function buildAgentPanelTaskRequest(selectedQuickTask, instruction = '') 
 
 export function buildAgentPanelMessage(instruction, context = {}, options = {}) {
   const selectedCount = Number(context.selectedCount) || 0
-  const scope = selectedCount > 0 ? `当前选中的 ${selectedCount} 个对象` : '当前页面'
+  const scope = selectedCount > 0 ? `当前选中的 ${selectedCount} 个对象` : '当前画布'
   const selectedShapeIds = Array.isArray(context.selectedShapeIds)
     ? context.selectedShapeIds.slice(0, AGENT_CONTEXT_MAX_SHAPE_IDS)
     : []
@@ -1282,6 +1286,11 @@ export function buildAgentPanelMessage(instruction, context = {}, options = {}) 
     ? context.exactShapeIds.slice(0, AGENT_CONTEXT_MAX_SHAPE_IDS)
     : []
   const stableContext = {
+    canvasId: context.canvasId || context.pageId || null,
+    canvasName: context.canvasName || context.pageName || '未命名画布',
+    parentCanvasId: context.parentCanvasId || null,
+    canvasBreadcrumb: Array.isArray(context.canvasBreadcrumb) ? context.canvasBreadcrumb : [],
+    projectRevision: context.projectRevision || null,
     pageId: context.pageId || null,
     pageName: context.pageName || '未命名页面',
     scope: selectedCount > 0 ? 'selection' : 'page',
@@ -1301,7 +1310,10 @@ export function buildAgentPanelMessage(instruction, context = {}, options = {}) 
       '[@cowart-thinking-canvas](plugin://cowart-thinking-canvas@cowart-thinking-github) Yogurt AI Agent 任务',
       '',
       `项目：${context.projectName || 'Yogurt AI 画布'}`,
-      `页面：${context.pageName || '未命名页面'}`,
+      `画布：${context.canvasName || context.pageName || '未命名画布'}`,
+      `层级：${Array.isArray(context.canvasBreadcrumb) && context.canvasBreadcrumb.length > 0
+        ? context.canvasBreadcrumb.join(' / ')
+        : context.canvasName || context.pageName || '未命名画布'}`,
       `作用范围：${scope}`,
       '',
       '画布上下文（请使用这些稳定 ID，不要依赖截图坐标）：',
@@ -2019,6 +2031,8 @@ export function CowartAgentPanel({
         invocation: taskRequest.invocation,
         visibility: 'user-authored',
         projectName: taskContext.projectName || null,
+        canvasId: taskContext.canvasId || taskContext.pageId || null,
+        canvasName: taskContext.canvasName || taskContext.pageName || null,
         pageId: taskContext.pageId || null,
         pageName: taskContext.pageName || null,
         selectedCount: Number(taskContext.selectedCount) || 0
@@ -2044,6 +2058,8 @@ export function CowartAgentPanel({
         metadata: {
           ...initialTask.metadata,
           projectName: taskContext.projectName || null,
+          canvasId: taskContext.canvasId || taskContext.pageId || null,
+          canvasName: taskContext.canvasName || taskContext.pageName || null,
           pageId: taskContext.pageId || null,
           pageName: taskContext.pageName || null,
           selectedCount: Number(taskContext.selectedCount) || 0,

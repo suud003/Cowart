@@ -74,3 +74,58 @@ test('desktop runtime forwards analytics to the ready MCP bridge instead of swal
   assert.deepEqual(calls, [request])
   assert.equal(result.structuredContent.delivered, true)
 })
+
+test('desktop canvas bridge manages and isolates project canvases without an Agent round trip', async (context) => {
+  const projectDir = await mkdtemp(path.join(os.tmpdir(), 'yogurt-desktop-multi-canvas-'))
+  context.after(() => rm(projectDir, { recursive: true, force: true }))
+  const runtime = new YogurtDesktopRuntime({
+    configuredWorkspace: false,
+    projectDir,
+    workspaceSource: 'none'
+  })
+
+  const project = await runtime.callCowartTool({
+    name: 'manage_cowart_canvas_project',
+    arguments: { action: 'read' }
+  })
+  const created = await runtime.callCowartTool({
+    name: 'manage_cowart_canvas_project',
+    arguments: {
+      action: 'create',
+      canvasId: 'canvas_child',
+      name: 'Child',
+      parentId: 'canvas_main',
+      baseProjectRevision: project.structuredContent.projectRevision
+    }
+  })
+  assert.equal(created.structuredContent.canvas.id, 'canvas_child')
+  assert.equal(created.structuredContent.canvas.parentId, 'canvas_main')
+
+  const conflict = await runtime.callCowartTool({
+    name: 'manage_cowart_canvas_project',
+    arguments: {
+      action: 'create',
+      canvasId: 'canvas_stale',
+      name: 'Stale',
+      baseProjectRevision: project.structuredContent.projectRevision
+    }
+  })
+  assert.equal(conflict.isError, true)
+  assert.equal(conflict.structuredContent.storage, 'project-revision-conflict')
+  assert.equal(conflict.structuredContent.code, 'COWART_PROJECT_REVISION_CONFLICT')
+
+  const child = await runtime.callCowartTool({
+    name: 'get_cowart_canvas_state',
+    arguments: { canvasId: 'canvas_child' }
+  })
+  assert.equal(child.structuredContent.canvasId, 'canvas_child')
+
+  const selection = await runtime.callCowartTool({
+    name: 'save_cowart_selection_state',
+    arguments: {
+      canvasId: 'canvas_child',
+      selection: { selectedShapes: ['shape:child'] }
+    }
+  })
+  assert.match(selection.structuredContent.path, /canvases[\\/]canvas_child[\\/]selection\.json$/)
+})

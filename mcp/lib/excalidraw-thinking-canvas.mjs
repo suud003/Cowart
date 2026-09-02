@@ -8,10 +8,10 @@ import {
   cowartSnapshotRevision,
   readCowartCanvasState,
   readCowartSelectionState,
-  resolveCanvasDir,
   resolveCowartPaths,
   saveCowartCanvasSnapshot,
 } from "./canvas-storage.mjs";
+import { resolveCowartCanvasPaths } from "./canvas-project-storage.mjs";
 import { layoutSemanticGraph } from "./semantic-layout.mjs";
 
 const SCENE_PAGE_ID = "excalidraw:scene";
@@ -1486,6 +1486,7 @@ export function applyExcalidrawThinkingOperationsToSnapshot({
   operations,
   semanticDiagram: requestedSemanticDiagram = null,
   allowUserAuthoredEdits = false,
+  pageId = SCENE_PAGE_ID,
 } = {}) {
   validateOperations(operations);
   const nextSnapshot = ensureExcalidrawSnapshot(snapshot);
@@ -1576,7 +1577,7 @@ export function applyExcalidrawThinkingOperationsToSnapshot({
   }
   return {
     snapshot: nextSnapshot,
-    pageId: SCENE_PAGE_ID,
+    pageId,
     changes,
     references: Object.fromEntries(references),
     semanticDiagram: diagram,
@@ -1681,6 +1682,7 @@ export function summarizeExcalidrawThinkingContext({
   shapeIds,
   maxShapes = MAX_CONTEXT_SHAPES,
   maxTextLength = MAX_CONTEXT_TEXT,
+  pageId = SCENE_PAGE_ID,
 } = {}) {
   const scene = ensureExcalidrawSnapshot(snapshot);
   const selectedIds = new Set(
@@ -1712,7 +1714,7 @@ export function summarizeExcalidrawThinkingContext({
     version: 1,
     runtime: "excalidraw",
     revision: cowartSnapshotRevision(scene),
-    pageId: SCENE_PAGE_ID,
+    pageId,
     scope: scope === "selection" && selectedIds.size > 0 ? "selection" : "page",
     selection: Array.from(selectedIds),
     shapes: limited.map((element) =>
@@ -1724,7 +1726,7 @@ export function summarizeExcalidrawThinkingContext({
 }
 
 function historyDirectory(args) {
-  return join(resolveCanvasDir(args), "thinking-history");
+  return resolveCowartCanvasPaths(args, args.canvasId).historyDir;
 }
 
 function historyFile(args, operationId) {
@@ -1754,6 +1756,33 @@ async function pruneHistory(args) {
   for (const fileName of files.slice(HISTORY_LIMIT)) await rm(join(directory, fileName), { force: true });
 }
 
+function canvasBreadcrumb(project, canvasId) {
+  const byId = new Map((project?.canvases ?? []).map((canvas) => [canvas.id, canvas]));
+  const names = [];
+  const visited = new Set();
+  let canvas = byId.get(canvasId) ?? null;
+  while (canvas && !visited.has(canvas.id)) {
+    visited.add(canvas.id);
+    names.unshift(canvas.name);
+    canvas = canvas.parentId ? byId.get(canvas.parentId) ?? null : null;
+  }
+  return names;
+}
+
+function canvasStateMetadata(state) {
+  return {
+    canvasId: state.canvasId,
+    canvasName: state.canvas?.name ?? null,
+    parentCanvasId: state.canvas?.parentId ?? null,
+    canvasBreadcrumb: canvasBreadcrumb(state.project, state.canvasId),
+    projectRevision: state.projectRevision ?? null,
+  };
+}
+
+function scopedCanvasArgs(args, state) {
+  return { ...args, canvasId: state.canvasId };
+}
+
 export async function getThinkingContext(args = {}, options = {}) {
   const state = await readCowartCanvasState(args, { hydrateAssets: false });
   if (state.snapshot && state.snapshot.type !== "excalidraw") {
@@ -1761,7 +1790,10 @@ export async function getThinkingContext(args = {}, options = {}) {
   }
   const currentSnapshot = ensureExcalidrawSnapshot(state.snapshot);
   const frozen = options.scope === "selection" && Array.isArray(options.shapeIds);
-  const selectionState = frozen ? { selection: { selectedShapes: [] } } : await readCowartSelectionState(args);
+  const scopedArgs = scopedCanvasArgs(args, state);
+  const selectionState = frozen
+    ? { selection: { selectedShapes: [] } }
+    : await readCowartSelectionState(scopedArgs);
   return {
     ...summarizeExcalidrawThinkingContext({
       snapshot: currentSnapshot,
@@ -1770,17 +1802,23 @@ export async function getThinkingContext(args = {}, options = {}) {
       shapeIds: options.shapeIds,
       maxShapes: options.maxShapes,
       maxTextLength: options.maxTextLength,
+      pageId: state.canvasId,
     }),
     projectDir: state.projectDir,
     canvasDir: state.canvasDir,
+    ...canvasStateMetadata(state),
   };
 }
 
 export async function applyThinkingOperations(args = {}, options = {}) {
-  const state = await readCowartCanvasState(args, { hydrateAssets: false });
+  const state = await readCowartCanvasState(args, {
+    hydrateAssets: false,
+    requireExplicitCanvasId: true,
+  });
   if (state.snapshot && state.snapshot.type !== "excalidraw") {
     throw new Error("Expected an Excalidraw canvas document.");
   }
+  const scopedArgs = scopedCanvasArgs(args, state);
   const currentSnapshot = ensureExcalidrawSnapshot(state.snapshot);
   const currentRevision = cowartSnapshotRevision(currentSnapshot);
   if (options.baseRevision && options.baseRevision !== currentRevision) {
@@ -1791,6 +1829,7 @@ export async function applyThinkingOperations(args = {}, options = {}) {
     operations: options.operations,
     semanticDiagram: options.semanticDiagram,
     allowUserAuthoredEdits: options.allowUserAuthoredEdits === true,
+    pageId: state.canvasId,
   });
   if (options.dryRun === true) {
     return {
@@ -1803,6 +1842,7 @@ export async function applyThinkingOperations(args = {}, options = {}) {
       references: result.references,
       semanticDiagram: result.semanticDiagram,
       layoutReport: result.layoutReport,
+      ...canvasStateMetadata(state),
     };
   }
 
@@ -1817,20 +1857,24 @@ export async function applyThinkingOperations(args = {}, options = {}) {
     baseRevision: currentRevision,
     resultRevision: result.revision,
     pageId: result.pageId,
+    canvasId: state.canvasId,
     changes: result.changes,
     beforeSnapshot: currentSnapshot,
   };
-  const persistedHistoryPath = historyFile(args, operationId);
+  const persistedHistoryPath = historyFile(scopedArgs, operationId);
   await writeJsonAtomic(persistedHistoryPath, history);
   let saveResult;
   try {
-    saveResult = await saveCowartCanvasSnapshot({ ...args, baseRevision: state.revision }, result.snapshot);
+    saveResult = await saveCowartCanvasSnapshot(
+      { ...scopedArgs, baseRevision: state.revision },
+      result.snapshot,
+    );
     if (!saveResult.ok) throw new Error(saveResult.message || "Yogurt AI refused to persist the Excalidraw operation batch.");
   } catch (error) {
     await rm(persistedHistoryPath, { force: true }).catch(() => undefined);
     throw error;
   }
-  await pruneHistory(args);
+  await pruneHistory(scopedArgs);
   return {
     ok: true,
     applied: true,
@@ -1844,6 +1888,7 @@ export async function applyThinkingOperations(args = {}, options = {}) {
     layoutReport: result.layoutReport,
     explanation: history.explanation,
     storage: saveResult.storage,
+    ...canvasStateMetadata(state),
   };
 }
 
@@ -1874,16 +1919,22 @@ async function readHistoryEntries(args) {
 }
 
 export async function undoThinkingOperation(args = {}, options = {}) {
-  const histories = await readHistoryEntries(args);
+  const state = await readCowartCanvasState(args, {
+    hydrateAssets: false,
+    requireExplicitCanvasId: true,
+  });
+  const scopedArgs = scopedCanvasArgs(args, state);
+  const histories = await readHistoryEntries(scopedArgs);
   const candidate = histories.find(({ value }) =>
-    !value.undoneAt && (!options.operationId || value.operationId === options.operationId),
+    !value.undoneAt &&
+    (!value.canvasId || value.canvasId === state.canvasId) &&
+    (!options.operationId || value.operationId === options.operationId),
   );
   if (!candidate) {
     throw new Error(options.operationId
       ? `Unknown or already undone operation ${options.operationId}.`
       : "No Excalidraw thinking operation is available to undo.");
   }
-  const state = await readCowartCanvasState(args, { hydrateAssets: false });
   const currentRevision = cowartSnapshotRevision(state.snapshot);
   if (currentRevision !== candidate.value.resultRevision) {
     throw new Error(
@@ -1891,7 +1942,10 @@ export async function undoThinkingOperation(args = {}, options = {}) {
     );
   }
   const beforeSnapshot = ensureExcalidrawSnapshot(candidate.value.beforeSnapshot);
-  const saveResult = await saveCowartCanvasSnapshot({ ...args, baseRevision: state.revision }, beforeSnapshot);
+  const saveResult = await saveCowartCanvasSnapshot(
+    { ...scopedArgs, baseRevision: state.revision },
+    beforeSnapshot,
+  );
   if (!saveResult.ok) throw new Error(saveResult.message || "Yogurt AI refused to persist the Excalidraw undo snapshot.");
   const updatedHistory = {
     ...candidate.value,
@@ -1905,6 +1959,7 @@ export async function undoThinkingOperation(args = {}, options = {}) {
     revision: updatedHistory.undoRevision,
     restoredChangeCount: candidate.value.changes?.length ?? 0,
     storage: saveResult.storage,
+    ...canvasStateMetadata(state),
   };
 }
 
@@ -1942,11 +1997,16 @@ async function uniqueMaterialPath(directory, requestedName) {
 }
 
 export async function importThinkingMaterial(args = {}, options = {}) {
+  const canvasState = await readCowartCanvasState(args, {
+    hydrateAssets: false,
+    requireExplicitCanvasId: true,
+  });
+  const scopedArgs = scopedCanvasArgs(args, canvasState);
   const sourcePath = resolve(String(options.sourcePath || ""));
   const sourceStat = await stat(sourcePath);
   if (!sourceStat.isFile()) throw new Error(`Thinking material is not a file: ${sourcePath}`);
   if (sourceStat.size > MATERIAL_SIZE_LIMIT) throw new Error("Thinking material exceeds the 200 MB MVP limit.");
-  const { projectDir, canvasDir } = resolveCowartPaths(args);
+  const { projectDir, canvasDir } = resolveCowartPaths(scopedArgs);
   if (!options.allowExternalSource && sourcePath !== projectDir && !isSafeChildPath(projectDir, sourcePath)) {
     throw new Error("Material must be inside the active project unless allowExternalSource is explicitly enabled.");
   }
@@ -1972,7 +2032,7 @@ export async function importThinkingMaterial(args = {}, options = {}) {
     fileSize: sourceStat.size,
   });
   try {
-    const result = await applyThinkingOperations(args, {
+    const result = await applyThinkingOperations(scopedArgs, {
       baseRevision: options.baseRevision,
       dryRun: options.dryRun,
       reason: options.reason || `Import material ${source.fileName}`,
